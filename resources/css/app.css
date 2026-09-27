@@ -5,7 +5,206 @@
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
+/* Token Wisma Trans (lihat design system: tokens/colors.css, typography.css, motion.css) */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --font-display: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+
+    --color-brown-900: #3E2A1C;
+    --color-brown-800: #4E3423;
+    --color-brown-600: #6E5233;
+    --color-clay-600: #9C5D3B;
+    --color-clay-500: #B5714A;
+    --color-sand-300: #E4B98F;
+    --color-olive-600: #6C6B50;
+
+    --color-cream-50: #FFFDF6;
+    --color-cream-100: #F6F3E9;
+    --color-cream-150: #F2EBDC;
+    --color-cream-200: #F1E4CE;
+    --color-cream-300: #E5DCC6;
+    --color-cream-400: #D9CBAE;
+    --color-cream-500: #E7D7B8;
+    --color-row-hover: #FAF4E6;
+
+    --color-ink-900: #37281C;
+    --color-ink-500: #96826A;
+
+    --color-status-available: #5C9E67;
+    --color-status-occupied: #9B8B78;
+    --color-status-dirty: #D4514A;
+    --color-status-maintenance: #E8AC45;
+    --color-status-reserved: #6C95C4;
+
+    --ease-wt: cubic-bezier(.2, .6, .3, 1);
+    --ease-slide: cubic-bezier(.7, 0, .3, 1);
+
+    --shadow-wt-xs: 0 1px 2px rgba(78, 52, 35, .06);
+    --shadow-wt-md: 0 4px 12px rgba(78, 52, 35, .10);
+    --shadow-wt-lg: 0 12px 32px rgba(78, 52, 35, .14);
+
+    --animate-wt-masuk: wt-masuk .24s cubic-bezier(.2, .6, .3, 1);
+    --animate-wt-fade: wt-fade .2s ease;
+
+    @keyframes wt-masuk {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: none; }
+    }
+    @keyframes wt-fade {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: none; }
+    }
+}
+
+@layer base {
+    html, body { overflow-anchor: none; }
+    body {
+        background: var(--color-cream-100);
+        color: var(--color-ink-900);
+        font-family: var(--font-sans);
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+    }
+    button { font-family: inherit; cursor: pointer; }
+    button, a {
+        transition: background-color 150ms var(--ease-wt), color 150ms var(--ease-wt), border-color 150ms var(--ease-wt),
+            box-shadow 200ms var(--ease-wt), transform 200ms var(--ease-wt), opacity 150ms var(--ease-wt);
+    }
+    button:active { transform: translateY(1px); }
+    input:focus, textarea:focus { outline: none; }
+    :focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(181, 113, 74, .32); }
+    [x-cloak] { display: none !important; }
+
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+    }
+}
+
+@layer components {
+    .wt-container { max-width: 1320px; margin-inline: auto; padding-inline: 16px; }
+    @media (min-width: 640px) { .wt-container { padding-inline: 24px; } }
+
+    /* Eyebrow kecil di atas judul seksi */
+    .wt-eyebrow {
+        font-family: var(--font-display); font-size: 11px; letter-spacing: .22em;
+        text-transform: uppercase; font-weight: 700; color: var(--color-clay-500);
+    }
+    .wt-section-title {
+        font-family: var(--font-display); font-size: 28px; letter-spacing: .06em;
+        text-transform: uppercase; font-weight: 700; margin: 0;
+    }
+    .wt-micro-label {
+        font-family: var(--font-display); font-size: 10px; letter-spacing: .18em;
+        text-transform: uppercase; color: var(--color-ink-500); font-weight: 700;
+    }
+
+    .wt-btn-primary {
+        display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+        background: var(--color-clay-500); color: var(--color-cream-50); border: 0; border-radius: 4px;
+        font-family: var(--font-display); font-weight: 700; text-transform: uppercase;
+    }
+    .wt-btn-primary:hover { background: var(--color-clay-600); color: var(--color-cream-50); text-decoration: none; }
+
+    .wt-btn-outline {
+        display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+        background: transparent; color: var(--color-brown-800); border: 1px solid var(--color-cream-300); border-radius: 4px;
+        font-family: var(--font-display); font-weight: 600; text-transform: uppercase;
+    }
+    .wt-btn-outline:hover { background: var(--color-cream-200); color: var(--color-brown-800); text-decoration: none; }
+
+    .wt-card { background: var(--color-cream-50); border: 1px solid var(--color-cream-300); border-radius: 6px; }
+
+    /* Isian bergaris bawah pada modal masuk/daftar */
+    .wt-line-field {
+        display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--color-cream-300);
+        padding: 0 2px; transition: border-color 150ms var(--ease-wt);
+    }
+    .wt-line-field:focus-within { border-bottom-color: var(--color-clay-500); }
+    .wt-line-field input {
+        flex: 1; min-width: 0; border: 0; outline: none; box-shadow: none; appearance: none;
+        background: transparent; font-size: 14px; color: var(--color-ink-900); height: 100%;
+    }
+    .wt-line-field.is-invalid { border-bottom-color: var(--color-status-dirty); }
+    .wt-field-label {
+        font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--color-ink-500);
+    }
+
+    /* Panel staf: isian berbingkai, tombol kecil, lencana status */
+    .wt-input {
+        display: block; width: 100%; height: 40px; padding: 0 12px; font-size: 14px; color: var(--color-ink-900);
+        background: var(--color-cream-50); border: 1px solid var(--color-cream-300); border-radius: 4px;
+        transition: border-color 150ms var(--ease-wt), box-shadow 150ms var(--ease-wt);
+    }
+    textarea.wt-input { height: auto; min-height: 84px; padding: 10px 12px; line-height: 1.5; resize: vertical; }
+    select.wt-input { padding-right: 32px; appearance: none; cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2396826A' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 12px center; }
+    .wt-input::placeholder { color: var(--color-ink-500); opacity: .75; }
+    .wt-input:focus { border-color: var(--color-clay-500); box-shadow: 0 0 0 3px rgba(181, 113, 74, .16); }
+    .wt-input.is-invalid { border-color: var(--color-status-dirty); }
+    .wt-input:disabled, .wt-input[readonly] { background: var(--color-cream-100); color: var(--color-ink-500); }
+
+    .wt-btn-sm {
+        display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; font-size: 12px; white-space: nowrap;
+        color: var(--color-brown-800); background: transparent; border: 1px solid var(--color-cream-300); border-radius: 4px;
+    }
+    .wt-btn-sm:hover { background: var(--color-cream-200); }
+
+    .wt-lencana { display: inline-block; padding: 3px 8px; font-size: 11px; font-weight: 700; line-height: 1.2; white-space: nowrap; border-radius: 999px; }
+    .wt-lencana-aktif { background: rgba(92, 158, 103, .18); color: var(--color-status-available); }
+    .wt-lencana-nonaktif { background: rgba(155, 139, 120, .20); color: var(--color-status-occupied); }
+    .wt-lencana-netral { background: var(--color-cream-200); color: var(--color-brown-800); }
+
+    /* Goyang singkat saat masuk gagal; otomatis nonaktif bila pengguna memilih gerak dikurangi */
+    .wt-goyang { animation: wt-goyang .4s var(--ease-wt); }
+    @keyframes wt-goyang {
+        0%, 100% { transform: none; }
+        20%, 60% { transform: translateX(-6px); }
+        40%, 80% { transform: translateX(6px); }
+    }
+
+    /*
+     * Lebar sidebar staf dan ruang isi; .is-ciut dipasang Alpine saat sidebar diciutkan.
+     * Ikon tidak pernah berpindah (selalu di tengah lajur 72px). Saat diciutkan teks memudar
+     * lebih dulu lalu terpotong lebar sidebar; saat dilebarkan teks muncul setelah ada ruang.
+     * Animasi baru aktif setelah halaman siap (.wt-anim) supaya tidak berjalan saat dimuat.
+     */
+    .wt-sidebar { width: 256px; }
+    .wt-label { min-width: 0; overflow: hidden; white-space: nowrap; transition: opacity .2s var(--ease-wt) .12s; }
+    .wt-logo-kecil { opacity: 0; transition: opacity .15s var(--ease-wt); }
+    .wt-ciut-ikon { transition: transform .3s var(--ease-wt); }
+    .wt-anim .wt-sidebar { transition: width .3s var(--ease-wt), transform .3s var(--ease-wt); }
+    .wt-anim .wt-konten { transition: padding-left .3s var(--ease-wt); }
+    @media (min-width: 768px) {
+        .wt-sidebar.is-ciut { width: 72px; }
+        .wt-sidebar.is-ciut .wt-label { opacity: 0; pointer-events: none; transition-duration: .1s; transition-delay: 0s; }
+        .wt-sidebar.is-ciut .wt-logo-kecil { opacity: 1; transition-delay: .15s; }
+        .wt-sidebar.is-ciut .wt-grup-aktif { background: rgba(242, 235, 220, .16); }
+        .wt-sidebar.is-ciut .wt-ciut-ikon { transform: rotate(180deg); }
+        .wt-konten { padding-left: 256px; }
+        .wt-konten.is-ciut { padding-left: 72px; }
+    }
+
+    .wt-th { padding: 11px 16px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-ink-500); text-align: left; white-space: nowrap; background: var(--color-cream-200); }
+    .wt-td { padding: 11px 16px; font-size: 13px; border-top: 1px solid var(--color-cream-300); vertical-align: middle; }
+}
+
+/*
+ * Isian yang diisi otomatis browser (sandi tersimpan): ganti latar biru bawaan Chrome
+ * dengan krem kartu. Latar autofill tidak bisa diubah lewat background, jadi ditutup
+ * bayangan inset. Sengaja di luar @layer agar menang atas .wt-line-field input.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+    -webkit-text-fill-color: var(--color-ink-900);
+    caret-color: var(--color-ink-900);
+    box-shadow: 0 0 0 1000px var(--color-cream-50) inset;
+    transition: background-color 9999s ease-out 0s;
+}
+input:autofill {
+    box-shadow: 0 0 0 1000px var(--color-cream-50) inset;
 }

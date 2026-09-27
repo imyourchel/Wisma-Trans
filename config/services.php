@@ -28,6 +28,23 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        // Kosongkan agar callback mengikuti alamat yang sedang dibuka (mis. http://127.0.0.1:8000/auth/google/callback)
+        'redirect' => env('GOOGLE_REDIRECT_URI') ?: '/auth/google/callback',
+    ],
+
+    // Pembayaran online (Snap). Notifikasi: POST /midtrans/notification
+    'midtrans' => [
+        'merchant_id' => env('MIDTRANS_MERCHANT_ID'),
+        'server_key' => env('MIDTRANS_SERVER_KEY'),
+        'client_key' => env('MIDTRANS_CLIENT_KEY'),
+        'is_production' => (bool) env('MIDTRANS_IS_PRODUCTION', false),
+        // Batas waktu bayar pesanan makanan (menit)
+        'batas_bayar_menit' => 60,
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

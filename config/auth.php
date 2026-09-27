@@ -94,6 +94,9 @@ return [
 
     'passwords' => [
         'users' => [
+            // Token disimpan di cache karena basis data tidak punya tabel password_reset_tokens
+            'driver' => 'cache',
+            'store' => env('AUTH_PASSWORD_RESET_CACHE_STORE'),
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
             'expire' => 60,

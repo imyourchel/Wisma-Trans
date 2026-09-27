@@ -11,7 +11,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Percayai proxy (ngrok, hosting) agar https dan nama domain terbaca benar
+        $middleware->trustProxies(at: '*');
+
+        // Notifikasi pembayaran dari server Midtrans tidak membawa token CSRF
+        $middleware->validateCsrfTokens(except: [
+            'midtrans/notification',
+        ]);
+
+        $middleware->alias([
+            'staf' => \App\Http\Middleware\PastikanStaf::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
