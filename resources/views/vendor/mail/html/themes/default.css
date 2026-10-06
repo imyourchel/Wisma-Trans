@@ -1,0 +1,388 @@
+/* Tema email Wisma Trans: krem, cokelat, dan aksen tanah liat seperti situs. Gaya ini ditanam ke elemen saat email dibuat. */
+
+/* Dasar */
+
+body,
+body *:not(html):not(style):not(br):not(tr):not(code) {
+    box-sizing: border-box;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    position: relative;
+}
+
+body {
+    -webkit-text-size-adjust: none;
+    background-color: #F2EBDC;
+    color: #5B4A3C;
+    height: 100%;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+}
+
+p,
+ul,
+ol,
+blockquote {
+    line-height: 1.65;
+    text-align: start;
+}
+
+a {
+    color: #9C5D3B;
+}
+
+a img {
+    border: none;
+}
+
+/* Tipografi */
+
+h1 {
+    color: #3E2A1C;
+    font-family: 'Montserrat', 'Inter', Helvetica, Arial, sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: .2px;
+    line-height: 1.25;
+    margin-top: 0;
+    margin-bottom: 18px;
+    text-align: start;
+}
+
+h2 {
+    color: #3E2A1C;
+    font-size: 17px;
+    font-weight: bold;
+    margin-top: 0;
+    text-align: start;
+}
+
+h3 {
+    color: #3E2A1C;
+    font-size: 15px;
+    font-weight: bold;
+    margin-top: 0;
+    text-align: left;
+}
+
+p {
+    color: #5B4A3C;
+    font-size: 15px;
+    line-height: 1.7em;
+    margin-top: 0;
+    text-align: left;
+}
+
+p.sub {
+    font-size: 12px;
+}
+
+p.eyebrow {
+    color: #B5714A;
+    font-family: 'Montserrat', 'Inter', Helvetica, Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    line-height: 1.4;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+p.salam {
+    border-top: 1px solid #EFE6D3;
+    color: #8A7663;
+    font-size: 14px;
+    margin-top: 28px;
+    padding-top: 20px;
+}
+
+p.salam strong {
+    color: #3E2A1C;
+    font-family: 'Montserrat', 'Inter', Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    letter-spacing: .3px;
+}
+
+strong {
+    color: #3E2A1C;
+}
+
+img {
+    max-width: 100%;
+}
+
+/* Tata letak */
+
+.wrapper {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #F2EBDC;
+    margin: 0;
+    padding: 0 0 8px;
+    width: 100%;
+}
+
+.content {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+/* Kepala */
+
+.header {
+    padding: 36px 0 0;
+    text-align: center;
+}
+
+.header-band {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    background-color: #3E2A1C;
+    border-radius: 14px 14px 0 0;
+    margin: 0 auto;
+    width: 570px;
+}
+
+.header-cell {
+    border-bottom: 3px solid #B5714A;
+    padding: 30px 24px 26px;
+    text-align: center;
+}
+
+.wordmark {
+    color: #FFFDF6;
+    display: inline-block;
+    font-family: 'Montserrat', 'Inter', Helvetica, Arial, sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 7px;
+    text-decoration: none;
+}
+
+p.header-tagline {
+    color: #E4B98F;
+    font-size: 11px;
+    letter-spacing: 2.5px;
+    margin: 8px 0 0;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+/* Isi */
+
+.body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #F2EBDC;
+    border-bottom: 1px solid #F2EBDC;
+    border-top: 1px solid #F2EBDC;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.inner-body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    background-color: #FFFDF6;
+    border: 1px solid #E5DCC6;
+    border-top: 0;
+    border-radius: 0 0 14px 14px;
+    box-shadow: 0 12px 32px rgba(78, 52, 35, .10);
+    margin: 0 auto;
+    padding: 0;
+    width: 570px;
+}
+
+.inner-body a {
+    word-break: break-all;
+}
+
+.content-cell {
+    max-width: 100vw;
+    padding: 36px 40px 32px;
+}
+
+/* Keterangan tautan cadangan */
+
+.subcopy {
+    border-top: 1px dashed #E5DCC6;
+    margin-top: 24px;
+    padding-top: 20px;
+}
+
+.subcopy p {
+    color: #8A7663;
+    font-size: 12px;
+    line-height: 1.6em;
+}
+
+.subcopy a {
+    color: #9C5D3B;
+}
+
+/* Kaki */
+
+.footer {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    margin: 0 auto;
+    padding: 0;
+    text-align: center;
+    width: 570px;
+}
+
+.footer p {
+    color: #8A7663;
+    font-size: 12px;
+    line-height: 1.7em;
+    text-align: center;
+}
+
+.footer strong {
+    color: #5B4A3C;
+    letter-spacing: 1px;
+}
+
+.footer a {
+    color: #9C5D3B;
+    text-decoration: none;
+}
+
+.footer .tagline {
+    color: #B5714A;
+    font-family: 'Montserrat', 'Inter', Helvetica, Arial, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+/* Tabel */
+
+.table table {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 24px auto;
+    width: 100%;
+}
+
+.table th {
+    border-bottom: 1px solid #E5DCC6;
+    color: #8A7663;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin: 0;
+    padding-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.table td {
+    border-bottom: 1px solid #EFE6D3;
+    color: #5B4A3C;
+    font-size: 14px;
+    line-height: 18px;
+    margin: 0;
+    padding: 10px 0;
+}
+
+/* Tombol */
+
+.action {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 28px auto 30px;
+    padding: 0;
+    text-align: center;
+    width: 100%;
+    float: unset;
+}
+
+.button {
+    -webkit-text-size-adjust: none;
+    border-radius: 8px;
+    color: #FFFDF6;
+    display: inline-block;
+    font-family: 'Montserrat', 'Inter', Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    overflow: hidden;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+.button-blue,
+.button-primary {
+    background-color: #B5714A;
+    border-bottom: 14px solid #B5714A;
+    border-left: 30px solid #B5714A;
+    border-right: 30px solid #B5714A;
+    border-top: 14px solid #B5714A;
+}
+
+.button-green,
+.button-success {
+    background-color: #4E7F57;
+    border-bottom: 14px solid #4E7F57;
+    border-left: 30px solid #4E7F57;
+    border-right: 30px solid #4E7F57;
+    border-top: 14px solid #4E7F57;
+}
+
+.button-red,
+.button-error {
+    background-color: #B8443E;
+    border-bottom: 14px solid #B8443E;
+    border-left: 30px solid #B8443E;
+    border-right: 30px solid #B8443E;
+    border-top: 14px solid #B8443E;
+}
+
+/* Kotak keterangan */
+
+.panel {
+    border-left: #B5714A solid 3px;
+    border-radius: 0 8px 8px 0;
+    margin: 6px 0 4px;
+}
+
+.panel-content {
+    background-color: #F6F0E3;
+    border-radius: 0 8px 8px 0;
+    color: #5B4A3C;
+    padding: 16px 20px;
+}
+
+.panel-content p {
+    color: #6B5847;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.panel-item {
+    padding: 0;
+}
+
+.panel-item p:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* Bantuan */
+
+.break-all {
+    word-break: break-all;
+}

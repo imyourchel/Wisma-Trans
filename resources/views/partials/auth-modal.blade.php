@@ -107,7 +107,7 @@
                                 </div>
                                 <div x-show="galat" x-text="galat" role="alert" @unless ($errors->login->any()) x-cloak @endunless
                                      class="flex-none text-[13px] text-status-dirty">{{ $errors->login->first() }}</div>
-                                <button type="submit" :disabled="proses" x-text="proses ? 'Memproses…' : 'Masuk'"
+                                <button type="submit" :disabled="proses" :aria-busy="proses" x-text="proses ? 'Memproses…' : 'Masuk'"
                                         class="h-11 w-full flex-none rounded-[10px] border-0 bg-clay-500 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 hover:bg-clay-600 disabled:cursor-wait disabled:opacity-70">Masuk</button>
                             </form>
 
@@ -122,25 +122,25 @@
                             </div>
                             </div>
 
-                            {{-- Lupa kata sandi: tautan dikirim ke email, jawaban sama untuk email terdaftar maupun tidak --}}
+                            {{-- Lupa kata sandi: tautan dikirim ke email, atau ke WhatsApp dan email bila diisi nomor HP; jawaban sama untuk data terdaftar maupun tidak --}}
                             <div x-show="lupa" x-cloak class="contents" x-data="formLupa" @lupa-sandi.window="mulai($event.detail.email)">
                                 <div class="flex-none font-display text-[10px] font-bold uppercase tracking-[.24em] text-clay-500">Lupa kata sandi</div>
                                 <div x-show="!terkirim" class="contents">
                                     <div class="flex flex-none flex-col gap-0.5">
                                         <div class="font-display text-[22px] font-bold uppercase tracking-[.05em] text-ink-900">Atur ulang kata sandi</div>
-                                        <div class="text-[13px] text-ink-500">Masukkan email akun Anda. Kami akan mengirim tautan untuk membuat kata sandi baru.</div>
+                                        <div class="text-[13px] text-ink-500">Masukkan email atau nomor WhatsApp akun Anda. Kami akan mengirim tautan untuk membuat kata sandi baru.</div>
                                     </div>
                                     <form method="POST" action="{{ route('password.email') }}" class="flex flex-col gap-2.5" novalidate @submit.prevent="kirim($el)" :class="goyang && 'wt-goyang'">
                                         @csrf
                                         <label class="block flex-none">
-                                            <span class="wt-field-label">Email</span>
+                                            <span class="wt-field-label">Email atau nomor WhatsApp</span>
                                             <span class="wt-line-field h-[42px]" :class="galat && 'is-invalid'">
                                                 <img src="{{ asset('ds/icons/mail-muted.svg') }}" alt="" width="16" height="16" class="flex-none">
-                                                <input id="lupa-email" x-ref="email" type="email" name="email" x-model="email" @input="galat = ''" placeholder="Contoh: nama@email.com" autocomplete="email" required>
+                                                <input id="lupa-email" x-ref="email" type="text" name="login" x-model="email" @input="galat = ''" placeholder="nama@email.com atau 0812…" autocomplete="username" inputmode="email" required>
                                             </span>
                                         </label>
                                         <div x-show="galat" x-text="galat" x-cloak role="alert" class="flex-none text-[13px] text-status-dirty"></div>
-                                        <button type="submit" :disabled="proses" x-text="proses ? 'Mengirim…' : 'Kirim tautan'"
+                                        <button type="submit" :disabled="proses" :aria-busy="proses" x-text="proses ? 'Mengirim…' : 'Kirim tautan'"
                                                 class="h-11 w-full flex-none rounded-[10px] border-0 bg-clay-500 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 hover:bg-clay-600 disabled:cursor-wait disabled:opacity-70">Kirim tautan</button>
                                     </form>
                                 </div>
@@ -149,16 +149,16 @@
                                         <img src="{{ asset('ds/icons/mail-muted.svg') }}" alt="" width="22" height="22">
                                     </div>
                                     <div class="flex flex-none flex-col gap-1">
-                                        <div class="font-display text-[22px] font-bold uppercase tracking-[.05em] text-ink-900">Periksa email Anda</div>
+                                        <div class="font-display text-[22px] font-bold uppercase tracking-[.05em] text-ink-900" x-text="lewatHp ? 'Periksa WhatsApp Anda' : 'Periksa email Anda'">Periksa email Anda</div>
                                         <div class="text-[13px] leading-relaxed text-ink-500">
-                                            Jika <strong class="font-semibold text-ink-900" x-text="email"></strong> terdaftar, tautan untuk membuat kata sandi baru sudah dikirim.
-                                            Tautan berlaku 60 menit. Bila tidak ada di kotak masuk, periksa folder Spam.
+                                            Jika <strong class="font-semibold text-ink-900" x-text="email"></strong> terdaftar, tautan untuk membuat kata sandi baru sudah dikirim<span x-show="lewatHp"> ke WhatsApp nomor itu dan ke email akun Anda</span>.
+                                            Tautan berlaku 60 menit. <span x-show="!lewatHp">Bila tidak ada di kotak masuk, periksa folder Spam.</span>
                                         </div>
                                     </div>
-                                    <button type="button" @click="terkirim = false; $nextTick(() => $refs.email.focus())" class="self-start border-0 bg-transparent p-0 text-[13px] font-semibold text-clay-500">Kirim ke email lain</button>
+                                    <button type="button" @click="terkirim = false; $nextTick(() => $refs.email.focus())" class="self-start border-0 bg-transparent p-0 text-[13px] font-semibold text-clay-500">Kirim ke email atau nomor lain</button>
                                 </div>
                                 <div class="flex-none rounded-lg bg-cream-200 px-3.5 py-2.5 text-xs leading-relaxed text-ink-500">
-                                    Akun Anda tidak memakai email, atau email tidak diterima? Hubungi resepsionis di {{ $wisma['telepon'] }}.
+                                    Tautan tidak diterima? Hubungi resepsionis di {{ $wisma['telepon'] }}.
                                 </div>
                                 <button type="button" @click="lupa = false; fokus()" class="flex-none self-center border-0 bg-transparent p-0 text-[13px] font-semibold text-clay-500">Kembali ke halaman masuk</button>
                             </div>
@@ -210,7 +210,7 @@
                                         </label>
                                     @endforeach
                                 </div>
-                                <button type="submit" :disabled="proses" x-text="proses ? 'Memproses…' : 'Buat akun'"
+                                <button type="submit" :disabled="proses" :aria-busy="proses" x-text="proses ? 'Memproses…' : 'Buat akun'"
                                         class="h-11 w-full flex-none rounded-[10px] border-0 bg-clay-500 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 hover:bg-clay-600 disabled:cursor-wait disabled:opacity-70">Buat akun</button>
                             </form>
 
@@ -274,13 +274,14 @@
 <script>
     document.addEventListener('alpine:init', () => {
         // Aturan sama dengan RegisterController, supaya kesalahan umum langsung terlihat tanpa menunggu server
-        // Lupa kata sandi: minta tautan atur ulang lewat email
+        // Lupa kata sandi: minta tautan atur ulang lewat email atau nomor WhatsApp
         Alpine.data('formLupa', () => ({
             email: '',
             galat: '',
             proses: false,
             terkirim: false,
             goyang: false,
+            get lewatHp() { return !this.email.includes('@'); },
 
             mulai(email) {
                 this.email = email;
@@ -297,8 +298,8 @@
             async kirim(form) {
                 if (this.proses) return;
                 const email = this.email.trim();
-                if (!email) return this.salah('Email wajib diisi.');
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return this.salah('Format email tidak valid.');
+                if (!email) return this.salah('Email atau nomor WhatsApp wajib diisi.');
+                if (email.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return this.salah('Format email tidak valid.');
 
                 this.proses = true;
                 try {
@@ -310,7 +311,7 @@
                     if (res.ok) {
                         this.terkirim = true;
                     } else if (res.status === 422) {
-                        this.salah((await res.json()).errors.email[0]);
+                        this.salah(Object.values((await res.json()).errors)[0][0]);
                     } else if (res.status === 419) {
                         Alpine.store('toasts').tampil('Sesi Anda sudah berakhir. Muat ulang halaman, lalu coba lagi.', '#D4514A');
                     } else {

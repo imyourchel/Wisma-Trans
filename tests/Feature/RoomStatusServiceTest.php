@@ -96,9 +96,9 @@ class RoomStatusServiceTest extends TestCase
         $this->assertSame('Perubahan status dari Sedang dibersihkan ke Siap tidak diizinkan.', $galat['status'][0]);
     }
 
-    public function test_ST08_perpindahan_yang_tidak_ada_di_tabel_ditolak_walau_admin(): void
+    public function test_ST08_perpindahan_yang_tidak_ada_di_tabel_ditolak_walau_fo_dan_hk(): void
     {
-        $galat = $this->ditolak('101', RoomStatus::Cleaning, 'admin');
+        $galat = $this->ditolak('101', RoomStatus::Cleaning, 'fo_hk');
 
         $this->assertSame('Perubahan status dari Siap ke Sedang dibersihkan tidak diizinkan.', $galat['status'][0]);
     }
@@ -107,7 +107,7 @@ class RoomStatusServiceTest extends TestCase
     {
         $log = RoomStatusLog::count();
 
-        $this->ubah('101', RoomStatus::Available, 'admin');
+        $this->ubah('101', RoomStatus::Available, 'fo');
 
         $this->assertSame($log, RoomStatusLog::count());
     }
@@ -153,7 +153,7 @@ class RoomStatusServiceTest extends TestCase
     {
         $this->kamar('101')->update(['is_active' => false]);
 
-        $galat = $this->ditolak('101', RoomStatus::VacantDirty, 'admin');
+        $galat = $this->ditolak('101', RoomStatus::VacantDirty, 'fo');
 
         $this->assertStringContainsString('nonaktif', $galat['status'][0]);
     }

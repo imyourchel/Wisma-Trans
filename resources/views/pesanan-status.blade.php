@@ -1,14 +1,17 @@
 @php
     use App\Models\Payment;
     use App\Models\ServiceOrder;
+    use App\Services\PembayaranMidtrans;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $dibayar = $order->sudahDibayar();
     $batal = $order->status === 'cancelled';
     $ambil = $order->serving_type === 'take_away';
     $bayarBerhasil = $order->invoice?->payments->firstWhere('status', 'success');
-    $bayarTertunda = $order->invoice?->payments->where('status', 'pending')->sortByDesc('id')->first();
-    $batasBayar = $order->order_date->copy()->addMinutes((int) config('services.midtrans.batas_bayar_menit', 60));
+    $batasBayar = $order->batasBayar();
+    // Belum dibayar: tamu memilih metode dan melihat nomor VA atau QRIS langsung di halaman ini
+    $siapBayar = ! $dibayar && ! $batal && PembayaranMidtrans::siap();
+    $total = (int) $order->invoice?->total_amount;
     $hp = $order->customer?->phone;
     $hpSamar = $hp ? substr($hp, 0, 4).str_repeat('•', max(0, strlen($hp) - 7)).substr($hp, -3) : '—';
 
@@ -36,13 +39,19 @@
         'maintenance' => 'border-[rgba(232,172,69,.45)] bg-[rgba(232,172,69,.12)] text-[#8A5E10]',
         'available' => 'border-[rgba(92,158,103,.35)] bg-[rgba(92,158,103,.10)] text-status-available',
     ][$warna];
-    $pantau = ! $batal && $order->status !== 'delivered';
+    // Muat ulang otomatis hanya setelah dibayar, agar formulir bayar yang sedang diisi tidak hilang
+    $pantau = $dibayar && $order->status !== 'delivered';
 @endphp
 
 <x-layouts.guest :title="$title">
-<div class="wt-container max-w-[760px] animate-wt-masuk py-10 sm:py-14"
-     x-data="statusPesanan(@js(['urlBayar' => route('pesanan.bayar', ['kode' => $order->kodeUrl(), 't' => $order->access_token]), 'pantau' => $pantau]))">
+<div @class(["wt-container animate-wt-masuk py-10 sm:py-14", "max-w-[980px]" => $siapBayar, "max-w-[760px]" => ! $siapBayar])
+     x-data="statusPesanan(@js(['pantau' => $pantau]))">
 
+    @auth
+        <a href="{{ route('pesanan') }}" class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-ink-500 hover:text-clay-600">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Pesanan saya
+        </a>
+    @endauth
     <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
             <div class="wt-eyebrow">Pesanan makanan</div>
@@ -57,30 +66,52 @@
         </button>
     </div>
 
-    {{-- Status utama --}}
-    <div class="rounded-lg border px-5 py-4 {{ $gaya }}" role="status">
-        <div class="font-display text-base font-bold">{{ $judul }}</div>
-        <p class="mb-0 mt-1 text-sm text-ink-900/80">{{ $pesan }}</p>
-        @if (! $dibayar && ! $batal && $bayarTertunda)
-            <p class="mb-0 mt-2 text-sm text-ink-900/80">Anda memilih <strong>{{ Payment::METHODS[$bayarTertunda->method] ?? $bayarTertunda->method }}</strong>. Selesaikan pembayaran sesuai petunjuk yang diberikan, lalu tekan Muat ulang status.</p>
-        @endif
-        <div class="mt-4 flex flex-wrap gap-2">
-            @if (! $dibayar && ! $batal)
-                <button type="button" @click="bayar()" :disabled="proses"
-                        class="h-10 rounded border-0 bg-clay-500 px-5 font-display text-xs font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 disabled:cursor-wait disabled:opacity-70"
-                        x-text="proses ? 'Membuka pembayaran…' : 'Bayar {{ $rp($order->invoice?->total_amount) }}'"></button>
+    {{-- Pembayaran: pilih metode, lalu nomor VA atau QRIS tampil di kartu ini --}}
+    @if ($siapBayar)
+        <x-bayar-online :url-bayar="route('pesanan.bayar', ['kode' => $order->kodeUrl(), 't' => $order->access_token])"
+                        :url-cek="route('pesanan.cek', ['kode' => $order->kodeUrl(), 't' => $order->access_token])"
+                        :jumlah="$total" :batas="$batasBayar" :tagihan="$tagihan ?? null"
+                        keterangan="Pesanan diproses dapur setelah pembayaran berhasil.">
+            <div class="mt-5 border-t border-cream-300 pt-4 font-display text-[11px] font-bold uppercase tracking-[.12em] text-ink-500">Rincian pesanan</div>
+            <ul class="m-0 mt-2 flex list-none flex-col gap-2.5 p-0 text-sm">
+                @foreach ($order->items as $item)
+                    <li class="flex justify-between gap-3">
+                        <span class="min-w-0">
+                            <span class="block">{{ $item->service?->name }} <span class="text-ink-500">×{{ (float) $item->quantity }}</span></span>
+                            @if ($item->note)<span class="block text-xs italic text-ink-500">Catatan: {{ $item->note }}</span>@endif
+                        </span>
+                        <span class="flex-none tabular-nums">{{ $rp($item->subtotal) }}</span>
+                    </li>
+                @endforeach
+            </ul>
+            @if ($order->note)
+                <p class="mb-0 mt-3 text-xs text-ink-500">Catatan untuk restoran: <span class="text-ink-900">{{ $order->note }}</span></p>
             @endif
-            @if ($batal)
-                <a href="{{ route('menu') }}" class="inline-flex h-10 items-center rounded bg-clay-500 px-5 font-display text-xs font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">Pesan lagi</a>
-            @endif
-            @if ($pantau)
-                <button type="button" @click="location.reload()" class="h-10 rounded border border-cream-400 bg-cream-50 px-5 text-[13px] text-brown-800 hover:bg-cream-200">Muat ulang status</button>
-            @endif
+
+            <dl class="m-0 mt-5 flex flex-col gap-1.5 border-t border-cream-300 pt-4 text-xs">
+                <div class="flex justify-between gap-3"><dt class="text-ink-500">Pemesan</dt><dd class="m-0 truncate font-semibold">{{ $order->customer?->full_name }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-ink-500">Cara menikmati</dt><dd class="m-0 font-semibold">{{ ServiceOrder::SERVING[$order->serving_type] ?? $order->serving_type }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-ink-500">Nomor nota</dt><dd class="m-0 font-semibold tabular-nums">{{ $order->invoice?->invoice_number }}</dd></div>
+            </dl>
+        </x-bayar-online>
+    @else
+        {{-- Status utama --}}
+        <div class="rounded-lg border px-5 py-4 {{ $gaya }}" role="status">
+            <div class="font-display text-base font-bold">{{ $judul }}</div>
+            <p class="mb-0 mt-1 text-sm text-ink-900/80">{{ $pesan }}</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+                @if ($batal)
+                    <a href="{{ route('menu') }}" class="inline-flex h-10 items-center rounded bg-clay-500 px-5 font-display text-xs font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">Pesan lagi</a>
+                @endif
+                @if ($pantau)
+                    <button type="button" @click="location.reload()" class="h-10 rounded border border-cream-400 bg-cream-50 px-5 text-[13px] text-brown-800 hover:bg-cream-200">Muat ulang status</button>
+                @endif
+            </div>
         </div>
-    </div>
+    @endif
 
     {{-- Garis waktu --}}
-    @unless ($batal)
+    @unless ($batal || ! $dibayar)
         <ol class="mt-8 grid grid-cols-4 gap-2 p-0" aria-label="Tahapan pesanan">
             @foreach ($langkah as $i => [$nama, $ket])
                 @php $sudah = $selesai($i); $kini = ! $sudah && ($i === 0 ? ! $dibayar : $selesai($i - 1)); @endphp
@@ -106,6 +137,7 @@
     @endunless
 
     {{-- Rincian --}}
+    @unless ($siapBayar)
     <div class="wt-card mt-8 overflow-hidden">
         <div class="border-b border-cream-300 px-5 py-3.5 font-display text-[13px] font-bold uppercase tracking-[.08em]">Rincian pesanan</div>
         <div class="divide-y divide-cream-300">
@@ -114,13 +146,16 @@
                     <div class="min-w-0">
                         <div class="font-semibold">{{ $item->service?->name }}</div>
                         <div class="text-xs tabular-nums text-ink-500">{{ $rp($item->unit_price) }} × {{ (float) $item->quantity }}</div>
+                        @if ($item->note)
+                            <div class="mt-1 text-xs italic text-ink-900">Catatan: {{ $item->note }}</div>
+                        @endif
                     </div>
                     <div class="font-semibold tabular-nums">{{ $rp($item->subtotal) }}</div>
                 </div>
             @endforeach
         </div>
         @if ($order->note)
-            <div class="border-t border-cream-300 px-5 py-3 text-sm"><span class="text-ink-500">Catatan:</span> {{ $order->note }}</div>
+            <div class="border-t border-cream-300 px-5 py-3 text-sm"><span class="text-ink-500">Catatan untuk restoran:</span> {{ $order->note }}</div>
         @endif
         <div class="flex items-baseline justify-between border-t border-cream-300 bg-cream-100 px-5 py-4">
             <span class="text-sm text-ink-500">Total</span>
@@ -145,6 +180,7 @@
             </dd>
         </div>
     </dl>
+    @endunless
 
     <p class="mt-8 text-center text-xs text-ink-500">
         Simpan tautan halaman ini untuk memantau pesanan. Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.
@@ -152,43 +188,17 @@
 </div>
 
 @push('scripts')
-@if (! $dibayar && ! $batal && \App\Services\PembayaranMidtrans::siap())
-    <script src="{{ \App\Services\PembayaranMidtrans::urlSnapJs() }}" data-client-key="{{ config('services.midtrans.client_key') }}"></script>
-@endif
 <script>
     document.addEventListener('alpine:init', () => {
         Alpine.data('statusPesanan', (cfg) => ({
-            proses: false,
             init() {
-                // Perbarui status otomatis selama pesanan belum selesai (dijeda saat jendela bayar terbuka)
-                if (cfg.pantau) setInterval(() => { if (!this.proses && document.visibilityState === 'visible') location.reload(); }, 30000);
+                // Perbarui status otomatis setelah dibayar (dapur memproses pesanan)
+                if (cfg.pantau) setInterval(() => { if (document.visibilityState === 'visible') location.reload(); }, 30000);
             },
             salin() {
                 navigator.clipboard?.writeText(location.href)
                     .then(() => Alpine.store('toasts').tampil('Tautan pesanan disalin'))
                     .catch(() => Alpine.store('toasts').tampil('Salin tautan dari bilah alamat browser', '#E8AC45'));
-            },
-            async bayar() {
-                if (this.proses) return;
-                const gagal = (teks) => Alpine.store('toasts').tampil(teks, '#D4514A');
-                this.proses = true;
-                try {
-                    const res = await fetch(cfg.urlBayar, {
-                        method: 'POST',
-                        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-                    });
-                    const data = await res.json().catch(() => ({}));
-                    if (res.ok && data.token && window.snap) {
-                        const muat = () => location.reload();
-                        window.snap.pay(data.token, { onSuccess: muat, onPending: muat, onError: muat, onClose: () => { this.proses = false; } });
-                        return;
-                    }
-                    if (res.status === 409) { gagal(data.pesan); setTimeout(() => location.reload(), 1200); return; }
-                    gagal(data.pesan || 'Halaman pembayaran gagal dibuka. Silakan coba lagi.');
-                } catch {
-                    gagal('Tidak dapat terhubung ke server. Periksa koneksi internet Anda, lalu coba lagi.');
-                }
-                this.proses = false;
             },
         }));
     });

@@ -2,27 +2,43 @@
 
 namespace App\Services;
 
+use App\Contracts\BayarOnline;
 use App\Models\Payment;
+use App\Models\Reservation;
 use App\Models\ServiceOrder;
 use App\Support\Nomor;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Midtrans\Config;
-use Midtrans\Snap;
+use Midtrans\CoreApi;
 use Midtrans\Transaction;
 use Throwable;
 
 /**
- * Pembayaran pesanan makanan lewat Midtrans Snap.
+ * Pembayaran online lewat Midtrans Core API: pesanan makanan (lunas) dan uang muka reservasi kamar.
+ * Tamu memilih metode di halaman pesanan, lalu nomor virtual account atau kode QRIS ditampilkan
+ * dengan tampilan Wisma Trans sendiri.
  *
- * Setiap percobaan bayar memakai order_id Midtrans sendiri, misalnya WT-ORD-202609-0132-K3J9,
- * karena order_id yang sudah kedaluwarsa tidak dapat dipakai lagi. Status diterapkan dari
- * notifikasi Midtrans maupun dari pengecekan langsung, dan aman diterapkan berulang kali.
+ * Setiap percobaan bayar memakai order_id Midtrans sendiri, misalnya WT-ORD202609-0132-K3J9 atau
+ * WT-RSV0016-DP-K3J9, karena order_id yang sudah dipakai tidak dapat dipakai lagi. Semua percobaan berakhir
+ * pada batas bayar yang sama. Status diterapkan dari notifikasi Midtrans maupun dari pengecekan langsung,
+ * dan aman diterapkan berulang kali.
  */
 class PembayaranMidtrans
 {
+    /** Metode yang ditawarkan: [nama, keterangan singkat]. */
+    public const METODE = [
+        'qris' => ['QRIS', 'GoPay, OVO, DANA, ShopeePay, LinkAja, dan m-banking'],
+        'bca' => ['BCA Virtual Account', 'BCA mobile, KlikBCA, atau ATM BCA'],
+        'bni' => ['BNI Virtual Account', 'BNI Mobile Banking atau ATM BNI'],
+        'bri' => ['BRI Virtual Account', 'BRImo atau ATM BRI'],
+        'mandiri' => ['Mandiri Bill Payment', "Livin' by Mandiri atau ATM Mandiri"],
+        'permata' => ['Permata Virtual Account', 'PermataMobile X, ATM, atau bank lain'],
+    ];
+
     public function __construct()
     {
         Config::$serverKey = (string) config('services.midtrans.server_key');
@@ -30,6 +46,8 @@ class PembayaranMidtrans
         Config::$isProduction = (bool) config('services.midtrans.is_production');
         Config::$isSanitized = true;
         Config::$is3ds = true;
+        // Batas waktu agar halaman tidak menggantung saat Midtrans lambat menjawab
+        Config::$curlOptions = [CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_TIMEOUT => 20, CURLOPT_HTTPHEADER => []];
     }
 
     public static function siap(): bool
@@ -37,62 +55,111 @@ class PembayaranMidtrans
         return filled(config('services.midtrans.server_key')) && filled(config('services.midtrans.client_key'));
     }
 
-    public static function urlSnapJs(): string
+    /**
+     * Kunci cache per tagihan memakai token akses (acak), bukan id atau kode,
+     * agar tidak tertukar dengan data lain yang kebetulan bernomor sama, misalnya di database salinan.
+     */
+    public static function kunci(BayarOnline $x, string $jenis): string
     {
-        return config('services.midtrans.is_production')
-            ? 'https://app.midtrans.com/snap/snap.js'
-            : 'https://app.sandbox.midtrans.com/snap/snap.js';
+        return "midtrans.{$jenis}.{$x->kunciBayar()}";
     }
 
-    /** Token Snap untuk pesanan. Token yang masih berlaku dipakai ulang agar tidak membuat transaksi ganda. */
-    public function tokenSnap(ServiceOrder $order): string
+    /** Tagihan yang sedang berjalan (nomor VA atau QR), atau null bila tamu belum memilih metode. */
+    public function tagihanAktif(BayarOnline $x): ?array
     {
-        $cache = "midtrans.snap.{$order->id}";
-        if ($simpan = Cache::get($cache)) {
-            return $simpan['token'];
+        return Cache::get(self::kunci($x, 'tagihan'));
+    }
+
+    /**
+     * Buat tagihan untuk metode pilihan. Tagihan dengan metode yang sama dipakai ulang; memilih metode lain
+     * mengakhiri tagihan sebelumnya di Midtrans agar tamu tidak membayar dua kali.
+     *
+     * @return array{metode: string, order_id: string, jumlah: int, nomor: ?string, kode_perusahaan: ?string, qr: ?string}
+     */
+    public function buatTagihan(BayarOnline $x, string $metode): array
+    {
+        $lama = $this->tagihanAktif($x);
+        if ($lama && $lama['metode'] === $metode) {
+            return $lama;
         }
 
-        $order->loadMissing('items.service', 'customer', 'invoice');
-        $idMidtrans = 'WT-'.str_replace('/', '', substr($order->order_code, 0, 11)).'-'.substr($order->order_code, -4).'-'.Str::upper(Str::random(4));
-        $menit = (int) config('services.midtrans.batas_bayar_menit', 60);
+        $idMidtrans = $x->awalanMidtrans().'-'.Str::upper(Str::random(4));
+        $jumlah = $x->jumlahBayar();
+        $sisaMenit = max(1, (int) ceil(now()->diffInSeconds($x->batasBayar(), false) / 60));
+        $pembayar = $x->pembayar();
 
-        $token = Snap::getSnapToken([
-            'transaction_details' => [
-                'order_id' => $idMidtrans,
-                'gross_amount' => (int) $order->invoice->total_amount,
-            ],
-            'item_details' => $order->items->map(fn ($i) => [
-                'id' => $i->service->code,
-                'price' => (int) $i->unit_price,
-                'quantity' => (int) $i->quantity,
-                'name' => Str::limit($i->service->name, 50, ''),
-            ])->values()->all(),
+        $hasil = (array) CoreApi::charge([
+            ...$this->parameterMetode($metode, $x),
+            'transaction_details' => ['order_id' => $idMidtrans, 'gross_amount' => $jumlah],
+            'item_details' => $x->rincianBayar(),
             'customer_details' => array_filter([
-                'first_name' => Str::limit($order->customer->full_name, 50, ''),
-                'phone' => $order->customer->phone,
-                'email' => $order->customer->email,
+                'first_name' => Str::limit((string) $pembayar?->full_name, 50, ''),
+                'phone' => $pembayar?->phone,
+                'email' => $pembayar?->email,
             ]),
-            'expiry' => ['unit' => 'minute', 'duration' => $menit],
-            'callbacks' => ['finish' => $order->urlStatus()],
+            'custom_expiry' => ['order_time' => now()->format('Y-m-d H:i:s O'), 'expiry_duration' => $sisaMenit, 'unit' => 'minute'],
         ]);
 
-        // Simpan sedikit lebih singkat dari masa berlaku token di Midtrans
-        Cache::put($cache, ['token' => $token, 'order_id' => $idMidtrans], now()->addMinutes($menit - 5));
-        Cache::put("midtrans.percobaan.{$order->id}", array_values(array_unique([
-            ...Cache::get("midtrans.percobaan.{$order->id}", []), $idMidtrans,
-        ])), now()->addDays(2));
+        $tagihan = ['metode' => $metode, 'order_id' => $idMidtrans, 'jumlah' => $jumlah, ...self::bacaHasil($hasil)];
+        Cache::put(self::kunci($x, 'tagihan'), $tagihan, $x->batasBayar());
+        Cache::put(self::kunci($x, 'percobaan'), array_values(array_unique([
+            ...Cache::get(self::kunci($x, 'percobaan'), []), $idMidtrans,
+        ])), $x->batasBayar()->copy()->addDays(2));
 
-        return $token;
+        if ($lama) {
+            $this->akhiri($lama['order_id']);
+        }
+
+        return $tagihan;
     }
 
-    /** Tanyakan status ke Midtrans untuk semua percobaan bayar pesanan ini (cadangan bila notifikasi tidak sampai). */
-    public function sinkronkan(ServiceOrder $order): void
+    /** Akhiri tagihan yang sedang berjalan, misalnya saat reservasi dibatalkan sebelum dibayar. */
+    public function akhiriTagihan(BayarOnline $x): void
     {
-        if ($order->sudahDibayar() || ! self::siap()) {
+        if ($lama = $this->tagihanAktif($x)) {
+            Cache::forget(self::kunci($x, 'tagihan'));
+            $this->akhiri($lama['order_id']);
+        }
+    }
+
+    private function akhiri(string $idMidtrans): void
+    {
+        try {
+            Transaction::expire($idMidtrans);
+        } catch (Throwable $e) {
+            Log::warning('Tagihan Midtrans lama gagal diakhiri', ['order_id' => $idMidtrans, 'pesan' => $e->getMessage()]);
+        }
+    }
+
+    private function parameterMetode(string $metode, BayarOnline $x): array
+    {
+        return match ($metode) {
+            'qris' => ['payment_type' => 'qris', 'qris' => ['acquirer' => 'gopay']],
+            'mandiri' => ['payment_type' => 'echannel', 'echannel' => ['bill_info1' => 'Pembayaran', 'bill_info2' => Str::limit($x->keteranganBayar(), 30, '')]],
+            default => ['payment_type' => 'bank_transfer', 'bank_transfer' => ['bank' => $metode]],
+        };
+    }
+
+    /** Ambil nomor bayar dari jawaban charge Midtrans. */
+    private static function bacaHasil(array $h): array
+    {
+        $qr = collect($h['actions'] ?? [])->map(fn ($a) => (array) $a)->firstWhere('name', 'generate-qr-code');
+
+        return [
+            'nomor' => $h['bill_key'] ?? $h['permata_va_number'] ?? ((array) ($h['va_numbers'][0] ?? []))['va_number'] ?? null,
+            'kode_perusahaan' => $h['biller_code'] ?? null,
+            'qr' => $qr['url'] ?? null,
+        ];
+    }
+
+    /** Tanyakan status ke Midtrans untuk semua percobaan bayar (cadangan bila notifikasi tidak sampai). */
+    public function sinkronkan(BayarOnline $x): void
+    {
+        if ($x->sudahDibayar() || ! self::siap()) {
             return;
         }
 
-        foreach (Cache::get("midtrans.percobaan.{$order->id}", []) as $idMidtrans) {
+        foreach (Cache::get(self::kunci($x, 'percobaan'), []) as $idMidtrans) {
             try {
                 $this->terapkan((array) Transaction::status($idMidtrans));
             } catch (Throwable $e) {
@@ -104,14 +171,22 @@ class PembayaranMidtrans
         }
     }
 
-    /** Terapkan status transaksi Midtrans ke pembayaran, nota, dan pesanan. */
-    public function terapkan(array $st): ?ServiceOrder
+    /** Terapkan status transaksi Midtrans ke pembayaran, nota, dan pesanan atau reservasinya. */
+    public function terapkan(array $st): ?Model
     {
-        if (! preg_match('/^WT-ORD(\d{4})(\d{2})-(\d{4})-/', $st['order_id'] ?? '', $m)) {
+        $id = $st['order_id'] ?? '';
+        $x = match (true) {
+            (bool) preg_match('/^WT-ORD(\d{4})(\d{2})-(\d{4})-/', $id, $m) => ServiceOrder::with('invoice')->where('order_code', "ORD/{$m[1]}/{$m[2]}/{$m[3]}")->first(),
+            (bool) preg_match('/^WT-RSV(\d{4,})-DP-/', $id, $m) => Reservation::with('stayInvoice')->where('reservation_code', 'RSV-'.$m[1])->first(),
+            default => null,
+        };
+        if (! $x || ! $x->notaBayar()) {
             return null;
         }
-        $order = ServiceOrder::with('invoice')->where('order_code', "ORD/{$m[1]}/{$m[2]}/{$m[3]}")->first();
-        if (! $order || ! $order->invoice) {
+        // Jumlah harus sama dengan tagihan; transaksi yang jumlahnya lain bukan milik data ini
+        if (isset($st['gross_amount']) && (int) round((float) $st['gross_amount']) !== $x->jumlahBayar()) {
+            Log::warning('Status Midtrans diabaikan: jumlah tidak sesuai tagihan', ['order_id' => $id, 'jumlah' => $st['gross_amount'], 'tagihan' => $x->jumlahBayar()]);
+
             return null;
         }
 
@@ -124,23 +199,24 @@ class PembayaranMidtrans
             default => 'failed',
         };
 
-        DB::transaction(function () use ($order, $st, $hasil, $status) {
+        $baruBerhasil = DB::transaction(function () use ($x, $st, $hasil, $status) {
+            $nota = $x->notaBayar();
             $bayar = Payment::where('midtrans_order_id', $st['order_id'])->lockForUpdate()->first();
             // Pembayaran yang sudah berhasil tidak diubah lagi oleh notifikasi yang datang terlambat
             if ($bayar?->status === 'success') {
-                return;
+                return false;
             }
 
             $bayar ??= new Payment([
                 'payment_code' => Nomor::pembayaran(),
-                'invoice_id' => $order->invoice_id,
+                'invoice_id' => $nota->id,
                 'transaction_type' => 'payment',
-                'payment_purpose' => 'service',
+                'payment_purpose' => $x instanceof Reservation ? 'down_payment' : 'service',
                 'channel' => 'online',
                 'midtrans_order_id' => $st['order_id'],
             ]);
             $bayar->fill([
-                'amount' => (float) ($st['gross_amount'] ?? $order->invoice->total_amount),
+                'amount' => (float) ($st['gross_amount'] ?? $x->jumlahBayar()),
                 'method' => self::metode($st['payment_type'] ?? ''),
                 'status' => $hasil,
                 'midtrans_transaction_id' => $st['transaction_id'] ?? null,
@@ -148,17 +224,55 @@ class PembayaranMidtrans
                 'paid_at' => $hasil === 'success' ? ($st['settlement_time'] ?? $st['transaction_time'] ?? now()) : null,
             ])->save();
 
-            if ($hasil === 'success') {
-                $order->invoice->update(['paid_amount' => $order->invoice->total_amount, 'status' => 'paid']);
-            } elseif ($status === 'expire' && $order->status === 'pending' && ! $order->sudahDibayar()) {
-                // Waktu bayar habis: pesanan dibatalkan agar tidak masuk antrean dapur
-                $order->update(['status' => 'cancelled']);
-                $order->invoice->update(['status' => 'cancelled']);
-                Cache::forget("midtrans.snap.{$order->id}");
-            }
+            return $x instanceof Reservation
+                ? $this->terapkanReservasi($x, $bayar, $hasil)
+                : $this->terapkanPesanan($x, $hasil, $status);
         });
 
-        return $order->fresh('invoice');
+        if ($baruBerhasil && $x instanceof Reservation) {
+            app(NotifikasiReservasi::class)->uangMukaDiterima($x->fresh());
+        }
+
+        return $x->fresh();
+    }
+
+    private function terapkanPesanan(ServiceOrder $order, string $hasil, string $status): bool
+    {
+        if ($hasil === 'success') {
+            $order->invoice->update(['paid_amount' => $order->invoice->total_amount, 'status' => 'paid']);
+
+            return true;
+        }
+        if ($status === 'expire' && $order->status === 'pending' && ! $order->sudahDibayar() && $order->batasBayar()->subMinute()->isPast()) {
+            // Waktu bayar habis: pesanan dibatalkan agar tidak masuk antrean dapur.
+            // Tagihan yang diakhiri karena tamu ganti metode sebelum batas waktu tidak membatalkan pesanan.
+            $order->update(['status' => 'cancelled']);
+            $order->invoice->update(['status' => 'cancelled']);
+            Cache::forget(self::kunci($order, 'tagihan'));
+        }
+
+        return false;
+    }
+
+    private function terapkanReservasi(Reservation $r, Payment $bayar, string $hasil): bool
+    {
+        if ($hasil !== 'success') {
+            return false;
+        }
+        $nota = $r->notaBayar();
+        $nota->paid_amount = (float) $nota->paid_amount + (float) $bayar->amount;
+        app(NotaService::class)->hitungUlang($nota);
+        Cache::forget(self::kunci($r, 'tagihan'));
+
+        if ($r->status === 'pending_payment') {
+            app(ReservasiService::class)->uangMukaDiterima($r, 'Uang muka diterima lewat Midtrans ('.(Payment::METHODS[$bayar->method] ?? $bayar->method).')');
+
+            return true;
+        }
+        // Dibayar setelah reservasi dibatalkan: uang tetap tercatat, resepsionis menindaklanjuti pengembaliannya
+        app(ReservasiService::class)->catat($r, $r->status, null, 'Uang muka '.number_format((float) $bayar->amount, 0, ',', '.').' diterima setelah reservasi '.$r->label().'; perlu ditindaklanjuti');
+
+        return false;
     }
 
     private static function metode(string $tipe): string

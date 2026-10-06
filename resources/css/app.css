@@ -208,3 +208,35 @@ select:-webkit-autofill {
 input:autofill {
     box-shadow: 0 0 0 1000px var(--color-cream-50) inset;
 }
+
+/*
+ * Indikator proses (lihat resources/js/app.js): bilah di atas layar dan pemutar pada tombol yang sedang memproses.
+ * aria-busy dipasang skrip atau Alpine; data-loading dipasang Livewire pada tombol yang memicu permintaan.
+ */
+@keyframes wt-putar { to { transform: rotate(360deg); } }
+@keyframes wt-bilah-maju { from { transform: scaleX(0); } to { transform: scaleX(.92); } }
+@keyframes wt-bilah-kilau { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+
+html.wt-memuat body::after {
+    content: ""; position: fixed; inset: 0 0 auto 0; z-index: 1000; height: 3px; pointer-events: none;
+    transform-origin: left center;
+    background: linear-gradient(90deg, var(--color-clay-500), var(--color-sand-300) 50%, var(--color-clay-500)) 0 0 / 40% 100% no-repeat, var(--color-clay-500);
+    animation: wt-bilah-maju 8s cubic-bezier(.08, .7, .2, 1) forwards, wt-bilah-kilau 1.1s linear infinite;
+    box-shadow: 0 0 8px rgba(181, 113, 74, .55);
+}
+html.wt-memuat, html.wt-memuat * { cursor: progress; }
+
+button[aria-busy="true"],
+:is(.wt-btn-primary, .wt-btn-outline, .wt-btn-sm, button[type="submit"])[data-loading] { pointer-events: none; }
+
+button[aria-busy="true"]::before,
+:is(.wt-btn-primary, .wt-btn-outline, .wt-btn-sm, button[type="submit"])[data-loading]::before {
+    content: ""; display: inline-block; flex: none; width: 1.05em; height: 1.05em; margin-right: .6em; vertical-align: -.18em;
+    border: 2px solid currentColor; border-right-color: transparent; border-radius: 9999px;
+    animation: wt-putar .7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    html.wt-memuat body::after { animation: none; transform: scaleX(.6); }
+    button[aria-busy="true"]::before,
+    :is(.wt-btn-primary, .wt-btn-outline, .wt-btn-sm, button[type="submit"])[data-loading]::before { animation-duration: 1.6s; }
+}

@@ -92,7 +92,8 @@ class KamarTest extends TestCase
         $this->patch(route('staf.kamar.toggle', $kamar))->assertSessionHas('status', 'Kamar 101 dinonaktifkan.');
 
         $this->assertFalse($kamar->refresh()->is_active);
-        Livewire::test(RoomStatusBoard::class)
+        // Papan status dilihat Manager/FO/HK; Admin tidak membukanya
+        Livewire::actingAs($this->akun('manager'))->test(RoomStatusBoard::class)
             ->assertViewHas('floors', fn ($floors) => ! $floors->flatten(1)->contains('room_number', '101'));
     }
 

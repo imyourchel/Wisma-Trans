@@ -47,10 +47,13 @@
         </nav>
 
         <div class="ml-auto flex flex-none items-center gap-3 lg:ml-0">
-            <a href="{{ route('cek') }}" class="hidden whitespace-nowrap p-2 text-sm text-[rgba(242,235,220,.78)] hover:text-cream-150 hover:no-underline sm:inline-block">Cek Pesanan</a>
+            {{-- Cek Pesanan hanya untuk tamu tanpa akun; yang sudah masuk memakai Pesanan saya --}}
+            @guest
+                <a href="{{ route('cek') }}" class="hidden whitespace-nowrap p-2 text-sm text-[rgba(242,235,220,.78)] hover:text-cream-150 hover:no-underline sm:inline-block">Cek Pesanan</a>
+            @endguest
 
             @auth
-                <div class="relative" @click.outside="akun = false">
+                <div class="relative hidden lg:block" @click.outside="akun = false">
                     <button type="button" @click="akun = !akun" :aria-expanded="akun"
                             class="flex h-10 max-w-[200px] items-center gap-2 rounded border border-[rgba(242,235,220,.22)] bg-[rgba(242,235,220,.12)] px-4 font-display text-[13px] font-semibold text-cream-150">
                         <span class="truncate">{{ auth()->user()->name }}</span>
@@ -87,13 +90,36 @@
         <div x-show="laci" x-transition.opacity @click="laci = false" class="absolute inset-0 bg-[rgba(62,42,28,.44)] backdrop-blur-[2px]"></div>
         <div x-show="laci" x-transition:enter="transition duration-200 ease-wt" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
              x-transition:leave="transition duration-150 ease-wt" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full"
-             class="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col bg-brown-800 p-5">
+             class="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-brown-800 p-5">
             <div class="mb-6 flex items-center justify-between">
                 <img src="{{ asset('ds/logo/DC-wismatrans-landscape.png') }}" alt="Wisma Trans" class="h-9 w-auto">
                 <button type="button" @click="laci = false" class="flex h-9 w-9 items-center justify-center rounded hover:bg-[rgba(242,235,220,.12)]" aria-label="Tutup menu">
                     <img src="{{ asset('ds/icons/x-cream.svg') }}" alt="" width="18" height="18">
                 </button>
             </div>
+            @auth
+                @php
+                    $pengguna = auth()->user();
+                    $inisial = collect(explode(' ', trim($pengguna->name)))->filter()->take(2)->map(fn ($k) => mb_strtoupper(mb_substr($k, 0, 1)))->join('');
+                @endphp
+                {{-- Akun (di layar lebar ada di tombol profil header) --}}
+                <div class="mb-5 rounded-md border border-[rgba(242,235,220,.16)] bg-[rgba(242,235,220,.06)] p-3">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-sand-300 font-display text-sm font-bold text-brown-800">{{ $inisial }}</span>
+                        <div class="min-w-0">
+                            <div class="truncate font-display text-sm font-semibold text-cream-50">{{ $pengguna->name }}</div>
+                            <div class="truncate text-xs text-[rgba(242,235,220,.66)]">{{ $pengguna->email }}</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex flex-col gap-0.5 border-t border-[rgba(242,235,220,.14)] pt-2">
+                        @if ($pengguna->isStaff())
+                            <a href="{{ route('staf.dashboard') }}" class="rounded px-2 py-2 text-sm text-cream-150 hover:bg-[rgba(242,235,220,.12)] hover:text-cream-50 hover:no-underline">Panel staf</a>
+                        @endif
+                        <a href="{{ route('pesanan') }}" @class(['rounded px-2 py-2 text-sm hover:bg-[rgba(242,235,220,.12)] hover:text-cream-50 hover:no-underline', 'bg-[rgba(242,235,220,.14)] text-cream-50' => request()->routeIs('pesanan'), 'text-cream-150' => ! request()->routeIs('pesanan')])>Pesanan saya</a>
+                        <a href="{{ route('profil') }}" @class(['rounded px-2 py-2 text-sm hover:bg-[rgba(242,235,220,.12)] hover:text-cream-50 hover:no-underline', 'bg-[rgba(242,235,220,.14)] text-cream-50' => request()->routeIs('profil'), 'text-cream-150' => ! request()->routeIs('profil')])>Profil</a>
+                    </div>
+                </div>
+            @endauth
             <nav class="flex flex-col gap-1" aria-label="Menu utama">
                 @foreach ($nav as $item)
                     @php $aktif = request()->routeIs(...$item['aktif']); @endphp
@@ -104,8 +130,14 @@
                            'text-cream-150 hover:text-cream-150' => ! $aktif,
                        ])>{{ $item['label'] }}</a>
                 @endforeach
-                <a href="{{ route('cek') }}" class="mt-2 rounded border-t border-[rgba(242,235,220,.16)] px-3 py-3 text-sm text-[rgba(242,235,220,.78)] hover:text-cream-150 hover:no-underline">Cek Pesanan</a>
+                @guest<a href="{{ route('cek') }}" class="mt-2 rounded border-t border-[rgba(242,235,220,.16)] px-3 py-3 text-sm text-[rgba(242,235,220,.78)] hover:text-cream-150 hover:no-underline">Cek Pesanan</a>@endguest
             </nav>
+            @auth
+                <form method="POST" action="{{ route('logout') }}" class="mt-auto border-t border-[rgba(242,235,220,.16)] pt-3">
+                    @csrf
+                    <button type="submit" class="w-full rounded border-0 bg-transparent px-3 py-3 text-left text-sm font-semibold text-[#F0A29C] hover:bg-[rgba(242,235,220,.08)]">Keluar</button>
+                </form>
+            @endauth
         </div>
     </div>
 </header>
@@ -118,7 +150,7 @@
     <div class="wt-container grid grid-cols-1 items-start gap-x-8 gap-y-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
         <div class="flex min-w-0 flex-col gap-5">
             <img src="{{ asset('ds/logo/wismatrans-landscape-dark.png') }}" alt="Wisma Trans" class="-mb-3 h-[52px] w-auto self-start">
-            <p class="m-0 max-w-[280px] text-sm leading-[1.7]">Penginapan keluarga dengan 32 kamar, restoran, dan aula di jantung Malili.</p>
+            <p class="m-0 max-w-[280px] text-sm leading-[1.7]">Menginap nyaman, bersantap hangat, dan ruang pertemuan untuk setiap acara di pusat kota Malili.</p>
             <div class="flex items-center gap-4">
                 <a href="https://wa.me/{{ $wisma['whatsapp'] }}" target="_blank" rel="noopener" title="WhatsApp" class="flex opacity-80 hover:opacity-100"><img src="{{ asset('ds/icons/whatsapp.svg') }}" alt="WhatsApp" width="20" height="20"></a>
                 <a href="{{ $wisma['instagram'] }}" target="_blank" rel="noopener" title="Instagram" class="flex opacity-80 hover:opacity-100"><img src="{{ asset('ds/icons/instagram.svg') }}" alt="Instagram" width="20" height="20"></a>

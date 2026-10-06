@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class Service extends Model
@@ -13,14 +14,32 @@ class Service extends Model
 
     public const DEPARTMENTS = ['fnb' => 'F&B', 'housekeeping' => 'Housekeeping', 'front_office' => 'Front Office'];
 
-    protected $fillable = ['code', 'name', 'description', 'category', 'menu_group', 'department', 'unit', 'price', 'photo', 'is_active'];
+    protected $fillable = ['code', 'name', 'description', 'category', 'menu_group', 'department', 'unit', 'price', 'photo', 'is_active', 'is_sold_out'];
 
     protected function casts(): array
     {
         return [
             'price' => 'decimal:2',
             'is_active' => 'boolean',
+            'is_sold_out' => 'boolean',
         ];
+    }
+
+    /**
+     * Kolom is_sold_out ditambahkan lewat SQL terpisah. Selama belum dijalankan di sebuah basis data,
+     * penanda habis tidak dipakai (semua menu dianggap tersedia) agar halaman tidak galat.
+     */
+    public static function adaPenandaHabis(): bool
+    {
+        static $ada = null;
+
+        return $ada ??= Schema::hasColumn('services', 'is_sold_out');
+    }
+
+    /** Sedang ditandai habis oleh F&B. */
+    public function habis(): bool
+    {
+        return (bool) ($this->is_sold_out ?? false);
     }
 
     /** Menu berlabel "Baru" bila ditambahkan dalam 1 bulan terakhir. */

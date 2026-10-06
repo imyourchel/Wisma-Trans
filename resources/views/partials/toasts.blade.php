@@ -12,15 +12,17 @@
     document.addEventListener('alpine:init', () => {
         Alpine.store('toasts', {
             items: [],
-            tampil(teks, warna = '#5C9E67') {
+            tampil(teks, warna = '#5C9E67', lama = 4000) {
                 const id = Math.random().toString(36).slice(2);
                 this.items.push({ id, teks, warna });
-                setTimeout(() => { this.items = this.items.filter(t => t.id !== id); }, 4000);
+                setTimeout(() => { this.items = this.items.filter(t => t.id !== id); }, lama);
             },
         });
 
-        // Dari komponen Livewire: $this->dispatch('toast', teks: '...', galat: true)
-        window.addEventListener('toast', (e) => Alpine.store('toasts').tampil(e.detail.teks, e.detail.galat ? '#D4514A' : undefined));
+        // Dari komponen Livewire: $this->dispatch('toast', teks: '...', galat: true) atau peringatan: true (kuning, lebih lama)
+        window.addEventListener('toast', (e) => e.detail.peringatan
+            ? Alpine.store('toasts').tampil(e.detail.teks, '#E8AC45', 9000)
+            : Alpine.store('toasts').tampil(e.detail.teks, e.detail.galat ? '#D4514A' : undefined));
 
         const kilat = JSON.parse(document.getElementById('pesan-kilat').textContent || '{}');
         Alpine.nextTick(() => {

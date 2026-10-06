@@ -49,41 +49,40 @@ enum RoomStatus: string
 
     /**
      * Perpindahan status yang diizinkan beserta peran yang boleh melakukannya.
-     * Perpindahan di luar tabel ini selalu ditolak RoomStatusService.
+     * Perpindahan di luar tabel ini selalu ditolak RoomStatusService. Admin tidak ikut (hanya data master).
      *
      * @return array<string, list<string>> [status tujuan => kode peran]
      */
     public function allowedTransitions(): array
     {
-        $a = 'admin';
         $fo = 'front_office';
         $hk = 'housekeeping';
 
         return match ($this) {
             self::Available => [
-                'occupied_clean' => [$a, $fo],          // tamu check-in (manual)
-                'vacant_dirty' => [$a, $fo, $hk],       // perlu dibersihkan ulang
-                'maintenance' => [$a, $fo, $hk],        // ditemukan kerusakan
+                'occupied_clean' => [$fo],              // tamu check-in (manual)
+                'vacant_dirty' => [$fo, $hk],           // perlu dibersihkan ulang
+                'maintenance' => [$fo, $hk],            // ditemukan kerusakan
             ],
             self::OccupiedClean => [
-                'occupied_dirty' => [$a, $fo, $hk],     // bersih harian tamu menginap
-                'vacant_dirty' => [$a, $fo],            // tamu check-out
+                'occupied_dirty' => [$fo, $hk],         // bersih harian tamu menginap
+                'vacant_dirty' => [$fo],                // tamu check-out
             ],
             self::OccupiedDirty => [
-                'cleaning' => [$a, $hk],                // mulai dibersihkan
-                'vacant_dirty' => [$a, $fo],            // check-out sebelum dibersihkan
+                'cleaning' => [$hk],                    // mulai dibersihkan
+                'vacant_dirty' => [$fo],                // check-out sebelum dibersihkan
             ],
             self::VacantDirty => [
-                'cleaning' => [$a, $hk],
-                'maintenance' => [$a, $fo, $hk],
+                'cleaning' => [$hk],
+                'maintenance' => [$fo, $hk],
             ],
             self::Cleaning => [
-                'available' => [$a, $hk],               // selesai, kamar kosong
-                'occupied_clean' => [$a, $hk],          // selesai, tamu masih menginap
+                'available' => [$hk],                   // selesai, kamar kosong
+                'occupied_clean' => [$hk],              // selesai, tamu masih menginap
             ],
             self::Maintenance => [
-                'vacant_dirty' => [$a, $fo],            // selesai diperbaiki, perlu dibersihkan
-                'available' => [$a, $fo],               // selesai diperbaiki, sudah bersih
+                'vacant_dirty' => [$fo],                // selesai diperbaiki, perlu dibersihkan
+                'available' => [$fo],                   // selesai diperbaiki, sudah bersih
             ],
         };
     }

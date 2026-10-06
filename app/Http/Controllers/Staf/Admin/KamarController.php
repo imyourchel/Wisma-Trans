@@ -68,6 +68,10 @@ class KamarController extends MasterController
         if ($kamar->is_active && $kamar->status->isOccupied()) {
             return back()->with('error', 'Kamar sedang terisi tamu, tidak bisa dinonaktifkan.');
         }
+        // Kamar yang sudah ditetapkan untuk reservasi mendatang tidak boleh hilang dari daftar
+        if ($kamar->is_active && ($pesan = $kamar->pemesananBerjalan(['booked', 'checked_in'])->first())) {
+            return back()->with('error', "Kamar {$kamar->room_number} sudah dipesan untuk {$pesan->keterangan()}. Pindahkan reservasinya dulu.");
+        }
 
         return $this->balikAktif($kamar, 'Kamar '.$kamar->room_number);
     }

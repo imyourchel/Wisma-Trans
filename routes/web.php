@@ -4,8 +4,14 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LupaSandiController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\CekPesananController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\LaundryController;
+use App\Http\Controllers\NotaController;
+use App\Http\Controllers\PengajuanInstansiController;
 use App\Http\Controllers\PesananMakananController;
+use App\Http\Controllers\PesananSayaController;
+use App\Http\Controllers\ReservasiTamuController;
 use App\Http\Controllers\RestoController;
 use App\Http\Controllers\Staf\Admin\AulaController;
 use App\Http\Controllers\Staf\Admin\FasilitasController;
@@ -18,8 +24,25 @@ use App\Http\Controllers\Staf\Admin\PeranController;
 use App\Http\Controllers\Staf\Admin\TipeKamarController;
 use App\Http\Controllers\Staf\Admin\UnitFasilitasController;
 use App\Http\Controllers\Staf\DashboardController;
+use App\Http\Controllers\Staf\Maintenance\JadwalController;
+use App\Http\Controllers\Staf\Maintenance\LaporController;
+use App\Http\Controllers\Staf\Maintenance\PenangananController;
+use App\Http\Controllers\Staf\Maintenance\RiwayatController;
 use App\Http\Controllers\Staf\SegeraController;
+use App\Livewire\Profil;
+use App\Livewire\Staf\Aula\KalenderAula;
+use App\Livewire\Staf\Aula\PemesananAula;
+use App\Livewire\Staf\Layanan\PesananLaundry;
+use App\Livewire\Staf\Reservasi\CheckIn;
+use App\Livewire\Staf\Reservasi\DaftarReservasi;
+use App\Livewire\Staf\Reservasi\PengajuanInstansi;
+use App\Livewire\Staf\Reservasi\ReservasiLangsung;
 use App\Livewire\Staf\RoomStatusBoard;
+use App\Livewire\Tamu\DaftarKamar;
+use App\Livewire\Tamu\DetailKamar;
+use App\Livewire\Tamu\PesanKamar;
+use App\Livewire\Tamu\PesanLaundry;
+use App\Livewire\Tamu\SewaAula;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
@@ -46,27 +69,38 @@ Route::middleware('guest')->group(function () {
 
 Route::post('/keluar', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 
-// Halaman yang dibangun pada tahap berikutnya
-$segera = fn (string $judul) => fn () => view('segera', ['judul' => $judul]);
-
-Route::get('/kamar', $segera('Pilih kamar'))->name('kamar');
-Route::get('/kamar/{kode}', $segera('Detail tipe kamar'))->name('kamar.tipe');
+Route::livewire('/kamar', DaftarKamar::class)->name('kamar');
+Route::livewire('/kamar/{kode}', DetailKamar::class)->name('kamar.tipe');
+// Data pemesan, lalu uang muka dibayar di halaman reservasi (tautan berisi token akses)
+Route::livewire('/kamar/{kode}/pesan', PesanKamar::class)->name('kamar.pesan');
+Route::get('/reservasi/{kode}', [ReservasiTamuController::class, 'show'])->name('reservasi.status');
+Route::post('/reservasi/{kode}/bayar', [ReservasiTamuController::class, 'bayar'])->middleware('throttle:10,1,bayar-reservasi')->name('reservasi.bayar');
+Route::get('/reservasi/{kode}/cek', [ReservasiTamuController::class, 'cek'])->middleware('throttle:30,1,cek-reservasi')->name('reservasi.cek');
+Route::post('/reservasi/{kode}/batal', [ReservasiTamuController::class, 'batal'])->middleware('throttle:5,1,batal-reservasi')->name('reservasi.batal');
+Route::post('/reservasi/{kode}/ubah-tanggal', [ReservasiTamuController::class, 'ubahTanggal'])->middleware('throttle:5,1,ubah-reservasi')->name('reservasi.ubah');
 Route::get('/resto', RestoController::class)->name('menu');
 
 // Pesan makanan online (ambil / makan di tempat), dibayar lewat Midtrans. Tidak wajib masuk akun.
-Route::post('/resto/pesan', [PesananMakananController::class, 'store'])->middleware('throttle:10,1')->name('resto.pesan');
+Route::post('/resto/pesan', [PesananMakananController::class, 'store'])->middleware('throttle:10,1,pesan-makanan')->name('resto.pesan');
 Route::get('/pesanan-makanan/{kode}', [PesananMakananController::class, 'show'])->name('pesanan.status');
-Route::post('/pesanan-makanan/{kode}/bayar', [PesananMakananController::class, 'bayar'])->middleware('throttle:10,1')->name('pesanan.bayar');
+Route::post('/pesanan-makanan/{kode}/bayar', [PesananMakananController::class, 'bayar'])->middleware('throttle:10,1,bayar-makanan')->name('pesanan.bayar');
+Route::get('/pesanan-makanan/{kode}/cek', [PesananMakananController::class, 'cek'])->middleware('throttle:30,1,cek-bayar')->name('pesanan.cek');
 Route::post('/midtrans/notification', [PesananMakananController::class, 'notifikasi'])->name('midtrans.notifikasi');
-Route::get('/laundry', $segera('Laundry'))->name('laundry');
-Route::get('/aula', $segera('Pengajuan sewa aula'))->name('aula');
-Route::get('/kontak', $segera('Kontak'))->name('kontak');
-Route::get('/cek-pesanan', $segera('Cek pesanan'))->name('cek');
-Route::get('/instansi', $segera('Pengajuan reservasi instansi'))->name('instansi');
+// Laundry kiloan (tamu menginap dan tamu luar); pembayaran setelah ditimbang memakai route pesanan.bayar/cek
+Route::livewire('/laundry', PesanLaundry::class)->name('laundry');
+Route::get('/laundry/{kode}', [LaundryController::class, 'show'])->name('laundry.status');
+Route::livewire('/aula', SewaAula::class)->name('aula');
+Route::view('/kontak', 'kontak')->name('kontak');
+// Nota PDF lewat tautan bertanda tangan, dikirim ke WhatsApp setelah pembayaran berhasil
+Route::get('/nota/{nota}', [NotaController::class, 'unduh'])->middleware(['signed', 'throttle:30,1,unduh-nota'])->name('nota.unduh');
+Route::get('/cek-pesanan', [CekPesananController::class, 'index'])->name('cek');
+Route::post('/cek-pesanan', [CekPesananController::class, 'cari'])->middleware('throttle:10,1,cek-pesanan')->name('cek.cari');
+Route::get('/instansi', [PengajuanInstansiController::class, 'create'])->name('instansi');
+Route::post('/instansi', [PengajuanInstansiController::class, 'store'])->middleware('throttle:5,1,pengajuan-instansi')->name('instansi.store');
 
-Route::middleware('auth')->group(function () use ($segera) {
-    Route::get('/pesanan-saya', $segera('Pesanan saya'))->name('pesanan');
-    Route::get('/profil', $segera('Profil'))->name('profil');
+Route::middleware('auth')->group(function () {
+    Route::get('/pesanan-saya', PesananSayaController::class)->name('pesanan');
+    Route::livewire('/profil', Profil::class)->name('profil');
 });
 
 // Panel staf. Menu yang tampil di sidebar diatur App\Support\MenuStaf
@@ -88,6 +122,44 @@ Route::prefix('staf')->name('staf.')->middleware('staf')->group(function () {
     });
     Route::livewire('papan-status-kamar', RoomStatusBoard::class)->middleware('can:view-rooms')->name('papan-status');
 
+    // Modul Reservasi; tombol aksi di tiap halaman diperiksa lagi dengan Gate
+    Route::middleware('can:view-reservations')->group(function () {
+        Route::livewire('reservasi', DaftarReservasi::class)->name('reservasi');
+        Route::livewire('pengajuan-instansi', PengajuanInstansi::class)->name('pengajuan-instansi');
+        Route::livewire('check-in', CheckIn::class)->name('check-in');
+    });
+    Route::livewire('reservasi-langsung', ReservasiLangsung::class)->middleware('can:manage-reservations')->name('reservasi-langsung');
+
+    // Layanan: laundry (Housekeeping, FO) dan aula (FO, F&B; Manager menyetujui)
+    Route::livewire('laundry', PesananLaundry::class)->middleware('can:view-laundry')->name('laundry');
+    Route::middleware('can:view-halls')->group(function () {
+        Route::livewire('pemesanan-aula', PemesananAula::class)->name('aula-pemesanan');
+        Route::livewire('kalender-aula', KalenderAula::class)->name('aula-kalender');
+    });
+
+    // Maintenance: semua staf operasional melapor; penanganan, jadwal rutin, dan riwayat hanya Manager
+    Route::prefix('maintenance')->name('maintenance.')->group(function () {
+        Route::middleware('can:report-damage')->group(function () {
+            Route::get('lapor', [LaporController::class, 'create'])->name('lapor');
+            Route::post('lapor', [LaporController::class, 'store'])->name('lapor.store');
+            Route::get('laporan-saya', [LaporController::class, 'saya'])->name('saya');
+        });
+        Route::middleware('can:manage-maintenance')->group(function () {
+            Route::get('/', [PenangananController::class, 'index'])->name('index');
+            Route::post('{laporan}/kerjakan', [PenangananController::class, 'kerjakan'])->whereNumber('laporan')->name('kerjakan');
+            Route::post('{laporan}/selesai', [PenangananController::class, 'selesaikan'])->whereNumber('laporan')->name('selesaikan');
+            Route::post('{laporan}/batal', [PenangananController::class, 'batalkan'])->whereNumber('laporan')->name('batalkan');
+
+            Route::get('jadwal', [JadwalController::class, 'index'])->name('jadwal');
+            Route::post('jadwal', [JadwalController::class, 'store'])->name('jadwal.store');
+            Route::put('jadwal/{jadwal}', [JadwalController::class, 'update'])->name('jadwal.update');
+            Route::patch('jadwal/{jadwal}/aktif', [JadwalController::class, 'toggle'])->name('jadwal.toggle');
+            Route::post('jadwal/{jadwal}/pelaksanaan', [JadwalController::class, 'laksanakan'])->name('jadwal.laksanakan');
+
+            Route::get('riwayat', [RiwayatController::class, 'index'])->name('riwayat');
+        });
+    });
+
     // Admin: data master lain, pengguna dan akses, pengaturan (BAB 3)
     Route::middleware('staf:admin')->group(function () {
         $master = [
@@ -96,7 +168,6 @@ Route::prefix('staf')->name('staf.')->middleware('staf')->group(function () {
             'unit-fasilitas' => [UnitFasilitasController::class, 'unit', true],
             'layanan' => [LayananController::class, 'layanan', true],
             'aula' => [AulaController::class, 'aula', true],
-            'kriteria' => [KriteriaController::class, 'kriteria', true],
         ];
         foreach ($master as $uri => [$controller, $param, $bisaNonaktif]) {
             Route::get($uri, [$controller, 'index'])->name("$uri.index");
@@ -106,6 +177,9 @@ Route::prefix('staf')->name('staf.')->middleware('staf')->group(function () {
                 Route::patch("$uri/{{$param}}/aktif", [$controller, 'toggle'])->name("$uri.toggle");
             }
         }
+
+        // Kriteria pembersihan dan bobot AHP sudah tetap: hanya dibaca
+        Route::get('kriteria', [KriteriaController::class, 'index'])->name('kriteria.index');
 
         Route::get('peran', [PeranController::class, 'index'])->name('peran.index');
         Route::put('peran/{peran}', [PeranController::class, 'update'])->name('peran.update');

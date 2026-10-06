@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Service;
 use App\Models\ServiceOrder;
@@ -10,9 +9,11 @@ use App\Rules\EmailWajar;
 use App\Rules\NomorHp;
 use App\Services\PembayaranMidtrans;
 use App\Support\Nomor;
+use App\Support\Pelanggan;
 use App\Support\PersonName;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -44,23 +45,28 @@ class PesananMakananController extends Controller
             'items' => ['required', 'array', 'min:1', 'max:30'],
             'items.*.id' => ['required', 'integer', 'distinct'],
             'items.*.qty' => ['required', 'integer', 'min:1', 'max:20'],
+            'items.*.note' => ['nullable', 'string', 'max:150'],
             'name' => ['required', 'string', 'min:3', 'max:100', PersonName::rule()],
             'phone' => ['required', new NomorHp],
             'email' => ['nullable', 'max:150', new EmailWajar],
             'serving_type' => ['required', Rule::in(['take_away', 'dine_in'])],
             'note' => ['nullable', 'string', 'max:255'],
+            'metode' => ['required', Rule::in(array_keys(PembayaranMidtrans::METODE))],
         ], [
             'items.required' => 'Keranjang masih kosong.',
             'items.min' => 'Keranjang masih kosong.',
             'items.*.qty.max' => 'Maksimal 20 porsi per menu.',
+            'items.*.note.max' => 'Catatan per menu maksimal 150 karakter.',
             'name.min' => 'Minimal 3 huruf.',
             'name.regex' => PersonName::MESSAGE,
             'serving_type.required' => 'Pilih ambil atau makan di tempat.',
+            'metode.*' => 'Pilih metode pembayaran.',
         ]);
 
         // Harga selalu diambil dari basis data, bukan dari peramban
         $menu = Service::whereIn('id', collect($data['items'])->pluck('id'))
-            ->where('category', 'fnb')->where('is_active', true)->whereNotNull('price')->get()->keyBy('id');
+            ->where('category', 'fnb')->where('is_active', true)->whereNotNull('price')->get()
+            ->reject(fn (Service $s) => $s->habis())->keyBy('id');
         $hilang = collect($data['items'])->reject(fn ($i) => $menu->has($i['id']));
         if ($hilang->isNotEmpty()) {
             return response()->json([
@@ -70,7 +76,7 @@ class PesananMakananController extends Controller
         }
 
         $order = DB::transaction(function () use ($data, $menu, $request) {
-            $customer = $this->pelanggan($data, $request);
+            $customer = Pelanggan::dariIsian($data, $request->user());
             $total = collect($data['items'])->sum(fn ($i) => $menu[$i['id']]->price * $i['qty']);
 
             $invoice = Invoice::create([
@@ -101,7 +107,12 @@ class PesananMakananController extends Controller
 
             foreach ($data['items'] as $i) {
                 $m = $menu[$i['id']];
-                $order->items()->create(['service_id' => $m->id, 'quantity' => $i['qty'], 'unit_price' => $m->price, 'subtotal' => $m->price * $i['qty']]);
+                // Catatan per menu untuk dapur, misalnya "tidak pedas"
+                $catatan = trim((string) ($i['note'] ?? ''));
+                $order->items()->create([
+                    'service_id' => $m->id, 'quantity' => $i['qty'], 'unit_price' => $m->price, 'subtotal' => $m->price * $i['qty'],
+                    'note' => $catatan === '' ? null : $catatan,
+                ]);
                 $invoice->items()->create([
                     'item_type' => 'fnb', 'description' => Str::limit($m->name, 150, ''), 'service_date' => now()->toDateString(),
                     'quantity' => $i['qty'], 'unit_price' => $m->price, 'subtotal' => $m->price * $i['qty'],
@@ -111,48 +122,76 @@ class PesananMakananController extends Controller
             return $order;
         });
 
+        // Nomor VA atau QRIS dibuat sekarang, jadi halaman pesanan langsung menampilkannya
         try {
-            $token = $this->midtrans->tokenSnap($order);
+            $this->midtrans->buatTagihan($order, $data['metode']);
         } catch (Throwable $e) {
-            Log::error('Token Snap gagal dibuat', ['pesanan' => $order->order_code, 'pesan' => $e->getMessage()]);
+            Log::error('Tagihan Midtrans gagal dibuat', ['pesanan' => $order->order_code, 'metode' => $data['metode'], 'pesan' => $e->getMessage()]);
 
-            // Pesanan tetap tersimpan; tamu dapat mencoba bayar lagi dari halaman status
-            return response()->json(['pesan' => 'Pesanan tersimpan, tetapi halaman pembayaran gagal dibuka.', 'status_url' => $order->urlStatus()], 502);
+            // Pesanan tetap tersimpan; tamu memilih metode lagi di halaman pesanan
+            return response()->json([
+                'pesan' => 'Pesanan tersimpan, tetapi '.PembayaranMidtrans::METODE[$data['metode']][0].' sedang tidak dapat dipakai. Pilih metode lain di halaman pesanan.',
+                'status_url' => $order->urlStatus(),
+            ], 502);
         }
 
-        return response()->json(['token' => $token, 'status_url' => $order->urlStatus()]);
+        return response()->json(['status_url' => $order->urlStatus()]);
     }
 
-    public function show(Request $request, string $kode): View
+    public function show(Request $request, string $kode): View|RedirectResponse
     {
         $order = $this->pesananDariTautan($request, $kode);
+        // Laundry punya halaman status sendiri
+        if ($order->jenisLayanan() === 'laundry') {
+            return redirect($order->urlStatus());
+        }
         $this->midtrans->sinkronkan($order);
-        $order = $this->batalkanBilaKedaluwarsa($order->fresh(['items.service', 'invoice.payments', 'customer']));
+        $order = $order->fresh(['items.service', 'invoice.payments', 'customer'])->batalkanBilaKedaluwarsa();
 
-        return view('pesanan-status', ['order' => $order, 'title' => 'Pesanan '.$order->order_code]);
+        return view('pesanan-status', [
+            'order' => $order,
+            'title' => 'Pesanan '.$order->order_code,
+            'tagihan' => $order->sudahDibayar() || $order->status === 'cancelled' ? null : $this->midtrans->tagihanAktif($order),
+        ]);
     }
 
-    /** Token Snap untuk membayar ulang dari halaman status. */
+    /** Buat tagihan (nomor virtual account atau QRIS) untuk metode yang dipilih tamu. */
     public function bayar(Request $request, string $kode): JsonResponse
     {
         $order = $this->pesananDariTautan($request, $kode);
+        $metode = $request->validate(['metode' => ['required', Rule::in(array_keys(PembayaranMidtrans::METODE))]], [
+            'metode.*' => 'Pilih metode pembayaran.',
+        ])['metode'];
         $this->midtrans->sinkronkan($order);
-        $order = $this->batalkanBilaKedaluwarsa($order->fresh('invoice'));
+        $order = $order->fresh('invoice')->batalkanBilaKedaluwarsa();
 
         if ($order->sudahDibayar()) {
             return response()->json(['pesan' => 'Pesanan ini sudah dibayar.'], 409);
+        }
+        if (! $order->invoice) {
+            return response()->json(['pesan' => 'Tagihan belum ada. Tunggu cucian ditimbang.'], 409);
         }
         if ($order->status === 'cancelled') {
             return response()->json(['pesan' => 'Waktu pembayaran sudah habis. Silakan pesan ulang dari halaman Resto.'], 409);
         }
 
         try {
-            return response()->json(['token' => $this->midtrans->tokenSnap($order)]);
+            return response()->json(['tagihan' => $this->midtrans->buatTagihan($order, $metode)]);
         } catch (Throwable $e) {
-            Log::error('Token Snap gagal dibuat', ['pesanan' => $order->order_code, 'pesan' => $e->getMessage()]);
+            Log::error('Tagihan Midtrans gagal dibuat', ['pesanan' => $order->order_code, 'metode' => $metode, 'pesan' => $e->getMessage()]);
 
-            return response()->json(['pesan' => 'Halaman pembayaran gagal dibuka. Silakan coba lagi.'], 502);
+            return response()->json(['pesan' => PembayaranMidtrans::METODE[$metode][0].' sedang tidak dapat dipakai. Coba lagi atau pilih metode lain.'], 502);
         }
+    }
+
+    /** Dipanggil berkala oleh halaman pesanan selama tamu menyelesaikan pembayaran. */
+    public function cek(Request $request, string $kode): JsonResponse
+    {
+        $order = $this->pesananDariTautan($request, $kode);
+        $this->midtrans->sinkronkan($order);
+        $order = $order->fresh('invoice')->batalkanBilaKedaluwarsa();
+
+        return response()->json(['dibayar' => $order->sudahDibayar(), 'batal' => $order->status === 'cancelled']);
     }
 
     /** Notifikasi dari server Midtrans. Keaslian diperiksa lewat signature_key. */
@@ -175,38 +214,5 @@ class PesananMakananController extends Controller
         abort_unless($order && $order->access_token && hash_equals($order->access_token, (string) $request->query('t')), 404);
 
         return $order;
-    }
-
-    /** Pesanan yang tidak dibayar melewati batas waktu dibatalkan, walau tamu belum sempat memilih metode bayar. */
-    private function batalkanBilaKedaluwarsa(ServiceOrder $order): ServiceOrder
-    {
-        $batas = (int) config('services.midtrans.batas_bayar_menit', 60);
-        if ($order->status === 'pending' && ! $order->sudahDibayar() && $order->order_date->lt(now()->subMinutes($batas + 5))) {
-            $order->update(['status' => 'cancelled']);
-            $order->invoice?->update(['status' => 'cancelled']);
-        }
-
-        return $order;
-    }
-
-    /** Tamu dikenali dari nomor HP; akun yang sedang masuk memakai data pelanggannya sendiri. */
-    private function pelanggan(array $data, Request $request): Customer
-    {
-        if ($punya = $request->user()?->customer) {
-            return $punya;
-        }
-
-        $customer = Customer::withTrashed()->firstOrNew(['phone' => $data['phone']]);
-        if (! $customer->exists) {
-            $customer->fill(['full_name' => $data['name'], 'email' => $data['email'] ?? null, 'is_active' => true]);
-        } elseif (! $customer->email && ! empty($data['email'])) {
-            $customer->email = $data['email'];
-        }
-        $customer->save();
-        if ($customer->trashed()) {
-            $customer->restore();
-        }
-
-        return $customer;
     }
 }

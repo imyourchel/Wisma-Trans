@@ -11,6 +11,7 @@
         'urlAktif' => route('staf.unit-fasilitas.toggle', $u),
         'pesanNonaktif' => "Unit {$u->unit_label} tidak dijadwalkan perawatannya lagi. Riwayat perawatannya tetap tersimpan.",
     ]);
+    $lantaiKamar = $kamar->mapWithKeys(fn ($k) => [$k->id => 'Lantai '.$k->floor]);
     $kosong = ['facility_id' => (string) $fasilitas->firstWhere('is_maintainable', true)?->id, 'unit_label' => '', 'area_label' => '', 'room_id' => '', 'installed_at' => ''];
 @endphp
 
@@ -59,9 +60,13 @@
             <x-staf.field nama="unit_label" label="Label unit">
                 <input type="text" name="unit_label" x-model="isi.unit_label" @input="hapus('unit_label')" maxlength="50" placeholder="Contoh: AC-101" class="wt-input" :class="pesan('unit_label') && 'is-invalid'">
             </x-staf.field>
-            <x-staf.field nama="area_label" label="Area">
-                <input type="text" name="area_label" x-model="isi.area_label" @input="hapus('area_label')" maxlength="50" placeholder="Contoh: Kamar 101" class="wt-input" :class="pesan('area_label') && 'is-invalid'">
-            </x-staf.field>
+            {{-- Unit di kamar: area mengikuti lantai kamar dan tidak bisa diketik --}}
+            <div x-data="{ lantai: @js($lantaiKamar) }" x-effect="if (isi.room_id) isi.area_label = lantai[isi.room_id] ?? isi.area_label">
+                <x-staf.field nama="area_label" label="Area">
+                    <input type="text" name="area_label" x-model="isi.area_label" @input="hapus('area_label')" maxlength="50" placeholder="Contoh: Aula" class="wt-input read-only:bg-cream-100 read-only:text-ink-500"
+                           :readonly="!!isi.room_id" :title="isi.room_id ? 'Mengikuti lantai kamar' : ''" :class="pesan('area_label') && 'is-invalid'">
+                </x-staf.field>
+            </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
             <x-staf.field nama="room_id" label="Kamar" tag="div">
@@ -72,7 +77,7 @@
                 <input type="date" name="installed_at" x-model="isi.installed_at" @input="hapus('installed_at')" max="{{ now()->toDateString() }}" class="wt-input" :class="pesan('installed_at') && 'is-invalid'">
             </x-staf.field>
         </div>
-        <p class="m-0 text-xs text-ink-500">Label unit harus unik, misalnya AC-101 untuk AC di kamar 101. Tanggal pasang dipakai untuk menjadwalkan perawatan rutin.</p>
+        <p class="m-0 text-xs text-ink-500">Label unit harus unik, misalnya AC-101 untuk AC di kamar 101. Unit di kamar otomatis masuk area lantai kamarnya (kamar 201 → Lantai 2), sehingga tercakup jadwal perawatan rutin lantai itu.</p>
     </x-staf.panel>
 </div>
 </x-layouts.staf>

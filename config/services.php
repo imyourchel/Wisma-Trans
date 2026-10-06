@@ -45,6 +45,11 @@ return [
         'batas_bayar_menit' => 60,
     ],
 
+    // WhatsApp lewat Fonnte (https://fonnte.com). Kosong = pesan tidak dikirim, hanya dicatat di log.
+    'fonnte' => [
+        'token' => env('FONNTE_TOKEN'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

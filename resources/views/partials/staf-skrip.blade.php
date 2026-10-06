@@ -73,6 +73,62 @@
             destroy() { clearInterval(this.pewaktu); },
         }));
 
+        // Kalender kecil pemilih tanggal (Papan Status). cfg: { mulai, hariIni, panjang } dalam Y-m-d.
+        // Minggu dimulai Senin; pita menandai rentang yang akan tampil, mengikuti tanggal yang disorot.
+        const keYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const dariYmd = (t) => { const [y, m, d] = t.split('-').map(Number); return new Date(y, m - 1, d); };
+        const fBulan = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' });
+        const fPanjang = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const fPendek = new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+
+        Alpine.data('pilihTanggal', (cfg) => ({
+            buka: false,
+            mulai: cfg.mulai,
+            hariIni: cfg.hariIni,
+            panjang: cfg.panjang,
+            bulan: dariYmd(cfg.mulai),
+            sorot: null,
+            get judul() { return fBulan.format(this.bulan); },
+            get acuan() { return this.sorot ?? this.mulai; },
+            get labelAcuan() { return fPendek.format(dariYmd(this.acuan)); },
+            get sel() {
+                const y = this.bulan.getFullYear(), m = this.bulan.getMonth();
+                const geserAwal = (new Date(y, m, 1).getDay() + 6) % 7;
+                const baris = Math.ceil((geserAwal + new Date(y, m + 1, 0).getDate()) / 7);
+                const akhirD = dariYmd(this.acuan);
+                akhirD.setDate(akhirD.getDate() + this.panjang - 1);
+                const akhir = keYmd(akhirD);
+                return Array.from({ length: baris * 7 }, (_, i) => {
+                    const d = new Date(y, m, 1 - geserAwal + i);
+                    const t = keYmd(d);
+                    return { t, n: d.getDate(), kolom: i % 7, luar: d.getMonth() !== m, label: fPanjang.format(d),
+                        awal: t === this.acuan, akhir: t === akhir, rentang: t > this.acuan && t <= akhir, hariIni: t === this.hariIni };
+                });
+            },
+            kelas(c) {
+                if (c.awal) return 'z-10 rounded-md bg-brown-800 font-bold text-cream-50';
+                const k = [c.luar ? 'text-ink-500/50' : 'text-ink-900'];
+                if (c.rentang) {
+                    k.push('bg-[rgba(181,113,74,.14)] hover:bg-[rgba(181,113,74,.26)]');
+                    if (c.kolom === 0) k.push('rounded-l-md');
+                    if (c.kolom === 6 || c.akhir) k.push('rounded-r-md');
+                    if (c.akhir) k.push('font-semibold text-clay-600');
+                } else {
+                    k.push('rounded-md bg-transparent hover:bg-cream-200');
+                }
+                return k.join(' ');
+            },
+            bukaTutup() {
+                this.buka = !this.buka;
+                if (this.buka) { this.bulan = dariYmd(this.mulai); this.sorot = null; }
+            },
+            geser(n) { this.bulan = new Date(this.bulan.getFullYear(), this.bulan.getMonth() + n, 1); },
+            pilih(t) {
+                this.buka = false;
+                if (t !== this.mulai) this.$wire.pickDate(t);
+            },
+        }));
+
         // Dropdown x-staf.pilih. cfg.pilihan: [{ v, l, w? }]; cfg.kirim: kirim formulir induk saat berubah
         Alpine.data('pilihan', (cfg) => ({
             pilihan: cfg.pilihan,
@@ -133,16 +189,67 @@
          * Halaman data master: pencarian, panel formulir, dan kirim lewat fetch.
          * cfg.baris: [{ nama, cari, isi, url, urlAktif, kelompok? }] sesuai urutan baris tabel.
          * kelompok dipakai penyaring dropdown (x-model="saring"); grup untuk saringan kedua (x-model="saringGrup").
+         * peran: daftar id peran baris itu, untuk saringan peran pilihan ganda (x-model="saringPeran"; cocok bila punya salah satunya).
          * cfg.kosong: nilai awal formulir tambah. Galeri memakai isi.foto:
          * [{ jenis: 'lama', path, url } | { jenis: 'baru', file, url }].
          */
         const salin = (o) => JSON.parse(JSON.stringify(o));
+
+        /*
+         * Formulir biasa yang dikirim lewat fetch (dipakai halaman Maintenance). Galat 422 tampil di samping kolom
+         * (x-staf.field memakai pesan()); berhasil: pindah ke jawaban.redirect atau muat ulang halaman.
+         */
+        // Isian awal disalin beserta getter-nya (spread biasa akan membekukan getter menjadi nilai)
+        Alpine.data('formStaf', (awal = {}) => Object.defineProperties({
+            galat: {},
+            proses: false,
+            pesan(f) { return this.galat[f] || ''; },
+            hapus(f) { delete this.galat[f]; },
+            async kirim(form, url = form.action) {
+                if (this.proses) return;
+                const gagal = (teks) => Alpine.store('toasts').tampil(teks, '#D4514A');
+                this.proses = true;
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        body: new FormData(form),
+                    });
+                    if (res.ok) {
+                        const j = await res.json().catch(() => ({}));
+                        if (j.redirect) window.location.href = j.redirect; else window.location.reload();
+                        return;
+                    }
+                    if (res.status === 422) {
+                        const { errors } = await res.json();
+                        const g = {};
+                        for (const [kunci, pesan] of Object.entries(errors)) g[kunci.split('.')[0]] ??= pesan[0];
+                        this.galat = g;
+                        // Galat di luar kolom formulir (misalnya status laporan) tampil sebagai notifikasi
+                        for (const k of ['status', 'jadwal']) if (g[k]) gagal(g[k]);
+                        this.$nextTick(() => form.querySelector('[data-galat]:not([style*="display: none"])')?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+                    } else if (res.status === 403) {
+                        gagal('Anda tidak berhak melakukan tindakan ini.');
+                    } else if (res.status === 419) {
+                        gagal('Sesi Anda sudah berakhir. Muat ulang halaman, lalu coba lagi.');
+                    } else if (res.status === 413) {
+                        gagal('Ukuran foto terlalu besar. Kurangi jumlah atau ukuran foto.');
+                    } else {
+                        gagal('Terjadi kesalahan. Silakan coba lagi.');
+                    }
+                } catch {
+                    gagal('Tidak dapat terhubung ke server. Periksa koneksi Anda, lalu coba lagi.');
+                }
+                this.proses = false;
+            },
+        }, Object.getOwnPropertyDescriptors(awal)));
 
         Alpine.data('dataMaster', (cfg) => ({
             baris: cfg.baris,
             cari: '',
             saring: '',
             saringGrup: '',
+            saringPeran: [],
             buka: false,
             rekam: null,
             isi: salin(cfg.kosong),
@@ -157,7 +264,8 @@
             cocok(b) {
                 const q = this.cari.trim().toLowerCase();
                 return (!q || b.cari.toLowerCase().includes(q)) && (!this.saring || String(b.kelompok) === this.saring)
-                    && (!this.saringGrup || b.grup === this.saringGrup);
+                    && (!this.saringGrup || b.grup === this.saringGrup)
+                    && (!this.saringPeran.length || this.saringPeran.some((p) => (b.peran || []).includes(p)));
             },
             pesan(f) { return this.galat[f] || ''; },
             hapus(f) { delete this.galat[f]; },

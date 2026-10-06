@@ -1,6 +1,8 @@
 @props(['menu', 'besar' => false])
-{{-- Tombol tambah ke keranjang; berubah menjadi pengatur jumlah setelah ditambahkan --}}
-@if ($menu->price === null)
+{{-- Tombol tambah ke keranjang; berubah menjadi pengatur jumlah setelah ditambahkan. Menu yang ditandai habis tidak bisa dipesan. --}}
+@if ($menu->habis())
+    <span class="flex-none rounded-full bg-[rgba(212,81,74,.1)] px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-[.12em] text-status-dirty">Habis</span>
+@elseif ($menu->price === null)
     <span class="flex-none text-right text-[11px] leading-tight text-ink-500">Pesan<br>di tempat</span>
 @else
     <div class="flex-none">

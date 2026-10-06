@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Staf\Admin\MasterController;
 use App\Models\FacilityUnit;
 use App\Models\Hall;
+use App\Models\MaintenanceRequest;
+use App\Models\MaintenanceSchedule;
 use App\Models\Role;
 use App\Models\Room;
 use App\Models\RoomType;
@@ -24,6 +26,7 @@ class DashboardController extends Controller
 
         return view('staf.dashboard', [
             'admin' => $user->hasRole(Role::ADMIN) ? $this->ringkasanAdmin() : null,
+            'maintenance' => $user->can('manage-maintenance') ? $this->ringkasanMaintenance() : null,
             // Pintasan ke menu peran lain (selain Dashboard dan menu Admin sendiri)
             'pintasan' => collect(MenuStaf::untuk($user))->filter(fn ($g) => $g['anak'] && ! in_array($g['label'], ['Data Master', 'Pengguna dan Akses']))->values(),
         ]);
@@ -60,6 +63,20 @@ class DashboardController extends Controller
                 'waktu' => $terakhir->updated_at,
                 'oleh' => $terakhir->updated_by ? User::find($terakhir->updated_by)?->name : null,
             ] : null,
+        ];
+    }
+
+    /** Kartu Maintenance untuk Manager: laporan baru, sedang dikerjakan, dan perawatan rutin yang terlambat. */
+    private function ringkasanMaintenance(): array
+    {
+        $laporan = MaintenanceRequest::where('maintenance_type', 'corrective')->whereIn('status', ['reported', 'in_progress'])
+            ->selectRaw('status, COUNT(*) n')->groupBy('status')->pluck('n', 'status');
+
+        return [
+            ['label' => 'Laporan kerusakan baru', 'nilai' => (int) ($laporan['reported'] ?? 0), 'url' => route('staf.maintenance.index'), 'awas' => ($laporan['reported'] ?? 0) > 0],
+            ['label' => 'Sedang dikerjakan', 'nilai' => (int) ($laporan['in_progress'] ?? 0), 'url' => route('staf.maintenance.index', ['tab' => 'in_progress']), 'awas' => false],
+            ['label' => 'Perawatan terlambat', 'nilai' => $lewat = MaintenanceSchedule::where('is_active', true)->whereDate('next_due_date', '<', today())->count(),
+                'url' => route('staf.maintenance.jadwal'), 'awas' => $lewat > 0],
         ];
     }
 

@@ -2,7 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Enums\RoomStatus;
+use App\Livewire\Staf\RoomStatusBoard;
+use App\Models\Room;
+use App\Services\RoomStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
+use Livewire\Livewire;
 use Tests\Concerns\DataContohWisma;
 use Tests\TestCase;
 
@@ -34,10 +41,30 @@ class HakAksesKamarTest extends TestCase
         }
     }
 
-    public function test_HA02_admin_membuka_semua_halaman_modul(): void
+    public function test_HA02_admin_membuka_data_master_tetapi_tidak_papan_status(): void
     {
-        foreach ([...self::MASTER, self::PAPAN] as $route) {
+        foreach (self::MASTER as $route) {
             $this->assertSame(200, $this->buka('admin', $route), $route);
+        }
+        // Admin hanya mengelola data master; status kamar urusan FO dan HK
+        $this->assertSame(403, $this->buka('admin', self::PAPAN));
+        $this->assertTrue(Gate::forUser($this->akun('admin'))->denies('view-rooms'));
+        $this->assertTrue(Gate::forUser($this->akun('admin'))->denies('change-room-status'));
+    }
+
+    public function test_HA02b_admin_mengubah_status_kamar_ditolak(): void
+    {
+        $kamar = Room::where('room_number', '101')->firstOrFail();
+
+        // Lewat komponen papan: gate view-rooms menolak sejak dibuka
+        Livewire::actingAs($this->akun('admin'))->test(RoomStatusBoard::class)->assertForbidden();
+        // Lewat layanan: tidak ada perpindahan yang boleh dilakukan peran admin
+        $this->assertSame([], RoomStatus::Available->transitionsFor(['admin']));
+        try {
+            app(RoomStatusService::class)->change($kamar, RoomStatus::Maintenance, 'Uji', $this->akun('admin'));
+            $this->fail('Admin seharusnya tidak bisa mengubah status kamar.');
+        } catch (ValidationException) {
+            $this->assertSame(RoomStatus::Available, $kamar->fresh()->status);
         }
     }
 

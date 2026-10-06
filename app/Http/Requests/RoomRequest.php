@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\Room;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Tambah dan ubah kamar (UC-MK02). Kolom status sengaja tidak ada di aturan,
@@ -30,6 +31,23 @@ class RoomRequest extends FormRequest
             'floor' => ['required', 'integer', 'min:1', 'max:10'],
             'bed_type' => ['required', Rule::in(array_keys(Room::BED_TYPES))],
         ];
+    }
+
+    /**
+     * Tipe kamar yang sedang dipesan atau ditempati tidak boleh diganti, supaya ketersediaan per tipe tetap benar.
+     * Nomor, lantai, dan jenis kasur tetap boleh diubah.
+     */
+    public function after(): array
+    {
+        return [function (Validator $v) {
+            $kamar = $this->route('kamar');
+            if (! $kamar instanceof Room || $v->errors()->has('room_type_id') || (int) $this->input('room_type_id') === (int) $kamar->room_type_id) {
+                return;
+            }
+            if ($pesan = $kamar->pemesananBerjalan(['booked', 'checked_in'])->first()) {
+                $v->errors()->add('room_type_id', "Tipe tidak bisa diubah: kamar {$kamar->room_number} sudah dipesan untuk {$pesan->keterangan()}.");
+            }
+        }];
     }
 
     public function messages(): array

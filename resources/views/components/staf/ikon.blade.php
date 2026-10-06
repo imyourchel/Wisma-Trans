@@ -48,6 +48,9 @@
         @case('panah')
             <path d="m6 9 6 6 6-6"/>
             @break
+        @case('kalender')
+            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+            @break
         @case('ciut')
             <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>
             @break

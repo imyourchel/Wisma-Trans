@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\RoomStatus;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -35,6 +36,51 @@ class Room extends Model
     public function statusLogs(): HasMany
     {
         return $this->hasMany(RoomStatusLog::class);
+    }
+
+    public function facilityUnits(): HasMany
+    {
+        return $this->hasMany(FacilityUnit::class);
+    }
+
+    /**
+     * Laporan kerusakan terbuka yang membuat kamar ini tidak bisa dipakai (blocks_room), paling lama dulu.
+     * Selama ada, kamar tidak boleh menjadi Siap. Kosong bila kolom blocks_room belum ada di basis data.
+     *
+     * @return Collection<int, MaintenanceRequest>
+     */
+    public function laporanMenahan(): Collection
+    {
+        if (! MaintenanceRequest::adaKolomMenahan()) {
+            return new Collection;
+        }
+
+        return $this->maintenanceRequests()->whereIn('status', ['reported', 'in_progress'])->where('blocks_room', true)
+            ->orderBy('reported_at')->orderBy('id')->get();
+    }
+
+    public function reservationRooms(): HasMany
+    {
+        return $this->hasMany(ReservationRoom::class);
+    }
+
+    /**
+     * Pemesanan kamar ini yang belum lewat tanggal keluarnya, paling awal dulu.
+     *
+     * @param  list<string>  $status  status reservation_rooms
+     * @return Collection<int, ReservationRoom>
+     */
+    public function pemesananBerjalan(array $status = ['booked', 'checked_in']): Collection
+    {
+        return $this->reservationRooms()->with('reservation')->whereIn('status', $status)
+            ->whereDate('check_out_date', '>=', today())->orderBy('check_in_date')->orderBy('id')->get();
+    }
+
+    /** Laporan perawatan kamar ini: lewat unit fasilitas di kamar, atau dilaporkan langsung untuk kamar. */
+    public function maintenanceRequests(): Builder
+    {
+        return MaintenanceRequest::query()->where(fn ($q) => $q->where('room_id', $this->id)
+            ->orWhereHas('unit', fn ($u) => $u->where('room_id', $this->id)));
     }
 
     public function scopeActive(Builder $query): void

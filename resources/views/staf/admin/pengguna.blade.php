@@ -3,6 +3,7 @@
     $baris = $users->values()->map(fn ($u) => [
         'nama' => $u->name,
         'cari' => implode(' ', [$u->name, $u->email, $u->phone, $u->roles->pluck('name')->join(' ')]),
+        'peran' => $u->roles->pluck('id')->map(fn ($id) => (string) $id)->values(),
         'isi' => [
             'name' => $u->name, 'email' => $u->email, 'phone' => $u->phone ?? '',
             'peran' => $u->roles->whereIn('code', \App\Models\Role::STAFF)->pluck('id')->map(fn ($id) => (string) $id)->values(),
@@ -17,7 +18,32 @@
 
 <x-layouts.staf title="Pengguna">
 <div x-data="dataMaster(@js(['baris' => $baris, 'kosong' => $kosong, 'urlSimpan' => route('staf.pengguna.store')]))">
-    <x-staf.toolbar tambah="Tambah pengguna" cari="Cari nama, email, atau peran" />
+    <x-staf.toolbar tambah="Tambah pengguna" cari="Cari nama, email, atau peran">
+        {{-- Saring peran: boleh lebih dari satu; tampil pengguna yang punya salah satu peran terpilih --}}
+        <div class="relative" x-data="{ bukaPeran: false }" @click.outside="bukaPeran = false" @keydown.escape="bukaPeran = false">
+            <button type="button" @click="bukaPeran = !bukaPeran" :aria-expanded="bukaPeran"
+                    :class="saringPeran.length ? 'border-clay-500 text-clay-600' : 'border-cream-300 text-ink-900'"
+                    class="inline-flex h-10 items-center gap-2 rounded border bg-cream-50 px-3.5 text-[13px] font-semibold hover:bg-cream-100">
+                Peran
+                <span x-show="saringPeran.length" x-cloak x-text="saringPeran.length" class="flex h-5 min-w-5 items-center justify-center rounded-full bg-clay-500 px-1.5 text-[11px] text-cream-50"></span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform" :class="bukaPeran && 'rotate-180'" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div x-show="bukaPeran" x-cloak x-transition.opacity.duration.150ms
+                 class="absolute left-0 top-[calc(100%+6px)] z-30 w-[240px] rounded-md border border-cream-300 bg-cream-50 p-1.5 shadow-wt-lg" role="group" aria-label="Saring peran">
+                @foreach ($peran as $r)
+                    <label class="flex cursor-pointer items-center gap-2.5 rounded px-2.5 py-2 text-[13px] hover:bg-row-hover">
+                        <input type="checkbox" value="{{ $r->id }}" x-model="saringPeran" class="h-4 w-4 accent-clay-500">
+                        <span class="flex-1">{{ $r->name }}</span>
+                        <span class="text-xs tabular-nums text-ink-500" x-text="baris.filter((b) => b.peran.includes('{{ $r->id }}')).length"></span>
+                    </label>
+                @endforeach
+                <div class="mt-1 flex justify-between border-t border-cream-300 px-1 pt-1.5">
+                    <button type="button" @click="saringPeran = @js($peran->pluck('id')->map(fn ($id) => (string) $id)->values())" class="rounded px-2 py-1.5 text-xs font-semibold text-brown-800 hover:bg-cream-200">Pilih semua</button>
+                    <button type="button" @click="saringPeran = []" x-show="saringPeran.length" class="rounded px-2 py-1.5 text-xs font-semibold text-clay-600 hover:bg-cream-200">Hapus saringan</button>
+                </div>
+            </div>
+        </div>
+    </x-staf.toolbar>
 
     <div class="wt-card overflow-x-auto">
         <table class="w-full min-w-[900px] border-collapse">
@@ -54,7 +80,7 @@
                         </td>
                     </tr>
                 @endforeach
-                <tr x-show="jumlah === 0" x-cloak><td colspan="5" class="wt-td py-10 text-center text-sm text-ink-500">Tidak ada pengguna yang cocok dengan pencarian.</td></tr>
+                <tr x-show="jumlah === 0" x-cloak><td colspan="5" class="wt-td py-10 text-center text-sm text-ink-500">Tidak ada pengguna yang cocok dengan pencarian atau saringan peran.</td></tr>
             </tbody>
         </table>
     </div>

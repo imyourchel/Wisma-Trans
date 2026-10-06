@@ -40,11 +40,11 @@ class MenuStaf
 
             ['label' => 'Reservasi', 'ikon' => 'reservasi', 'anak' => [
                 ['label' => 'Kalender Ketersediaan', 'peran' => [self::M, self::FO]],
-                ['label' => 'Daftar Reservasi', 'peran' => [self::M, self::FO]],
+                ['label' => 'Daftar Reservasi', 'route' => 'staf.reservasi', 'gate' => 'view-reservations'],
                 // FO melihat pengajuan, tetapi hanya Manager yang dapat menyetujui atau menolak
-                ['label' => 'Pengajuan Instansi', 'peran' => [self::M, self::FO]],
-                ['label' => 'Reservasi Langsung', 'peran' => [self::M, self::FO]],
-                ['label' => 'Check-in', 'peran' => [self::M, self::FO]],
+                ['label' => 'Pengajuan Instansi', 'route' => 'staf.pengajuan-instansi', 'gate' => 'view-reservations'],
+                ['label' => 'Reservasi Langsung', 'route' => 'staf.reservasi-langsung', 'gate' => 'manage-reservations'],
+                ['label' => 'Check-in', 'route' => 'staf.check-in', 'gate' => 'view-reservations'],
                 ['label' => 'Check-out', 'peran' => [self::M, self::FO]],
             ]],
 
@@ -65,11 +65,12 @@ class MenuStaf
                 ['label' => 'Papan Pesanan', 'peran' => [self::M, self::FB]],
                 ['label' => 'Riwayat Pesanan', 'peran' => [self::M, self::FB]],
                 ['label' => 'Ketersediaan Menu', 'peran' => [self::M, self::FB]],
+                ['label' => 'Laundry', 'route' => 'staf.laundry', 'gate' => 'view-laundry'],
             ]],
 
             ['label' => 'Aula', 'ikon' => 'aula', 'anak' => [
-                ['label' => 'Kalender Aula', 'peran' => [self::M, self::FB]],
-                ['label' => 'Pemesanan Aula', 'peran' => [self::M, self::FB]],
+                ['label' => 'Pemesanan Aula', 'route' => 'staf.aula-pemesanan', 'gate' => 'view-halls'],
+                ['label' => 'Kalender Aula', 'route' => 'staf.aula-kalender', 'gate' => 'view-halls'],
             ]],
 
             ['label' => 'Keuangan', 'ikon' => 'keuangan', 'anak' => [
@@ -82,10 +83,11 @@ class MenuStaf
 
             // Semua staf operasional boleh melaporkan kerusakan; penanganannya diputuskan Manager
             ['label' => 'Maintenance', 'ikon' => 'maintenance', 'anak' => [
-                ['label' => 'Laporan Kerusakan', 'peran' => [self::M, self::FO, self::FB, self::HK]],
-                ['label' => 'Sedang Dikerjakan', 'peran' => [self::M]],
-                ['label' => 'Jadwal Perawatan Rutin', 'peran' => [self::M]],
-                ['label' => 'Riwayat Perawatan', 'peran' => [self::M]],
+                ['label' => 'Lapor Kerusakan', 'route' => 'staf.maintenance.lapor', 'gate' => 'report-damage'],
+                ['label' => 'Laporan Saya', 'route' => 'staf.maintenance.saya', 'gate' => 'report-damage'],
+                ['label' => 'Penanganan', 'route' => 'staf.maintenance.index', 'gate' => 'manage-maintenance'],
+                ['label' => 'Jadwal Rutin', 'route' => 'staf.maintenance.jadwal', 'gate' => 'manage-maintenance'],
+                ['label' => 'Riwayat', 'route' => 'staf.maintenance.riwayat', 'gate' => 'manage-maintenance'],
             ]],
 
             ['label' => 'Pelanggan', 'ikon' => 'pelanggan', 'anak' => [

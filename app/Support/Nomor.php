@@ -21,9 +21,21 @@ class Nomor
         return self::berikut('service_orders', 'order_code', 'ORD/'.now()->format('Y/m').'/');
     }
 
+    /** RSV-0016 */
+    public static function reservasi(): string
+    {
+        return self::berikut('reservations', 'reservation_code', 'RSV-');
+    }
+
     public static function nota(): string
     {
         return self::berikut('invoices', 'invoice_number', 'INV/'.now()->format('Y/m').'/');
+    }
+
+    /** MNT-0006: laporan kerusakan dan catatan perawatan rutin memakai urutan yang sama. */
+    public static function maintenance(): string
+    {
+        return self::berikut('maintenance_requests', 'request_code', 'MNT-');
     }
 
     public static function pembayaran(): string

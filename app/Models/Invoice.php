@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Invoice extends Model
@@ -22,6 +23,30 @@ class Invoice extends Model
             'total_amount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
         ];
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class)->withTrashed();
+    }
+
+    public function reservation(): BelongsTo
+    {
+        return $this->belongsTo(Reservation::class);
+    }
+
+    /** Jumlah yang sudah diterima: pembayaran berhasil dikurangi pengembalian dana. */
+    public function terbayar(): float
+    {
+        $sukses = $this->payments()->where('status', 'success');
+
+        return (float) (clone $sukses)->where('transaction_type', 'payment')->sum('amount')
+            - (float) (clone $sukses)->where('transaction_type', 'refund')->sum('amount');
+    }
+
+    public function sisa(): float
+    {
+        return max(0, (float) $this->total_amount - (float) $this->paid_amount);
     }
 
     public function items(): HasMany

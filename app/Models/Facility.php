@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Facility extends Model
 {
@@ -19,5 +20,15 @@ class Facility extends Model
     public function roomTypes(): BelongsToMany
     {
         return $this->belongsToMany(RoomType::class, 'room_type_facilities');
+    }
+
+    public function units(): HasMany
+    {
+        return $this->hasMany(FacilityUnit::class);
+    }
+
+    public function maintenanceSchedules(): HasMany
+    {
+        return $this->hasMany(MaintenanceSchedule::class);
     }
 }

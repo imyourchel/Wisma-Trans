@@ -30,6 +30,20 @@ class RoomType extends Model
         return $this->belongsToMany(Facility::class, 'room_type_facilities');
     }
 
+    /**
+     * URL foto yang berkasnya benar-benar ada, sesuai urutan galeri (foto pertama = utama).
+     *
+     * @return list<string>
+     */
+    public function photoUrls(): array
+    {
+        return collect($this->photos ?? [])
+            ->filter(fn ($p) => is_string($p) && str_contains($p, '/') && Storage::disk('public')->exists($p))
+            ->map(fn ($p) => asset('storage/'.$p))
+            ->values()
+            ->all();
+    }
+
     /** Foto pertama = foto utama. Nama berkas data contoh (std-1.jpg) belum punya berkas, jadi memakai gambar pengganti. */
     protected function mainPhotoUrl(): Attribute
     {

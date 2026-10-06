@@ -57,9 +57,59 @@
         <button type="button" wire:click="shiftDays(-7)" class="wt-btn-sm" aria-label="7 hari sebelumnya">‹</button>
         <button type="button" wire:click="shiftDays(0)" class="wt-btn-sm">Hari ini</button>
         <button type="button" wire:click="shiftDays(7)" class="wt-btn-sm" aria-label="7 hari berikutnya">›</button>
-        <span class="ml-1 font-display text-sm font-bold uppercase tracking-[.04em] text-ink-900">
-            {{ $kalender['hari']->first()->translatedFormat('j M') }} – {{ $kalender['akhir']->translatedFormat('j M Y') }}
-        </span>
+        {{-- Pemilih tanggal: tanggal yang dipilih menjadi kolom pertama; pita menandai 14 hari yang akan tampil.
+             wire:key ikut tanggal awal supaya kalender kecil mengikuti tombol geser. --}}
+        @php $awalKal = $kalender['hari']->first(); @endphp
+        <div wire:key="pilih-tgl-{{ $awalKal->toDateString() }}" class="relative ml-1"
+             x-data="pilihTanggal(@js(['mulai' => $awalKal->toDateString(), 'hariIni' => today()->toDateString(), 'panjang' => $kalender['hari']->count()]))"
+             @click.outside="buka = false" @keydown.escape="buka = false">
+            <button type="button" @click="bukaTutup()" :aria-expanded="buka" aria-haspopup="dialog" title="Pilih tanggal"
+                    class="inline-flex h-8 items-center gap-2 rounded border border-cream-300 bg-cream-50 px-3 font-display text-sm font-bold uppercase tracking-[.04em] text-ink-900 hover:bg-cream-200"
+                    :class="buka && 'border-brown-800 bg-cream-200'">
+                <x-staf.ikon nama="kalender" ukuran="15" class="text-clay-600" />
+                {{ $awalKal->translatedFormat('j M') }} – {{ $kalender['akhir']->translatedFormat('j M Y') }}
+                <x-staf.ikon nama="panah" ukuran="14" class="text-ink-500 transition-transform" ::class="buka && 'rotate-180'" />
+            </button>
+
+            <div x-show="buka" x-cloak role="dialog" aria-label="Pilih tanggal awal kalender"
+                 x-transition:enter="transition duration-150 ease-wt" x-transition:enter-start="-translate-y-1 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
+                 x-transition:leave="transition duration-100" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+                 class="absolute left-0 top-full z-50 mt-2 w-[308px] rounded-lg border border-cream-300 bg-cream-50 p-4 shadow-wt-lg">
+                <div class="mb-3 flex items-center gap-2">
+                    <button type="button" @click="geser(-1)" aria-label="Bulan sebelumnya"
+                            class="flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-brown-800 hover:bg-cream-200">
+                        <x-staf.ikon nama="panah" ukuran="16" class="rotate-90" />
+                    </button>
+                    <div class="flex-1 text-center font-display text-sm font-bold uppercase tracking-[.08em] text-ink-900" x-text="judul" aria-live="polite"></div>
+                    <button type="button" @click="geser(1)" aria-label="Bulan berikutnya"
+                            class="flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent text-brown-800 hover:bg-cream-200">
+                        <x-staf.ikon nama="panah" ukuran="16" class="-rotate-90" />
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-7 pb-1">
+                    @foreach (['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'] as $h)
+                        <div @class(['py-1 text-center font-display text-[10px] font-semibold uppercase tracking-[.1em]', 'text-clay-600' => $h === 'Min', 'text-ink-500' => $h !== 'Min'])>{{ $h }}</div>
+                    @endforeach
+                </div>
+                <div class="grid grid-cols-7 gap-y-1" @mouseleave="sorot = null">
+                    <template x-for="c in sel" :key="c.t">
+                        <button type="button" @click="pilih(c.t)" @mouseenter="sorot = c.t" :aria-label="c.label" :aria-pressed="c.awal"
+                                class="relative h-9 border-0 p-0 text-[13px] tabular-nums transition-colors" :class="kelas(c)">
+                            <span x-text="c.n"></span>
+                            <span x-show="c.hariIni" class="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full" :class="c.awal ? 'bg-sand-300' : 'bg-clay-500'"></span>
+                        </button>
+                    </template>
+                </div>
+
+                <div class="mt-3 flex items-center justify-between gap-3 border-t border-cream-300 pt-3">
+                    <p class="m-0 text-xs leading-snug text-ink-500">
+                        <span x-text="panjang"></span> hari mulai <span class="font-semibold text-ink-900" x-text="labelAcuan"></span>
+                    </p>
+                    <button type="button" @click="pilih(hariIni)" class="h-8 flex-none rounded-md border border-cream-300 bg-transparent px-3 text-xs font-semibold text-brown-800 hover:bg-cream-200">Hari ini</button>
+                </div>
+            </div>
+        </div>
         <div class="ml-auto flex flex-wrap items-center gap-3 text-xs text-ink-500">
             @foreach ($namaJenis as $jenis => $label)
                 <span class="inline-flex items-center gap-1.5"><span class="h-3 w-5 rounded-sm {{ $gayaBalok[$jenis] }}"></span>{{ $label }}</span>
@@ -149,6 +199,10 @@
                         @if ($lama = $room->dirtyDuration())
                             <span class="mt-0.5 text-[11px] leading-tight text-ink-500">{{ $lama }}</span>
                         @endif
+                        @if (isset($rusak[$room->id]) && $room->status !== RoomStatus::Maintenance)
+                            <span class="mt-1.5 inline-flex self-start rounded bg-[rgba(212,81,74,.12)] px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-status-dirty"
+                                  title="{{ $rusak[$room->id] }}: kamar tidak bisa dipakai. Setelah dibersihkan, kamar langsung ditandai Perbaikan.">Ada laporan kerusakan</span>
+                        @endif
                     </button>
                 @endforeach
             </div>
@@ -185,6 +239,13 @@
                         <div><dt class="wt-field-label">Lantai</dt><dd class="m-0 mt-1">{{ $selected->floor }}</dd></div>
                         <div><dt class="wt-field-label">Harga dasar</dt><dd class="m-0 mt-1 tabular-nums">{{ $rp($selected->roomType?->base_price) }}</dd></div>
                     </dl>
+
+                    @if (isset($rusak[$selected->id]) && $selected->status !== RoomStatus::Maintenance)
+                        <p class="mb-0 mt-4 rounded-md border border-[rgba(212,81,74,.3)] bg-[rgba(212,81,74,.06)] px-3 py-2 text-xs text-status-dirty">
+                            Ada laporan kerusakan yang belum selesai ({{ $rusak[$selected->id] }}) dan membuat kamar ini tidak bisa dipakai.
+                            Setelah tamu keluar dan kamar dibersihkan, kamar langsung ditandai Perbaikan, bukan Siap.
+                        </p>
+                    @endif
 
                     @if ($canChange && $options)
                         <form wire:submit="save" novalidate class="mt-5 flex flex-col gap-4 border-t border-cream-300 pt-5">
@@ -238,6 +299,29 @@
                                 </li>
                             @endforeach
                         </ol>
+                    @endif
+
+                    <div class="mb-2 mt-6 flex items-baseline justify-between gap-3">
+                        <h3 class="m-0 font-display text-[13px] font-bold uppercase tracking-[.06em] text-ink-500">Riwayat perawatan</h3>
+                        @if ($bolehMaintenance)
+                            <a href="{{ route('staf.maintenance.riwayat', ['kamar' => $selected->id]) }}" class="text-[12px] font-semibold">Lihat semua</a>
+                        @endif
+                    </div>
+                    @if ($perawatan->isEmpty())
+                        <p class="m-0 text-[13px] text-ink-500">Belum ada laporan perawatan untuk kamar ini.</p>
+                    @else
+                        <ul class="m-0 flex list-none flex-col p-0">
+                            @foreach ($perawatan as $m)
+                                <li wire:key="mnt-{{ $m->id }}" class="border-t border-cream-300 py-2.5 text-[13px] first:border-t-0">
+                                    <div class="flex flex-wrap items-baseline justify-between gap-x-3">
+                                        <span class="font-semibold tabular-nums">{{ $m->request_code }} <span class="font-normal text-ink-500">· {{ $m->lokasi() }}</span></span>
+                                        <x-staf.lencana-mnt :status="$m->status" />
+                                    </div>
+                                    <div class="mt-0.5 line-clamp-2 text-[12px] text-ink-900">{{ $m->damage_description }}</div>
+                                    <div class="text-[12px] text-ink-500">{{ $m->reported_at->translatedFormat('d M Y') }}{{ $m->pengerja() ? ' · '.$m->pengerja() : '' }}</div>
+                                </li>
+                            @endforeach
+                        </ul>
                     @endif
                 </div>
             </div>

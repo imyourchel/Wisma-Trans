@@ -1,0 +1,112 @@
+@php
+    use App\Services\ReservasiService;
+
+    $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
+@endphp
+
+<div>
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+        <label class="relative block min-w-0 flex-[1_1_240px] sm:max-w-[320px]">
+            <span class="sr-only">Cari reservasi</span>
+            <x-staf.ikon nama="cari" ukuran="16" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+            <input type="search" wire:model.live.debounce.400ms="cari" placeholder="Kode reservasi atau nama tamu" class="wt-input pl-9">
+        </label>
+        <span class="text-[13px] text-ink-500">{{ $daftar->count() }} reservasi menunggu check-in · {{ today()->translatedFormat('l, j F Y') }}</span>
+        <span wire:poll.60s class="ml-auto text-[12px] text-ink-500">Diperbarui {{ now()->format('H.i') }} WITA</span>
+    </div>
+
+    @if ($belumWaktunya)
+        <p class="mb-4 rounded bg-[rgba(232,172,69,.14)] px-4 py-3 text-[13px] text-[#7A520C]">Check-in dibuka pukul {{ $jamCheckIn }} WITA. Tamu yang datang lebih awal bisa menunggu atau dititipkan barangnya.</p>
+    @endif
+
+    @if ($daftar->isEmpty())
+        <div class="wt-card px-6 py-12 text-center text-sm text-ink-500">Tidak ada reservasi yang menunggu check-in{{ $cari !== '' ? ' dengan kata kunci itu' : ' hari ini' }}.</div>
+    @else
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            @foreach ($daftar as $x)
+                @php
+                    $baris = $x->rooms->where('status', 'booked');
+                    $terlambat = $x->masuk()?->lt(today());
+                    $nota = $x->stayInvoice;
+                @endphp
+                <div wire:key="ci-{{ $x->id }}" class="wt-card flex flex-col p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="font-display text-[15px] font-extrabold tabular-nums">{{ $x->reservation_code }}</div>
+                            <div class="truncate text-[13px] font-semibold">{{ $x->customer?->full_name }}</div>
+                            <div class="truncate text-[12px] text-ink-500">{{ $x->institution?->name ?? $x->customer?->phone }}</div>
+                        </div>
+                        @if ($terlambat)
+                            <span class="wt-lencana bg-[rgba(212,81,74,.12)] text-status-dirty">Datang {{ $x->masuk()->translatedFormat('j M') }}</span>
+                        @else
+                            <span class="wt-lencana bg-[rgba(108,149,196,.16)] text-[#3F6D9E]">Hari ini</span>
+                        @endif
+                    </div>
+                    <ul class="m-0 mt-3 flex list-none flex-col gap-1 p-0 text-[13px]">
+                        @foreach ($baris as $b)
+                            <li class="flex justify-between gap-3">
+                                <span>{{ $b->roomType->name }}</span>
+                                <span @class(['tabular-nums', 'font-semibold' => $b->room, 'text-ink-500' => ! $b->room])>{{ $b->room ? 'Kamar '.$b->room->room_number : 'belum ditetapkan' }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                    <div class="mt-3 border-t border-cream-300 pt-3 text-[12px] text-ink-500">
+                        {{ ReservasiService::rentang($x->masuk(), $x->keluar()) }}
+                        @if ($nota) · sisa bayar <span class="font-semibold text-ink-900">{{ $rp(max(0, (float) $nota->total_amount - (float) $nota->paid_amount)) }}</span>@endif
+                        @if ($x->special_request)<div class="mt-1 line-clamp-2 italic text-ink-900">“{{ $x->special_request }}”</div>@endif
+                    </div>
+                    @if ($bolehKelola)
+                        <button type="button" wire:click="open({{ $x->id }})" class="mt-3 h-10 rounded border-0 bg-clay-500 font-display text-xs font-bold text-cream-50 hover:bg-clay-600">Proses check-in</button>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    @endif
+
+    @if ($r)
+        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+            <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
+            <form wire:submit="simpan" role="dialog" aria-modal="true" aria-labelledby="ci-judul" novalidate
+                  class="relative flex max-h-[92vh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+                <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
+                    <div class="min-w-0 flex-1">
+                        <div id="ci-judul" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]">Check-in {{ $r->reservation_code }}</div>
+                        <div class="mt-0.5 text-[13px] text-ink-500">{{ $r->customer?->full_name }} · {{ ReservasiService::rentang($r->masuk(), $r->keluar()) }}</div>
+                    </div>
+                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
+                        <x-staf.ikon nama="tutup" ukuran="16" />
+                    </button>
+                </div>
+                <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+                    @foreach ($r->rooms->where('status', 'booked') as $b)
+                        <x-staf.isian :nama="'kamar.'.$b->id" :label="'Kamar untuk '.$b->roomType->name" tag="div" wire:key="tempat-{{ $b->id }}">
+                            <x-staf.pilih model="$wire.penempatan[{{ $b->id }}]" :nilai="$penempatan[$b->id] ?? ''" label="Nomor kamar"
+                                          :galat="$errors->has('kamar.'.$b->id) ? 'true' : null"
+                                          :pilihan="['' => 'Pilih nomor kamar'] + ($pilihanKamar[$b->id] ?? [])" />
+                        </x-staf.isian>
+                    @endforeach
+                    <p class="m-0 text-xs text-ink-500">Hanya kamar berstatus Siap yang bisa dipakai. Kamar yang belum siap perlu dibersihkan dulu oleh Housekeeping.</p>
+
+                    <div class="flex flex-col gap-3 border-t border-cream-300 pt-4">
+                        <label class="flex items-center gap-2.5 text-[13px]">
+                            <input type="checkbox" wire:model.live="ktpDitahan" class="h-4 w-4 accent-brown-800">
+                            KTP tamu ditahan selama menginap
+                        </label>
+                        @if ($ktpDitahan)
+                            <x-staf.isian nama="nama_ktp" label="Nama sesuai KTP" bantuan="Boleh berbeda dari nama pemesan.">
+                                <input type="text" wire:model="namaKtp" maxlength="100" @class(['wt-input', 'is-invalid' => $errors->has('nama_ktp')])>
+                            </x-staf.isian>
+                        @endif
+                    </div>
+                    @error('status')<p class="m-0 rounded bg-[rgba(212,81,74,.08)] px-3 py-2 text-[13px] text-status-dirty" role="alert">{{ $message }}</p>@enderror
+                </div>
+                <div class="flex flex-none gap-2 border-t border-cream-300 px-6 py-4">
+                    <button type="submit" wire:loading.attr="disabled" wire:target="simpan" class="h-11 flex-1 rounded border-0 bg-clay-500 font-display text-[13px] font-bold text-cream-50 hover:bg-clay-600 disabled:opacity-70">
+                        <span wire:loading.remove wire:target="simpan">Check-in sekarang</span><span wire:loading wire:target="simpan">Memproses…</span>
+                    </button>
+                    <button type="button" wire:click="close" class="h-11 rounded border border-cream-300 bg-transparent px-5 text-[13px] text-brown-800 hover:bg-cream-200">Batal</button>
+                </div>
+            </form>
+        </div>
+    @endif
+</div>

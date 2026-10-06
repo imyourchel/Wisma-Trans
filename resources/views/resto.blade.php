@@ -22,20 +22,20 @@
 
     {{-- Kepala halaman --}}
     <section class="relative isolate overflow-hidden bg-brown-900">
-        <img src="{{ asset('ds/img/bangunan_samping.png') }}" alt="" class="absolute inset-0 -z-10 h-full w-full object-cover opacity-45">
+        <img src="{{ asset('ds/img/resto-kafe.jpg') }}" alt="" class="absolute inset-0 -z-10 h-full w-full object-cover opacity-45">
         <div class="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(40,27,18,.55)_0%,rgba(40,27,18,.72)_55%,rgba(40,27,18,.94)_100%)]"></div>
-        <div class="wt-container flex min-h-[380px] flex-col items-center justify-center py-14 text-center sm:min-h-[440px] sm:py-16">
+        <div class="wt-container flex min-h-[300px] flex-col items-center justify-center py-10 text-center sm:min-h-[340px] sm:py-12">
             <div class="flex items-center gap-3 font-display text-[11px] font-semibold uppercase tracking-[.32em] text-sand-300">
                 <span class="h-px w-8 bg-sand-300/60"></span>Wisma Trans · Malili<span class="h-px w-8 bg-sand-300/60"></span>
             </div>
             <h1 class="mb-0 mt-5 font-display text-[40px] font-extrabold uppercase leading-[1.05] tracking-[.04em] text-cream-50 sm:text-[60px]">
                 Resto <span class="text-sand-300">&amp;</span> Kafe
             </h1>
-            <x-resto.ornamen terang class="mt-6" />
-            <p class="mb-0 mt-6 max-w-[560px] text-[15px] leading-relaxed text-[rgba(242,235,220,.82)] sm:text-base">
+            <x-resto.ornamen terang class="mt-4" />
+            <p class="mb-0 mt-4 max-w-[560px] text-[15px] leading-relaxed text-[rgba(242,235,220,.82)] sm:text-base">
                 Kopi, jus, dan masakan rumahan khas Malili. Pesan dan bayar online, lalu ambil pesanan Anda atau nikmati langsung di restoran kami.
             </p>
-            <div class="mt-8 flex flex-wrap justify-center gap-3">
+            <div class="mt-6 flex flex-wrap justify-center gap-3">
                 <button type="button" @click="lompat(grup[0].slug)"
                         class="inline-flex h-12 w-full max-w-[260px] items-center justify-center gap-2.5 rounded-sm border-0 bg-clay-500 px-7 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 transition-colors hover:bg-clay-600 sm:w-auto">
                     Lihat menu
@@ -53,9 +53,9 @@
         <div class="border-t border-[rgba(242,235,220,.12)] bg-[rgba(20,13,8,.28)]">
             <div class="wt-container grid grid-cols-1 divide-y divide-[rgba(242,235,220,.10)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
                 @foreach ([
-                    ['Pesan online', 'Bayar lewat QRIS, dompet digital, atau transfer bank'],
-                    ['Ambil atau makan di tempat', 'Pesanan disiapkan setelah pembayaran berhasil'],
-                    ['Tamu menginap', 'Sarapan sudah termasuk dalam harga kamar'],
+                    ['Pesan dari mana saja', 'Bayar praktis dengan QRIS, e-wallet, atau transfer bank'],
+                    ['Santap di tempat atau dibawa pulang', 'Hidangan segera disiapkan begitu pembayaran diterima'],
+                    ['Layanan antar ke kamar', 'Tamu menginap cukup memesan lewat telepon kamar'],
                 ] as [$judulInfo, $isiInfo])
                     <div class="px-4 py-5 text-center">
                         <div class="font-display text-[10px] font-semibold uppercase tracking-[.24em] text-sand-300">{{ $judulInfo }}</div>
@@ -197,22 +197,21 @@
                                         @endif
                                         <div class="min-w-0 flex-1">
                                             <div class="flex items-center gap-3">
-                                                <h3 class="m-0 min-w-0 font-display text-[13px] font-bold uppercase leading-snug tracking-[.08em] text-ink-900">{{ $m->name }}</h3>
+                                                {{-- Nama menu beserta lencana Favorit/Baru; baris di bawahnya khusus deskripsi --}}
+                                                <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                                                    <h3 class="m-0 min-w-0 font-display text-[13px] font-bold uppercase leading-snug tracking-[.08em] text-ink-900">{{ $m->name }}</h3>
+                                                    @if ($m->isTerlaris())
+                                                        <span class="flex-none rounded-full bg-[rgba(181,113,74,.12)] px-2 py-0.5 font-display text-[9px] font-bold uppercase tracking-[.12em] text-clay-600" title="Termasuk 5 menu terlaris">★ Favorit</span>
+                                                    @endif
+                                                    @if ($m->isNew())
+                                                        <span class="flex-none rounded-full bg-[rgba(92,158,103,.14)] px-2 py-0.5 font-display text-[9px] font-bold uppercase tracking-[.12em] text-status-available">Baru</span>
+                                                    @endif
+                                                </div>
                                                 <span class="h-[5px] min-w-6 flex-1 border-y border-[rgba(181,113,74,.35)]" aria-hidden="true"></span>
                                                 <span class="flex-none whitespace-nowrap font-display text-sm font-bold tabular-nums text-clay-600">{{ $harga($m) ?? 'Sesuai ukuran' }}</span>
                                             </div>
-                                            @if ($m->description || $m->isTerlaris() || $m->isNew())
-                                                <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                    @if ($m->isTerlaris())
-                                                        <span class="rounded-full bg-[rgba(181,113,74,.12)] px-2 py-0.5 font-display text-[9px] font-bold uppercase tracking-[.12em] text-clay-600" title="Termasuk 5 menu terlaris">★ Favorit</span>
-                                                    @endif
-                                                    @if ($m->isNew())
-                                                        <span class="rounded-full bg-[rgba(92,158,103,.14)] px-2 py-0.5 font-display text-[9px] font-bold uppercase tracking-[.12em] text-status-available">Baru</span>
-                                                    @endif
-                                                    @if ($m->description)
-                                                        <span class="min-w-0 text-[13px] text-ink-500">{{ $m->description }}</span>
-                                                    @endif
-                                                </div>
+                                            @if ($m->description)
+                                                <p class="mb-0 mt-1.5 text-[13px] text-ink-500">{{ $m->description }}</p>
                                             @endif
                                         </div>
                                         <x-resto.tambah :menu="$m" />
@@ -232,18 +231,24 @@
         </div>
     </div>
 
-    {{-- Penutup: keterangan dan kontak --}}
-    <section class="border-b border-[rgba(242,235,220,.12)] bg-brown-800">
-        <div class="wt-container grid items-center gap-8 py-12 sm:py-14 md:grid-cols-[1fr_auto]">
-            <div>
-                <div class="font-display text-[11px] font-semibold uppercase tracking-[.28em] text-sand-300">Butuh bantuan?</div>
-                <h2 class="mb-0 mt-3 font-display text-[26px] font-extrabold uppercase leading-tight tracking-[.04em] text-cream-50 sm:text-[30px]">Ada pertanyaan tentang menu?</h2>
+    {{-- Penutup: kartu kontak di atas latar krem supaya terpisah jelas dari footer yang sama-sama cokelat --}}
+    <section class="bg-cream-50 pb-16 lg:pb-20">
+        <div class="wt-container">
+            <div class="relative overflow-hidden rounded-sm bg-brown-800 bg-[radial-gradient(circle_at_12%_0%,rgba(228,185,143,.16),transparent_45%),radial-gradient(circle_at_95%_100%,rgba(181,113,74,.28),transparent_50%)]">
+                <div class="pointer-events-none absolute inset-3 border border-[rgba(255,253,246,.18)]" aria-hidden="true"></div>
+                <div class="relative grid items-center gap-8 px-8 py-10 sm:px-12 sm:py-12 md:grid-cols-[1fr_auto]">
+                    <div>
+                        <div class="font-display text-[11px] font-semibold uppercase tracking-[.28em] text-sand-300">Butuh bantuan?</div>
+                        <h2 class="mb-0 mt-3 font-display text-[24px] font-extrabold uppercase leading-tight tracking-[.04em] text-cream-50 sm:text-[28px]">Ada pertanyaan tentang menu?</h2>
+                        <p class="mb-0 mt-2 max-w-[480px] text-sm text-[rgba(242,235,220,.74)]">Staf restoran siap membantu soal bahan, porsi, atau pesanan khusus.</p>
+                    </div>
+                    <a href="{{ $tanyaWa }}" target="_blank" rel="noopener"
+                       class="inline-flex h-12 items-center gap-2.5 self-start rounded-sm bg-clay-500 px-7 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 transition-colors hover:bg-clay-600 hover:text-cream-50 hover:no-underline md:self-auto">
+                        <img src="{{ asset('ds/icons/whatsapp.svg') }}" alt="" width="18" height="18" class="brightness-0 invert">
+                        Tanya lewat WhatsApp
+                    </a>
+                </div>
             </div>
-            <a href="{{ $tanyaWa }}" target="_blank" rel="noopener"
-               class="inline-flex h-12 items-center gap-2.5 self-start rounded-sm bg-clay-500 px-7 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 transition-colors hover:bg-clay-600 hover:text-cream-50 hover:no-underline md:self-auto">
-                <img src="{{ asset('ds/icons/whatsapp.svg') }}" alt="" width="18" height="18" class="brightness-0 invert">
-                Tanya lewat WhatsApp
-            </a>
         </div>
     </section>
 
@@ -276,7 +281,7 @@
         </div>
     </div>
 
-    {{-- Panel pesanan: 1) keranjang dan cara penyajian, 2) data pemesan lalu bayar --}}
+    {{-- Panel pesanan: 1) keranjang dan cara penyajian, 2) data pemesan dan metode bayar --}}
     <div x-show="panel" x-cloak @click="tutupPanel()" x-transition.opacity class="fixed inset-0 z-[340] bg-[rgba(62,42,28,.40)]"></div>
     <aside x-show="panel" x-cloak x-ref="panel" @keydown.escape.window="panel && tutupPanel()"
            x-transition:enter="transition duration-250 ease-wt" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
@@ -289,7 +294,7 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
             <div class="min-w-0 flex-1">
-                <div id="judul-pesanan" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]" x-text="langkah === 1 ? 'Pesanan Anda' : 'Data pemesan'"></div>
+                <div id="judul-pesanan" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]" x-text="langkah === 1 ? 'Pesanan Anda' : 'Pemesan dan pembayaran'"></div>
                 <div class="text-xs text-ink-500" x-text="'Langkah ' + langkah + ' dari 2'"></div>
             </div>
             <button type="button" @click="tutupPanel()" aria-label="Tutup"
@@ -303,7 +308,8 @@
             <div x-show="langkah === 1" class="flex flex-col gap-6">
                 <div class="flex flex-col divide-y divide-cream-300 rounded-lg border border-cream-300">
                     <template x-for="b in daftar" :key="b.id">
-                        <div class="flex items-center gap-3 px-3.5 py-3">
+                        <div class="px-3.5 py-3">
+                        <div class="flex items-center gap-3">
                             <div class="min-w-0 flex-1">
                                 <div class="truncate text-sm font-semibold" x-text="b.nama"></div>
                                 <div class="text-xs tabular-nums text-ink-500" x-text="rupiah(b.harga) + ' × ' + b.qty"></div>
@@ -318,6 +324,33 @@
                                 </button>
                             </div>
                             <div class="w-[84px] text-right text-sm font-semibold tabular-nums" x-text="rupiah(b.subtotal)"></div>
+                        </div>
+
+                        {{-- Catatan per menu untuk dapur, seperti di aplikasi pesan antar --}}
+                        <div class="mt-2">
+                            <template x-if="ubahCatatan !== b.id">
+                                <button type="button" @click="bukaCatatan(b.id)"
+                                        class="flex w-full min-w-0 items-center gap-2 rounded-md border border-dashed border-cream-400 bg-transparent px-2.5 py-1.5 text-left text-xs hover:border-clay-500 hover:bg-[rgba(181,113,74,.05)]"
+                                        :aria-label="(b.note ? 'Ubah catatan ' : 'Tambah catatan untuk ') + b.nama">
+                                    <svg class="flex-none text-clay-600" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                    <span x-show="!b.note" class="font-semibold text-clay-600">Tambah catatan</span>
+                                    <span x-show="b.note" class="min-w-0 flex-1 truncate italic text-ink-900" x-text="b.note"></span>
+                                    <span x-show="b.note" class="flex-none font-semibold text-clay-600">Ubah</span>
+                                </button>
+                            </template>
+                            <template x-if="ubahCatatan === b.id">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="text" x-model="catatan[b.id]" maxlength="150" placeholder="Contoh: tidak pedas, tanpa bawang"
+                                               x-init="$nextTick(() => $el.focus())" @keydown.enter.prevent="simpanCatatan()" @keydown.escape.stop="simpanCatatan()"
+                                               class="wt-input h-9 min-w-0 flex-1 text-[13px]" :aria-label="'Catatan untuk ' + b.nama">
+                                        <button type="button" @click="simpanCatatan()"
+                                                class="h-9 flex-none rounded border-0 bg-brown-800 px-3.5 text-xs font-semibold text-cream-50 hover:bg-brown-900">Simpan</button>
+                                    </div>
+                                    <div class="mt-1 text-right text-[11px] tabular-nums text-ink-500" x-text="(catatan[b.id] || '').length + '/150'"></div>
+                                </div>
+                            </template>
+                        </div>
                         </div>
                     </template>
                 </div>
@@ -341,8 +374,8 @@
                 </div>
 
                 <label class="block">
-                    <span class="wt-field-label mb-1.5 block">Catatan (opsional)</span>
-                    <textarea x-model="isi.note" rows="2" maxlength="255" placeholder="Contoh: tidak pedas, es sedikit" class="wt-input"></textarea>
+                    <span class="wt-field-label mb-1.5 block">Catatan untuk restoran (opsional)</span>
+                    <textarea x-model="isi.note" rows="2" maxlength="255" placeholder="Contoh: minta sendok plastik, diambil pukul 12.00" class="wt-input"></textarea>
                 </label>
             </div>
 
@@ -354,12 +387,11 @@
                     ['email', 'Email (opsional)', 'email', 'email', 'Untuk bukti pembayaran'],
                 ] as [$f, $label, $type, $auto, $ph])
                     <label class="block">
-                        <span class="mb-1.5 flex items-baseline justify-between gap-3">
-                            <span class="wt-field-label">{{ $label }}</span>
-                            <span x-show="galat.{{ $f }}" x-text="galat.{{ $f }}" x-cloak class="min-w-0 truncate text-[11px] font-medium text-status-dirty"></span>
-                        </span>
+                        <span class="wt-field-label mb-1.5 block">{{ $label }}</span>
                         <input type="{{ $type }}" x-model="isi.{{ $f }}" @input="delete galat.{{ $f }}" autocomplete="{{ $auto }}" placeholder="{{ $ph }}"
                                data-isian="{{ $f }}" class="wt-input h-11 text-[15px]" :class="galat.{{ $f }} && 'is-invalid'">
+                        {{-- Pesan galat di bawah kolom agar tampil utuh --}}
+                        <span x-show="galat.{{ $f }}" x-text="galat.{{ $f }}" x-cloak class="mt-1.5 flex text-xs font-medium leading-snug text-status-dirty" role="alert"></span>
                     </label>
                 @endforeach
 
@@ -367,9 +399,29 @@
                     <div class="flex justify-between gap-3"><span class="text-ink-500">Pesanan</span><span class="font-semibold" x-text="totalItem + ' item'"></span></div>
                     <div class="mt-1 flex justify-between gap-3"><span class="text-ink-500">Cara menikmati</span><span class="font-semibold" x-text="isi.serving_type === 'dine_in' ? 'Makan di tempat' : 'Ambil di tempat'"></span></div>
                 </div>
-                <p class="m-0 text-xs leading-relaxed text-ink-500">
-                    Pembayaran melalui Midtrans: QRIS, dompet digital, transfer bank, atau virtual account. Pesanan diproses dapur setelah pembayaran berhasil.
-                </p>
+                {{-- Metode bayar: nomor VA atau QRIS langsung dibuat bersama pesanan --}}
+                <fieldset class="m-0 mt-1 min-w-0 border-0 p-0">
+                    <legend class="mb-2 flex w-full items-baseline justify-between gap-3 p-0">
+                        <span class="wt-field-label">Metode pembayaran</span>
+                        <span x-show="galat.metode" x-text="galat.metode" x-cloak class="text-[11px] font-medium text-status-dirty"></span>
+                    </legend>
+                    <div class="flex flex-col divide-y divide-cream-300 overflow-hidden rounded-lg border border-cream-300" :class="galat.metode && 'border-status-dirty'" data-isian="metode">
+                        @foreach (\App\Services\PembayaranMidtrans::METODE as $kunci => [$nama, $ket])
+                            <label class="relative flex cursor-pointer items-center gap-3 px-3.5 py-2.5 transition hover:bg-row-hover has-[:checked]:bg-[rgba(181,113,74,.07)]">
+                                <input type="radio" name="metode" value="{{ $kunci }}" x-model="isi.metode" @change="delete galat.metode" class="peer sr-only">
+                                <span class="flex h-9 w-16 flex-none items-center justify-center rounded border border-cream-300 bg-white px-1.5">
+                                    <img src="{{ asset('ds/bank/'.$kunci.'.svg') }}" alt="" class="max-h-5 max-w-full object-contain">
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-sm font-semibold leading-snug">{{ $nama }}</span>
+                                    <span class="block truncate text-xs text-ink-500">{{ $ket }}</span>
+                                </span>
+                                <span class="h-4 w-4 flex-none rounded-full border border-cream-400 peer-checked:border-[5px] peer-checked:border-clay-500"></span>
+                            </label>
+                        @endforeach
+                    </div>
+                    <p class="mb-0 mt-2 text-xs leading-relaxed text-ink-500">Nomor pembayaran langsung tampil setelah pesanan dibuat. Pesanan diproses dapur setelah pembayaran berhasil.</p>
+                </fieldset>
             </div>
         </div>
 
@@ -382,22 +434,22 @@
                     class="h-12 w-full rounded border-0 bg-clay-500 font-display text-[13px] font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600">Lanjut</button>
             <button type="button" x-show="langkah === 2" x-cloak @click="bayar()" :disabled="proses"
                     class="h-12 w-full rounded border-0 bg-clay-500 font-display text-[13px] font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 disabled:cursor-wait disabled:opacity-70"
-                    x-text="proses ? 'Menyiapkan pembayaran…' : 'Bayar ' + rupiah(total)"></button>
+                    x-text="proses ? 'Membuat pesanan…' : 'Bayar ' + rupiah(total)"></button>
         </div>
     </aside>
 </div>
 
 @push('scripts')
-@if ($bayarOnline)
-    <script src="{{ \App\Services\PembayaranMidtrans::urlSnapJs() }}" data-client-key="{{ config('services.midtrans.client_key') }}"></script>
-@endif
 <script>
     document.addEventListener('alpine:init', () => {
-        const KUNCI = 'wt.keranjang';
-        const simpanan = {
-            baca() { try { return JSON.parse(localStorage.getItem(KUNCI) || '{}'); } catch { return {}; } },
-            tulis(v) { try { localStorage.setItem(KUNCI, JSON.stringify(v)); } catch { /* mode privat */ } },
-        };
+        const simpananDari = (kunci) => ({
+            baca() { try { return JSON.parse(localStorage.getItem(kunci) || '{}'); } catch { return {}; } },
+            tulis(v) { try { localStorage.setItem(kunci, JSON.stringify(v)); } catch { /* mode privat */ } },
+        });
+        const simpanan = simpananDari('wt.keranjang');
+        const simpananCatatan = simpananDari('wt.keranjang.catatan');
+        // Metode bayar terakhir dipilih di perangkat ini diingat untuk pesanan berikutnya
+        const metodeTerakhir = () => { try { return localStorage.getItem('wt.metode-bayar') || ''; } catch { return ''; } };
 
         Alpine.data('menuResto', (grup, katalog, cfg) => ({
             grup,
@@ -407,9 +459,12 @@
 
             // Keranjang disimpan di perangkat ini saja: { idMenu: jumlah }
             keranjang: {},
+            // Catatan per menu: { idMenu: teks }; ubahCatatan = id menu yang catatannya sedang diketik
+            catatan: {},
+            ubahCatatan: null,
             panel: false,
             langkah: 1,
-            isi: { ...cfg.pemesan, serving_type: '', note: '' },
+            isi: { ...cfg.pemesan, serving_type: '', note: '', metode: metodeTerakhir() },
             galat: {},
             proses: false,
 
@@ -422,21 +477,42 @@
             },
             kurang(id) {
                 const k = { ...this.keranjang };
-                if (k[id] > 1) k[id]--; else delete k[id];
+                if (k[id] > 1) {
+                    k[id]--;
+                } else {
+                    delete k[id];
+                    this.hapusCatatan(id);
+                }
                 this.keranjang = k;
                 if (!Object.keys(k).length) this.tutupPanel();
             },
             get daftar() {
                 return Object.entries(this.keranjang).filter(([id]) => katalog[id])
-                    .map(([id, qty]) => ({ id: +id, nama: katalog[id].nama, harga: katalog[id].harga, qty, subtotal: katalog[id].harga * qty }));
+                    .map(([id, qty]) => ({ id: +id, nama: katalog[id].nama, harga: katalog[id].harga, qty, subtotal: katalog[id].harga * qty,
+                        note: (this.catatan[id] || '').trim() }));
+            },
+            bukaCatatan(id) { this.simpanCatatan(); this.ubahCatatan = id; },
+            simpanCatatan() {
+                if (this.ubahCatatan === null) return;
+                const id = this.ubahCatatan;
+                const teks = (this.catatan[id] || '').trim().slice(0, 150);
+                if (teks) this.catatan = { ...this.catatan, [id]: teks }; else this.hapusCatatan(id);
+                this.ubahCatatan = null;
+            },
+            hapusCatatan(id) {
+                const c = { ...this.catatan };
+                delete c[id];
+                this.catatan = c;
+                if (this.ubahCatatan === +id) this.ubahCatatan = null;
             },
             get totalItem() { return this.daftar.reduce((a, b) => a + b.qty, 0); },
             get total() { return this.daftar.reduce((a, b) => a + b.subtotal, 0); },
             rupiah(n) { return 'Rp' + n.toLocaleString('id-ID'); },
 
             bukaPanel() { this.langkah = 1; this.panel = true; },
-            tutupPanel() { if (!this.proses) this.panel = false; },
+            tutupPanel() { if (!this.proses) { this.simpanCatatan(); this.panel = false; } },
             lanjut() {
+                this.simpanCatatan();
                 if (!this.isi.serving_type) {
                     this.galat = { ...this.galat, serving_type: 'Pilih salah satu.' };
                     return;
@@ -451,8 +527,12 @@
                 const nama = this.isi.name.trim();
                 if (!nama) g.name = 'Wajib diisi.'; else if (nama.length < 3) g.name = 'Minimal 3 huruf.';
                 if (!this.isi.phone.trim()) g.phone = 'Wajib diisi.';
+                if (!this.isi.metode) g.metode = 'Pilih metode pembayaran.';
                 this.galat = g;
-                if (Object.keys(g).length) return;
+                if (Object.keys(g).length) {
+                    this.$refs.panel.querySelector(`[data-isian="${Object.keys(g)[0]}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
                 if (!cfg.bayarOnline) return Alpine.store('toasts').tampil('Pembayaran online belum tersedia. Silakan pesan langsung di restoran.', '#E8AC45');
 
                 const gagal = (teks) => Alpine.store('toasts').tampil(teks, '#D4514A');
@@ -464,19 +544,21 @@
                             'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest',
                             'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
                         },
-                        body: JSON.stringify({ ...this.isi, items: this.daftar.map((b) => ({ id: b.id, qty: b.qty })) }),
+                        body: JSON.stringify({ ...this.isi, items: this.daftar.map((b) => ({ id: b.id, qty: b.qty, note: b.note || null })) }),
                     });
                     const data = await res.json().catch(() => ({}));
 
                     if (res.ok || data.status_url) {
                         // Pesanan sudah tersimpan di server; keranjang dikosongkan saat pindah ke halaman status
-                        const keStatus = () => { this.keranjang = {}; simpanan.tulis({}); window.location.href = data.status_url; };
-                        if (data.token && window.snap) {
-                            window.snap.pay(data.token, { onSuccess: keStatus, onPending: keStatus, onError: keStatus, onClose: keStatus });
-                        } else {
-                            if (data.pesan) gagal(data.pesan);
-                            setTimeout(keStatus, data.pesan ? 1200 : 0);
-                        }
+                        const keStatus = () => {
+                            this.keranjang = {}; this.catatan = {};
+                            simpanan.tulis({}); simpananCatatan.tulis({});
+                            try { localStorage.setItem('wt.metode-bayar', this.isi.metode); } catch { /* mode privat */ }
+                            window.location.href = data.status_url;
+                        };
+                        // Halaman pesanan langsung menampilkan nomor VA atau QRIS untuk metode yang dipilih
+                        if (data.pesan) gagal(data.pesan);
+                        setTimeout(keStatus, data.pesan ? 1200 : 0);
                         return;
                     }
                     if (res.status === 422 && data.errors) {
@@ -487,7 +569,7 @@
                         this.galat = pesan;
                     } else if (res.status === 422 && data.hapus) {
                         const k = { ...this.keranjang };
-                        data.hapus.forEach((id) => delete k[id]);
+                        data.hapus.forEach((id) => { delete k[id]; this.hapusCatatan(id); });
                         this.keranjang = k;
                         this.langkah = 1;
                         gagal(data.pesan);
@@ -515,6 +597,10 @@
                 this.keranjang = Object.fromEntries(Object.entries(simpanan.baca())
                     .filter(([id, qty]) => katalog[id] && Number.isInteger(qty) && qty > 0).map(([id, qty]) => [id, Math.min(qty, 20)]));
                 this.$watch('keranjang', (v) => simpanan.tulis(v));
+                // Catatan hanya dipertahankan untuk menu yang masih ada di keranjang
+                this.catatan = Object.fromEntries(Object.entries(simpananCatatan.baca())
+                    .filter(([id, teks]) => this.keranjang[id] && typeof teks === 'string' && teks.trim()).map(([id, teks]) => [id, teks.trim().slice(0, 150)]));
+                this.$watch('catatan', (v) => simpananCatatan.tulis(v));
 
                 // Kategori aktif = kelompok terakhir yang judulnya sudah melewati bagian atas layar
                 // (di bawah navbar, dan di bawah bilah tab pada layar kecil)

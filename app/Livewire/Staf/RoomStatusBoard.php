@@ -3,10 +3,12 @@
 namespace App\Livewire\Staf;
 
 use App\Enums\RoomStatus;
+use App\Models\MaintenanceRequest;
 use App\Models\Room;
 use App\Services\RoomStatusService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -16,7 +18,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * Papan Status Kamar untuk Admin, Manager, Front Office, dan Housekeeping.
+ * Papan Status Kamar untuk Manager, Front Office, dan Housekeeping (Admin hanya mengelola data master).
  * Manager hanya melihat. Pilihan status mengikuti RoomStatus::allowedTransitions() dan peran pengguna;
  * RoomStatusService memeriksanya lagi saat menyimpan.
  * Papan memuat ulang tiap 30 detik (dihentikan selama detail kamar terbuka).
@@ -64,6 +66,13 @@ class RoomStatusBoard extends Component
     public function shiftDays(int $hari): void
     {
         $this->start = $hari === 0 ? '' : $this->startDate()->addDays(max(-60, min(60, $hari)))->toDateString();
+    }
+
+    /** Lompat ke tanggal tertentu dari pemilih tanggal; tanggal itu menjadi kolom pertama kalender. */
+    public function pickDate(string $tanggal): void
+    {
+        $valid = preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal) && checkdate((int) substr($tanggal, 5, 2), (int) substr($tanggal, 8, 2), (int) substr($tanggal, 0, 4));
+        $this->start = ! $valid || $tanggal === today()->toDateString() ? '' : $tanggal;
     }
 
     private function startDate(): Carbon
@@ -171,11 +180,14 @@ class RoomStatusBoard extends Component
             return;
         }
 
-        // Aturan perpindahan dan peran diperiksa di service; galatnya tampil di formulir
-        $service->change($room, $baru, $this->note, auth()->user());
+        // Aturan perpindahan dan peran diperiksa di service; galatnya tampil di formulir.
+        // Kamar yang masih punya laporan kerusakan penahan tidak menjadi Siap, melainkan Perbaikan (pesan dari service).
+        $ditahan = $service->change($room, $baru, $this->note, Auth::user());
 
         $this->close();
-        $this->dispatch('toast', teks: "Status kamar {$room->room_number} diubah menjadi {$baru->label()}.");
+        $ditahan
+            ? $this->dispatch('toast', teks: $ditahan, peringatan: true)
+            : $this->dispatch('toast', teks: "Status kamar {$room->room_number} diubah menjadi {$baru->label()}.");
     }
 
     public function render(): View
@@ -187,10 +199,18 @@ class RoomStatusBoard extends Component
         $filter = RoomStatus::tryFrom($this->filter);
 
         $selected = $this->selectedId ? Room::with('roomType')->find($this->selectedId) : null;
-        $user = auth()->user()->loadMissing('roles');
+        $user = Auth::user()->loadMissing('roles');
         $canChange = Gate::allows('change-room-status');
 
+        // Kamar dengan laporan kerusakan penahan yang belum selesai (blocks_room), misalnya AC rusak saat tamu menginap
+        $rusak = MaintenanceRequest::adaKolomMenahan()
+            ? MaintenanceRequest::with('unit:id,room_id')->whereIn('status', ['reported', 'in_progress'])->where('blocks_room', true)
+                ->get(['id', 'room_id', 'facility_unit_id', 'request_code'])
+                ->groupBy(fn ($l) => $l->unit?->room_id ?? $l->room_id)->map(fn ($g) => $g->pluck('request_code')->implode(', '))
+            : collect();
+
         return view('livewire.staf.room-status-board', [
+            'rusak' => $rusak,
             'counts' => $rooms->countBy(fn (Room $r) => $r->status->value),
             'total' => $rooms->count(),
             'floors' => ($filter ? $rooms->where('status', $filter) : $rooms)->groupBy('floor'),
@@ -202,6 +222,12 @@ class RoomStatusBoard extends Component
             'options' => $selected && $canChange ? $selected->status->transitionsFor($user->roles->pluck('code')->all()) : [],
             'suggested' => $selected ? $service->suggestedTarget($selected) : null,
             'kalender' => $this->view === 'kalender' ? $this->calendar() : null,
+            // Riwayat perawatan kamar (laporan kerusakan dan unit fasilitas di kamar ini)
+            'perawatan' => $selected
+                ? $selected->maintenanceRequests()->with('unit', 'handler')->whereIn('status', ['reported', 'in_progress', 'completed'])
+                    ->orderByDesc('reported_at')->orderByDesc('id')->limit(5)->get()
+                : collect(),
+            'bolehMaintenance' => $user->can('manage-maintenance'),
         ])->layout('components.layouts.staf', ['title' => 'Papan Status Kamar']);
     }
 }

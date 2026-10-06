@@ -34,7 +34,7 @@ class PapanStatusKamarTest extends TestCase
 
     public function test_PS01_ringkasan_sesuai_jumlah_kamar_aktif_per_status(): void
     {
-        $this->papan('admin')
+        $this->papan('manager')
             ->assertViewHas('total', 32)
             ->assertViewHas('counts', fn ($counts) => $counts->sortKeys()->all() === [
                 'available' => 21, 'cleaning' => 1, 'maintenance' => 1,
@@ -46,7 +46,7 @@ class PapanStatusKamarTest extends TestCase
     {
         $this->actingAs($this->akun('admin'))->patch(route('staf.kamar.toggle', $this->kamar('101')));
 
-        $this->papan('admin')
+        $this->papan('manager')
             ->assertViewHas('total', 31)
             ->assertViewHas('floors', fn ($floors) => ! in_array('101', self::nomorDiPapan($floors), true));
     }
@@ -103,7 +103,7 @@ class PapanStatusKamarTest extends TestCase
             ]);
         }
 
-        $this->papan('admin')
+        $this->papan('fo')
             ->call('open', $kamar->id)
             ->assertViewHas('history', fn ($riwayat) => $riwayat->count() === 10
                 && $riwayat->first()->note === 'Perubahan 11'
@@ -134,6 +134,20 @@ class PapanStatusKamarTest extends TestCase
             ->assertDontSee('Tamu Batal');
     }
 
+    public function test_KL02_pilih_tanggal_menjadi_kolom_pertama_kalender(): void
+    {
+        $this->papan('fo')
+            ->call('setView', 'kalender')
+            ->call('pickDate', '2026-10-20')
+            ->assertSet('start', '2026-10-20')
+            ->assertViewHas('kalender', fn ($k) => $k['hari']->first()->toDateString() === '2026-10-20' && $k['akhir']->toDateString() === '2026-11-02')
+            ->call('pickDate', '2026-02-31')
+            ->assertSet('start', '')
+            ->call('pickDate', '2026-10-20')
+            ->call('pickDate', today()->toDateString())
+            ->assertSet('start', '');
+    }
+
     public function test_RW03_log_pengubah_yang_dihapus_tetap_ada_dan_tampil_sistem(): void
     {
         $hk = $this->akun('hk');
@@ -142,7 +156,7 @@ class PapanStatusKamarTest extends TestCase
         $hk->delete();
 
         $this->assertDatabaseHas('room_status_logs', ['room_id' => $kamar->id, 'status' => 'cleaning']);
-        $this->papan('admin')
+        $this->papan('fo')
             ->call('open', $kamar->id)
             ->assertViewHas('history', fn ($riwayat) => $riwayat->first()->status === RoomStatus::Cleaning && $riwayat->first()->changedBy === null)
             ->assertSee('oleh Sistem');

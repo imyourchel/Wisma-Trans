@@ -2,52 +2,25 @@
 
 namespace App\Http\Controllers\Staf\Admin;
 
+use App\Http\Controllers\Controller;
 use App\Models\CleaningCriterion;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
-/** Kriteria prioritas pembersihan. Bobotnya ditetapkan Manager di menu Bobot Kriteria. */
-class KriteriaController extends MasterController
+/**
+ * Kriteria prioritas pembersihan (C1–C3) beserta bobot AHP-nya. Keduanya sudah tetap dari penelitian terdahulu
+ * dan diisi langsung di basis data, jadi halaman ini hanya untuk dibaca: tidak ada tambah, ubah, atau nonaktifkan.
+ */
+class KriteriaController extends Controller
 {
     public function index(): View
     {
-        return view('staf.admin.kriteria', ['kriteria' => CleaningCriterion::orderBy('code')->get()]);
-    }
+        $sesi = DB::table('ahp_sessions')->where('is_active', true)->orderByDesc('calculated_at')->first();
 
-    public function store(Request $request): JsonResponse|RedirectResponse
-    {
-        $data = $this->validasi($request);
-        CleaningCriterion::create($data + ['is_active' => true]);
-
-        return $this->selesai($request, "Kriteria {$data['code']} ditambahkan.");
-    }
-
-    public function update(Request $request, CleaningCriterion $kriteria): JsonResponse|RedirectResponse
-    {
-        $data = $this->validasi($request, $kriteria);
-        $kriteria->update($data);
-
-        return $this->selesai($request, "Kriteria {$data['code']} disimpan.");
-    }
-
-    public function toggle(CleaningCriterion $kriteria): RedirectResponse
-    {
-        return $this->balikAktif($kriteria, 'Kriteria '.$kriteria->code);
-    }
-
-    private function validasi(Request $request, ?CleaningCriterion $kriteria = null): array
-    {
-        $request->merge(['code' => Str::upper(trim((string) $request->input('code')))]);
-
-        return $request->validate([
-            'code' => ['required', 'alpha_dash', 'max:10', Rule::unique('cleaning_criteria', 'code')->ignore($kriteria)],
-            'name' => ['required', 'string', 'max:80'],
-            'attribute_type' => ['required', Rule::in(array_keys(CleaningCriterion::TYPES))],
-            'description' => ['nullable', 'string', 'max:255'],
+        return view('staf.admin.kriteria', [
+            'kriteria' => CleaningCriterion::orderBy('code')->get(),
+            'sesi' => $sesi,
+            'bobot' => $sesi ? DB::table('ahp_criteria_weights')->where('ahp_session_id', $sesi->id)->pluck('weight', 'criteria_id') : collect(),
         ]);
     }
 }

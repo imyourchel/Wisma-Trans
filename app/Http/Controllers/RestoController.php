@@ -4,19 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\Service;
 use App\Services\PembayaranMidtrans;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /** Katalog menu restoran untuk tamu. Tamu hanya melihat; pemesanan lewat staf, telepon kamar, atau WhatsApp. */
 class RestoController extends Controller
 {
-    public function __invoke(): View
+    public function __invoke(Request $request): View
     {
         // Urutan kelompok mengikuti urutan menu di basis data (sama dengan menu cetak)
         $menu = Service::where('category', 'fnb')->where('is_active', true)->orderBy('id')->get();
         $ids = Service::terlarisIds();
 
         // Isian pemesan diisi otomatis untuk tamu yang sudah masuk
-        $user = auth()->user();
+        $user = $request->user();
         $pemesan = [
             'name' => $user?->customer?->full_name ?? $user?->name ?? '',
             'phone' => $user?->customer?->phone ?? $user?->phone ?? '',
@@ -27,8 +28,8 @@ class RestoController extends Controller
             'title' => 'Resto dan Kafe',
             'grup' => $menu->groupBy(fn (Service $s) => $s->menu_group ?: 'Lainnya'),
             'terlaris' => $menu->whereIn('id', $ids)->sortBy(fn (Service $s) => array_search($s->id, $ids))->values(),
-            // Hanya menu berharga tetap yang dapat dipesan online; menu sesuai ukuran dipesan di tempat
-            'katalog' => $menu->whereNotNull('price')->mapWithKeys(fn (Service $s) => [$s->id => ['nama' => $s->name, 'harga' => (int) $s->price]]),
+            // Hanya menu berharga tetap yang tidak sedang habis yang dapat dipesan online; menu sesuai ukuran dipesan di tempat
+            'katalog' => $menu->whereNotNull('price')->reject(fn (Service $s) => $s->habis())->mapWithKeys(fn (Service $s) => [$s->id => ['nama' => $s->name, 'harga' => (int) $s->price]]),
             'pemesan' => $pemesan,
             'bayarOnline' => PembayaranMidtrans::siap(),
         ]);
