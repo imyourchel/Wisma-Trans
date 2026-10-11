@@ -1,6 +1,6 @@
 @php
-    use App\Services\FolioService;
-    use App\Services\ReservasiService;
+    use App\Services\Reservasi\FolioService;
+    use App\Services\Reservasi\ReservasiService;
 
     $rp = fn ($n) => FolioService::rp($n);
     $warna = ['terlambat' => '#D4514A', 'hari-ini' => '#D69A2E', 'menginap' => '#5B86B8'];

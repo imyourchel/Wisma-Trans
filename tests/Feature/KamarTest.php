@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\RoomStatus;
-use App\Livewire\Staf\RoomStatusBoard;
+use App\Livewire\Staf\Kamar\RoomStatusBoard;
 use App\Models\Room;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;

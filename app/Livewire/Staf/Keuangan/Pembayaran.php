@@ -3,9 +3,9 @@
 namespace App\Livewire\Staf\Keuangan;
 
 use App\Models\Payment;
-use App\Services\FolioService;
-use App\Services\PembayaranService;
-use App\Support\RekapKas;
+use App\Services\Keuangan\PembayaranService;
+use App\Services\Keuangan\RekapKas;
+use App\Services\Reservasi\FolioService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;

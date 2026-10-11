@@ -3,10 +3,10 @@
 namespace Tests\Feature;
 
 use App\Livewire\Staf\Kamar\RiwayatStatus;
+use App\Livewire\Staf\Kamar\RoomStatusBoard;
 use App\Livewire\Staf\Reservasi\DaftarReservasi;
 use App\Livewire\Staf\Reservasi\ReservasiLangsung;
-use App\Livewire\Staf\RoomStatusBoard;
-use App\Services\KetersediaanKamar;
+use App\Services\Kamar\KetersediaanKamar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;

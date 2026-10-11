@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-/** Status operasional kamar. Diganti hanya lewat App\Services\RoomStatusService. */
+/** Status operasional kamar. Diganti hanya lewat App\Services\Kamar\RoomStatusService. */
 enum RoomStatus: string
 {
     case Available = 'available';

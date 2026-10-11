@@ -1,5 +1,5 @@
 @php
-    use App\Services\ReservasiService;
+    use App\Services\Reservasi\ReservasiService;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
 @endphp

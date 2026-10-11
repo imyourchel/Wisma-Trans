@@ -3,8 +3,8 @@
 namespace App\Livewire\Staf\Keuangan;
 
 use App\Models\BillingReminder;
-use App\Services\PengingatPenagihan as Layanan;
-use App\Services\TagihanBulananService;
+use App\Services\Keuangan\PengingatPenagihan as Layanan;
+use App\Services\Keuangan\TagihanBulananService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;

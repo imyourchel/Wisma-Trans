@@ -5,7 +5,7 @@ namespace App\Livewire\Tamu\Concerns;
 use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Setting;
-use App\Services\KetersediaanKamar;
+use App\Services\Kamar\KetersediaanKamar;
 use App\Support\PencarianInap;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;

@@ -1,7 +1,7 @@
 {{-- Detail pesanan makanan (Papan Pesanan, Riwayat Pesanan). Variabel: $o, $waSiap, $bolehBatal, $formBatal, $aksiDapur --}}
 @php
     use App\Models\Payment;
-    use App\Services\PesananMakananService as PM;
+    use App\Services\Layanan\PesananMakananService as PM;
     use App\Support\GayaPesanan;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');

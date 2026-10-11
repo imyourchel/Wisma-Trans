@@ -22,7 +22,7 @@
                     <li class="flex items-start gap-2"><x-staf.ikon nama="bintang" ukuran="14" class="mt-0.5 text-clay-500" />{{ $saran }}</li>
                 @endforeach
             </ul>
-        @elseif ($pola['rombongan'] < \App\Services\ProfilPelanggan::MIN_KUNJUNGAN)
+        @elseif ($pola['rombongan'] < \App\Services\Pelanggan\ProfilPelanggan::MIN_KUNJUNGAN)
             <p class="m-0 mt-2 text-[12px] text-ink-500">Rekomendasi muncul setelah 2 kunjungan rombongan.</p>
         @endif
     @endif

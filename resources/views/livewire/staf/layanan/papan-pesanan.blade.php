@@ -1,5 +1,5 @@
 @php
-    use App\Services\PesananMakananService as PM;
+    use App\Services\Layanan\PesananMakananService as PM;
     use App\Support\GayaPesanan;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');

@@ -1,6 +1,6 @@
 @php
     use App\Models\Payment;
-    use App\Services\FolioService;
+    use App\Services\Reservasi\FolioService;
 
     $rp = fn ($n) => FolioService::rp($n);
     $warnaStatus = [

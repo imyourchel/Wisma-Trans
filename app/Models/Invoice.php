@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Contracts\BayarOnline;
-use App\Services\PembayaranService;
+use App\Services\Keuangan\PembayaranService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;

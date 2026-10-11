@@ -1,7 +1,7 @@
 @php
     use App\Models\Reservation;
     use App\Models\ReservationLog;
-    use App\Services\ReservasiService;
+    use App\Services\Reservasi\ReservasiService;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $ringkasKamar = fn (Reservation $x) => $x->rooms->where('status', '!=', 'moved')->isEmpty()

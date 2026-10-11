@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Profil;
+use App\Livewire\Tamu\Profil;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;

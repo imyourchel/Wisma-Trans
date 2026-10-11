@@ -4,11 +4,11 @@ namespace App\Livewire\Staf\Reservasi;
 
 use App\Livewire\Staf\Concerns\QrisMeja;
 use App\Models\Reservation;
-use App\Services\CheckOutService;
-use App\Services\FolioService;
-use App\Services\NotaPdf;
-use App\Services\PembayaranMidtrans;
-use App\Services\PembayaranService;
+use App\Services\Keuangan\NotaPdf;
+use App\Services\Keuangan\PembayaranMidtrans;
+use App\Services\Keuangan\PembayaranService;
+use App\Services\Reservasi\CheckOutService;
+use App\Services\Reservasi\FolioService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;

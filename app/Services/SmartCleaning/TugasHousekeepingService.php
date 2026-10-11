@@ -7,7 +7,7 @@ use App\Models\HousekeepingTask;
 use App\Models\ReservationRoom;
 use App\Models\Room;
 use App\Models\User;
-use App\Services\RoomStatusService;
+use App\Services\Kamar\RoomStatusService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;

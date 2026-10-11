@@ -9,7 +9,7 @@
     'labelJumlah' => 'Total pembayaran',
 ])
 @php
-    use App\Services\PembayaranMidtrans;
+    use App\Services\Keuangan\PembayaranMidtrans;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $metode = collect(PembayaranMidtrans::METODE)->map(fn ($m, $k) => ['kunci' => $k, 'nama' => $m[0], 'ket' => $m[1]])->values();

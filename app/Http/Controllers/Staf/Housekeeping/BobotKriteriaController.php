@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Staf\Housekeeping;
 
 use App\Http\Controllers\Controller;
 use App\Models\CleaningCriterion;
-use App\Services\AhpService;
+use App\Services\SmartCleaning\AhpService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 

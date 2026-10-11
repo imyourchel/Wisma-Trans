@@ -3,7 +3,7 @@
 namespace App\Livewire\Staf\Layanan;
 
 use App\Models\Service;
-use App\Services\PesananMakananService;
+use App\Services\Layanan\PesananMakananService;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Url;

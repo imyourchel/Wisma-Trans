@@ -5,7 +5,7 @@ namespace App\Notifications;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-/** Email ringkas: pesan reservasi (disusun App\Services\NotifikasiReservasi) dan pengingat untuk staf. */
+/** Email ringkas: pesan reservasi (disusun App\Services\Notifikasi\NotifikasiReservasi) dan pengingat untuk staf. */
 class PesanReservasi extends Notification
 {
     /**

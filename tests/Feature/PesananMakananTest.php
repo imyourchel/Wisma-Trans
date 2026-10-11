@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Contracts\BayarOnline;
 use App\Models\Service;
 use App\Models\ServiceOrder;
-use App\Services\PembayaranMidtrans;
+use App\Services\Keuangan\PembayaranMidtrans;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;

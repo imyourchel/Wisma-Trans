@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Actions\RegisterCustomer;
 use App\Http\Controllers\Auth\Concerns\RedirectsAfterLogin;
 use App\Http\Controllers\Controller;
-use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Tamu\HomeController;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Rules\NomorHp;

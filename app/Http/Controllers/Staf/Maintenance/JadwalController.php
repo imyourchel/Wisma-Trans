@@ -7,7 +7,7 @@ use App\Http\Requests\Maintenance\PelaksanaanRequest;
 use App\Models\Facility;
 use App\Models\FacilityUnit;
 use App\Models\MaintenanceSchedule;
-use App\Services\MaintenanceService;
+use App\Services\Maintenance\MaintenanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;

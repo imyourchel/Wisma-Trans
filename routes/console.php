@@ -1,11 +1,11 @@
 <?php
 
-use App\Services\NotifikasiReservasi;
-use App\Services\PembayaranMidtrans;
-use App\Services\PengingatJadwalPerawatan;
-use App\Services\PengingatPenagihan;
-use App\Services\PiutangService;
-use App\Services\ReservasiService;
+use App\Services\Keuangan\PembayaranMidtrans;
+use App\Services\Keuangan\PengingatPenagihan;
+use App\Services\Keuangan\PiutangService;
+use App\Services\Maintenance\PengingatJadwalPerawatan;
+use App\Services\Notifikasi\NotifikasiReservasi;
+use App\Services\Reservasi\ReservasiService;
 use App\Services\SmartCleaning\TugasHousekeepingService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;

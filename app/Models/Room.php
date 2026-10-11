@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Kolom status sengaja tidak fillable: status hanya diganti lewat App\Services\RoomStatusService
+ * Kolom status sengaja tidak fillable: status hanya diganti lewat App\Services\Kamar\RoomStatusService
  * supaya dirty_since dan room_status_logs selalu ikut tercatat.
  */
 class Room extends Model

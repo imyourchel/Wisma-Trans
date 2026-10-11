@@ -2,7 +2,7 @@
 
 namespace App\Services\Laporan;
 
-use App\Services\PiutangService;
+use App\Services\Keuangan\PiutangService;
 use App\Support\SegmenPelanggan;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Arr;

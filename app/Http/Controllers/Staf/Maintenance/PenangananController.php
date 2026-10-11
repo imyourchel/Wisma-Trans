@@ -8,7 +8,7 @@ use App\Http\Requests\Maintenance\KerjakanRequest;
 use App\Http\Requests\Maintenance\LengkapiRequest;
 use App\Http\Requests\Maintenance\SelesaikanRequest;
 use App\Models\MaintenanceRequest;
-use App\Services\MaintenanceService;
+use App\Services\Maintenance\MaintenanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;

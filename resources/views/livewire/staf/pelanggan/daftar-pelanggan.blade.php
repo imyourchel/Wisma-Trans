@@ -1,6 +1,6 @@
 @php
-    use App\Services\FolioService;
-    use App\Services\ProfilPelanggan;
+    use App\Services\Reservasi\FolioService;
+    use App\Services\Pelanggan\ProfilPelanggan;
 
     $rp = fn ($n) => FolioService::rp($n);
     $tgl = fn ($t) => $t ? \Illuminate\Support\Carbon::parse($t)->translatedFormat('j M Y') : '—';

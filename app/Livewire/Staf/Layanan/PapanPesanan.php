@@ -4,9 +4,9 @@ namespace App\Livewire\Staf\Layanan;
 
 use App\Livewire\Staf\Layanan\Concerns\DetailPesanan;
 use App\Models\Service;
-use App\Services\NotifikasiLayanan;
-use App\Services\PembayaranMidtrans;
-use App\Services\PesananMakananService;
+use App\Services\Keuangan\PembayaranMidtrans;
+use App\Services\Layanan\PesananMakananService;
+use App\Services\Notifikasi\NotifikasiLayanan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;

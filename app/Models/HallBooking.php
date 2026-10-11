@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Pemesanan aula. Harga sewa tidak tetap: dirundingkan dengan penyewa. rental_price 0 berarti belum disepakati;
- * Manager menetapkan harga akhir saat menyetujui. Perubahan status lewat App\Services\AulaService.
+ * Manager menetapkan harga akhir saat menyetujui. Perubahan status lewat App\Services\Layanan\AulaService.
  */
 class HallBooking extends Model
 {

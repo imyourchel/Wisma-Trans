@@ -1,7 +1,7 @@
 @php
     use App\Enums\RoomStatus;
     use App\Models\MaintenanceRequest;
-    use App\Services\MaintenanceService;
+    use App\Services\Maintenance\MaintenanceService;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $tabs = MaintenanceRequest::STATUS;

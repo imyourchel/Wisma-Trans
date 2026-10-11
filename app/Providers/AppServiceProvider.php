@@ -71,7 +71,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('do-housekeeping-task', fn (User $user) => $user->hasRole('housekeeping'));
 
         // Info wisma yang tampil di navbar, footer, dan beranda
-        View::composer(['components.layouts.guest', 'home', 'resto', 'pesanan-status', 'pesanan-saya', 'reservasi-status', 'cek-pesanan', 'instansi', 'livewire.tamu.pesan-kamar', 'pdf.nota', 'pdf.tagihan-bulanan', 'pdf.surat-tagihan', 'kontak', 'laundry-status', 'livewire.tamu.pesan-laundry', 'livewire.tamu.sewa-aula', 'livewire.tamu.daftar-kamar', 'livewire.tamu.detail-kamar', 'errors::403', 'errors.403', 'errors::404', 'errors.404', 'errors::429', 'errors.429'], function ($view) {
+        View::composer(['components.layouts.guest', 'tamu.home', 'tamu.resto', 'tamu.pesanan-status', 'tamu.pesanan-saya', 'tamu.reservasi-status', 'tamu.cek-pesanan', 'tamu.instansi', 'livewire.tamu.pesan-kamar', 'pdf.nota', 'pdf.tagihan-bulanan', 'pdf.surat-tagihan', 'tamu.kontak', 'tamu.laundry-status', 'livewire.tamu.pesan-laundry', 'livewire.tamu.sewa-aula', 'livewire.tamu.daftar-kamar', 'livewire.tamu.detail-kamar', 'errors::403', 'errors.403', 'errors::404', 'errors.404', 'errors::429', 'errors.429'], function ($view) {
             $view->with('wisma', [
                 'telepon' => '0822-9222-4111',
                 'whatsapp' => '6282292224111',

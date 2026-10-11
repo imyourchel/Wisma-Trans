@@ -3,9 +3,9 @@
 namespace App\Livewire\Staf\Layanan\Concerns;
 
 use App\Models\ServiceOrder;
-use App\Services\NotifikasiLayanan;
-use App\Services\PesananMakananService;
-use App\Services\WhatsAppService;
+use App\Services\Layanan\PesananMakananService;
+use App\Services\Notifikasi\NotifikasiLayanan;
+use App\Services\Notifikasi\WhatsAppService;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Locked;
 

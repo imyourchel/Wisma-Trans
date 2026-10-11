@@ -2,19 +2,19 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\Staf\DashboardOperasional;
+use App\Livewire\Staf\Dashboard\Operasional;
 use App\Livewire\Staf\Reservasi\CheckIn;
 use App\Models\Customer;
 use App\Models\Institution;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Services\CheckOutService;
+use App\Services\Keuangan\NotaService;
 use App\Services\Laporan\Format;
 use App\Services\Laporan\LaporanHunian;
 use App\Services\Laporan\LaporanPendapatan;
 use App\Services\Laporan\Periode;
-use App\Services\NotaService;
-use App\Services\ReservasiService;
+use App\Services\Reservasi\CheckOutService;
+use App\Services\Reservasi\ReservasiService;
 use App\Support\Nomor;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -100,7 +100,7 @@ class DashboardTest extends TestCase
         $this->nota('room', '2026-09-03', 3, 380000);
         $this->nota('fnb', '2026-09-20', 2, 35000);
 
-        $t = Livewire::actingAs($this->akun('manager'))->test(DashboardOperasional::class);
+        $t = Livewire::actingAs($this->akun('manager'))->test(Operasional::class);
         $bulan = $this->kartu($t, 'bulanIni');
         $p = Periode::buat('bulan-ini');
         $uang = app(LaporanPendapatan::class)->diakui($p)['kategori'];
@@ -134,7 +134,7 @@ class DashboardTest extends TestCase
         $this->reservasi('pending_payment', [[null, '2026-10-20', '2026-10-21', 'booked']], ['dp_due_at' => '2026-10-12 18:00:00']);
         $this->reservasi('pending_payment', [[null, '2026-10-20', '2026-10-21', 'booked']], ['dp_due_at' => '2026-10-12 08:00:00']);
 
-        $fo = $this->kartu($t = Livewire::actingAs($this->akun('fo'))->test(DashboardOperasional::class), 'fo');
+        $fo = $this->kartu($t = Livewire::actingAs($this->akun('fo'))->test(Operasional::class), 'fo');
         $this->assertSame(['2 reservasi', 'termasuk 1 dari kemarin', true], [$fo['kedatangan']['nilai'], $fo['kedatangan']['ket'], $fo['kedatangan']['awas']]);
         $this->assertSame(['3 kamar (2 reservasi)', false], [$fo['keberangkatan']['nilai'], $fo['keberangkatan']['awas']]);
         $this->assertSame(['1 kamar (1 reservasi)', true], [$fo['terlambat']['nilai'], $fo['terlambat']['awas']]);
@@ -148,7 +148,7 @@ class DashboardTest extends TestCase
 
         // Setelah pukul 12.00 kamar yang keluar hari ini pindah ke Terlambat, tidak dihitung dua kali
         Carbon::setTestNow('2026-10-12 13:00:00');
-        $fo = $this->kartu(Livewire::actingAs($this->akun('fo'))->test(DashboardOperasional::class), 'fo');
+        $fo = $this->kartu(Livewire::actingAs($this->akun('fo'))->test(Operasional::class), 'fo');
         $this->assertSame(['0 kamar (0 reservasi)', '4 kamar (3 reservasi)'], [$fo['keberangkatan']['nilai'], $fo['terlambat']['nilai']]);
     }
 
@@ -159,7 +159,7 @@ class DashboardTest extends TestCase
         Payment::create(['payment_code' => 'PAY-D1', 'invoice_id' => $n->id, 'transaction_type' => 'refund', 'payment_purpose' => 'service',
             'amount' => 35000, 'method' => 'cash', 'channel' => 'manual', 'status' => 'pending']);
 
-        $fo = $this->kartu(Livewire::actingAs($this->akun('fo'))->test(DashboardOperasional::class), 'fo');
+        $fo = $this->kartu(Livewire::actingAs($this->akun('fo'))->test(Operasional::class), 'fo');
         $this->assertSame(['1 pengembalian', true], [$fo['refund']['nilai'], $fo['refund']['awas']]);
         $this->assertSame(route('staf.keuangan.pembayaran', ['tab' => 'refund']), $fo['refund']['url']);
         $this->assertSame(['1 reservasi', 'belum check-in', false], [$fo['kedatangan']['nilai'], $fo['kedatangan']['ket'], $fo['kedatangan']['awas']]);
@@ -173,7 +173,7 @@ class DashboardTest extends TestCase
             $this->actingAs($this->akun($peran))->get(route('staf.dashboard'))->assertOk()
                 ->assertDontSee('Bulan ini')->assertDontSee('Pendapatan kamar')->assertDontSee('Front Office hari ini')
                 ->assertDontSee('Kedatangan hari ini')->assertDontSee('Piutang instansi');
-            $t = Livewire::actingAs($this->akun($peran))->test(DashboardOperasional::class);
+            $t = Livewire::actingAs($this->akun($peran))->test(Operasional::class);
             $this->assertSame([null, null, null], [$t->viewData('manager'), $t->viewData('frontOffice'), $t->viewData('piutang')]);
         }
         // FO melihat kartu FO, tetapi tidak melihat pendapatan
@@ -187,7 +187,7 @@ class DashboardTest extends TestCase
         $this->reservasi('checked_in', [['101', '2026-10-11', '2026-10-14', 'checked_in'], ['102', '2026-10-11', '2026-10-14', 'checked_in']]);
         $this->reservasi('confirmed', [[null, '2026-10-12', '2026-10-13', 'booked'], [null, '2026-10-12', '2026-10-13', 'booked']]);
 
-        $hari = $this->kartu(Livewire::actingAs($this->akun('manager'))->test(DashboardOperasional::class), 'hariIni');
+        $hari = $this->kartu(Livewire::actingAs($this->akun('manager'))->test(Operasional::class), 'hariIni');
         $h = app(LaporanHunian::class)->ringkas(Periode::buat('hari-ini'));
         $this->assertSame([2, 32], [$h['terisi'], $h['tersedia']]);
         $this->assertSame(['2 / 32', '2 terisi · +2 akan datang'], [$hari['terisi']['nilai'], $hari['terisi']['ket']]);
@@ -198,7 +198,7 @@ class DashboardTest extends TestCase
     public function test_D06_bulan_ini_di_cache_dan_dihapus_setelah_pembayaran_dan_check_out(): void
     {
         $this->nota('fnb', '2026-10-05', 2, 35000);
-        $nilai = fn () => $this->kartu(Livewire::actingAs($this->akun('manager'))->test(DashboardOperasional::class), 'bulanIni');
+        $nilai = fn () => $this->kartu(Livewire::actingAs($this->akun('manager'))->test(Operasional::class), 'bulanIni');
         $this->assertSame(70000.0, $nilai()['Pendapatan F&B']['nilai']);
 
         // Nota baru tanpa pembayaran: masih angka cache

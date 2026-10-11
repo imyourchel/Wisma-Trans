@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Maintenance;
 
 use App\Models\User;
-use App\Services\MaintenanceService;
+use App\Services\Maintenance\MaintenanceService;
 use Illuminate\Validation\Rule;
 
 /** Isian "dikerjakan oleh": staf internal (handled_by) atau vendor luar (vendor_name). */

@@ -1,7 +1,7 @@
 @php
     use App\Models\Institution;
     use App\Models\Reservation;
-    use App\Services\ReservasiService;
+    use App\Services\Reservasi\ReservasiService;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $galat = fn ($f) => $errors->has($f) ? 'is-invalid' : '';

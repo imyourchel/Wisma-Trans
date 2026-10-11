@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Enums\RoomStatus;
-use App\Livewire\Staf\RoomStatusBoard;
+use App\Livewire\Staf\Kamar\RoomStatusBoard;
 use App\Models\Room;
-use App\Services\RoomStatusService;
+use App\Services\Kamar\RoomStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;

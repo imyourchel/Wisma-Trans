@@ -4,7 +4,7 @@ namespace App\Livewire\Staf\Layanan;
 
 use App\Livewire\Staf\Layanan\Concerns\DetailPesanan;
 use App\Models\ServiceOrderItem;
-use App\Services\PesananMakananService;
+use App\Services\Layanan\PesananMakananService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;

@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Staf\Keuangan;
 use App\Http\Controllers\Controller;
 use App\Models\BillingStatement;
 use App\Models\Invoice;
-use App\Services\PengingatPenagihan;
-use App\Services\TagihanBulananService;
+use App\Services\Keuangan\PengingatPenagihan;
+use App\Services\Keuangan\TagihanBulananService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 

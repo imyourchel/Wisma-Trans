@@ -1,5 +1,5 @@
 @php
-    use App\Services\BuktiInstansi;
+    use App\Services\Reservasi\BuktiInstansi;
 
     $masuk = $r->masuk();
     $keluar = $r->keluar();

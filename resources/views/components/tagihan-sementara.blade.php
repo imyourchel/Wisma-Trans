@@ -1,9 +1,9 @@
 @props([
-    'folio',            // hasil App\Services\FolioService::rincian()
+    'folio',            // hasil App\Services\Reservasi\FolioService::rincian()
     'staf' => false,    // tampilan staf: tanda baris yang baru digabung saat check-out
 ])
 @php
-    $rp = fn ($n) => \App\Services\FolioService::rp($n);
+    $rp = fn ($n) => \App\Services\Reservasi\FolioService::rp($n);
     $terpisah = $folio['nota']->has('service');
     $kelompok = [
         'Kamar' => $folio['kamar'],

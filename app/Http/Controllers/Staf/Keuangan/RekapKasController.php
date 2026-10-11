@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Staf\Keuangan;
 
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
-use App\Support\RekapKas;
+use App\Services\Keuangan\RekapKas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;

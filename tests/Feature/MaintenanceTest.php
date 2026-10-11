@@ -6,7 +6,7 @@ use App\Enums\RoomStatus;
 use App\Models\MaintenanceRequest;
 use App\Models\MaintenanceSchedule;
 use App\Models\Room;
-use App\Services\RoomStatusService;
+use App\Services\Kamar\RoomStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;

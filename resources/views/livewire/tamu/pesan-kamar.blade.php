@@ -1,6 +1,6 @@
 @php
-    use App\Services\PembayaranMidtrans;
-    use App\Services\ReservasiService;
+    use App\Services\Keuangan\PembayaranMidtrans;
+    use App\Services\Reservasi\ReservasiService;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $kolomGalat = fn ($f) => $errors->has($f) ? 'is-invalid' : '';

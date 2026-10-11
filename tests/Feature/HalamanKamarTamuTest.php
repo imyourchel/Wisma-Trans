@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Livewire\Tamu\DaftarKamar;
 use App\Livewire\Tamu\DetailKamar;
-use App\Services\KetersediaanKamar;
+use App\Services\Kamar\KetersediaanKamar;
 use App\Support\PencarianInap;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;

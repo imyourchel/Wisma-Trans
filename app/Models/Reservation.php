@@ -15,7 +15,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Reservasi kamar: online (tamu perorangan), langsung di resepsionis (walk-in), atau pengajuan instansi.
- * Perubahan status hanya lewat App\Services\ReservasiService supaya reservation_logs selalu tercatat.
+ * Perubahan status hanya lewat App\Services\Reservasi\ReservasiService supaya reservation_logs selalu tercatat.
  */
 class Reservation extends Model implements BayarOnline
 {

@@ -12,7 +12,7 @@
     </div>
 
     @if ($operasional)
-        <livewire:staf.dashboard-operasional />
+        <livewire:staf.dashboard.operasional />
     @endif
 
     @foreach (array_filter(['Layanan F&B' => $fnb ?? null, 'Housekeeping' => $housekeeping ?? null, 'Tugas Housekeeping' => $tugasSaya ?? null]) as $judulHk => $kartuHk)

@@ -1,5 +1,5 @@
 {{-- Kartu piutang instansi (Piutang Instansi dan Dashboard Manager). Variabel: $ringkasan dari PiutangService::ringkasan() --}}
-@php $rp = fn ($n) => \App\Services\FolioService::rp($n); @endphp
+@php $rp = fn ($n) => \App\Services\Reservasi\FolioService::rp($n); @endphp
 <div class="mb-5 grid gap-3 sm:grid-cols-3" data-kartu-piutang>
     @foreach ([
         ['Total piutang instansi', $rp($ringkasan['total']), 'Semua tagihan instansi yang belum lunas', '#5B86B8'],

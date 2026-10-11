@@ -1,6 +1,6 @@
 @php
     use App\Models\Payment;
-    use App\Services\LaundryService;
+    use App\Services\Layanan\LaundryService;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $galat = fn ($f) => $errors->has($f) ? 'is-invalid' : '';

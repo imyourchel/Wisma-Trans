@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Auth\Concerns\RedirectsAfterLogin;
 use App\Http\Controllers\Controller;
-use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Tamu\HomeController;
 use App\Models\User;
-use App\Services\WhatsAppService;
+use App\Services\Notifikasi\WhatsAppService;
 use App\Support\Phone;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;

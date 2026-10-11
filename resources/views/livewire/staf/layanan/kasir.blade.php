@@ -1,6 +1,6 @@
 @php
     use App\Models\ServiceOrder;
-    use App\Services\PesananMakananService as PM;
+    use App\Services\Layanan\PesananMakananService as PM;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $galatKeranjang = collect($errors->getMessages())->filter(fn ($p, $k) => str_starts_with($k, 'keranjang'))->flatten()->unique();

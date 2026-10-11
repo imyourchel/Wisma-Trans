@@ -8,7 +8,7 @@ use App\Models\Institution;
 use App\Models\Reservation;
 use App\Rules\EmailWajar;
 use App\Rules\NomorHp;
-use App\Services\ProfilPelanggan;
+use App\Services\Pelanggan\ProfilPelanggan;
 use App\Support\PersonName;
 use App\Support\Phone;
 use App\Support\SegmenPelanggan;

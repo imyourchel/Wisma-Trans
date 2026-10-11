@@ -3,11 +3,11 @@
 namespace Tests\Feature;
 
 use App\Enums\RoomStatus;
-use App\Livewire\Staf\RoomStatusBoard;
+use App\Livewire\Staf\Kamar\RoomStatusBoard;
 use App\Models\FacilityUnit;
 use App\Models\MaintenanceRequest;
 use App\Models\RoomStatusLog;
-use App\Services\MaintenanceService;
+use App\Services\Maintenance\MaintenanceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;

@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Services\RingkasanDashboard;
+use App\Services\Dashboard\RingkasanDashboard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

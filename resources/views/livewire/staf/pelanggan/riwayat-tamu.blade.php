@@ -1,5 +1,5 @@
 @php
-    use App\Services\FolioService;
+    use App\Services\Reservasi\FolioService;
 
     $rp = fn ($n) => FolioService::rp($n);
     $tgl = fn ($t) => \Illuminate\Support\Carbon::parse($t)->translatedFormat('j M Y');

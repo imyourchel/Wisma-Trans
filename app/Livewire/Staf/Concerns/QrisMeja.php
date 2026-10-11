@@ -4,8 +4,8 @@ namespace App\Livewire\Staf\Concerns;
 
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Services\FolioService;
-use App\Services\PembayaranMidtrans;
+use App\Services\Keuangan\PembayaranMidtrans;
+use App\Services\Reservasi\FolioService;
 use Closure;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Locked;

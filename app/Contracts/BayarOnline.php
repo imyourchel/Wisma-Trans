@@ -8,7 +8,7 @@ use Carbon\CarbonInterface;
 
 /**
  * Sesuatu yang dibayar tamu lewat Midtrans: pesanan makanan (lunas) atau reservasi kamar (uang muka).
- * Dipakai App\Services\PembayaranMidtrans dan komponen x-bayar-online.
+ * Dipakai App\Services\Keuangan\PembayaranMidtrans dan komponen x-bayar-online.
  */
 interface BayarOnline
 {

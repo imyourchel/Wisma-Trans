@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Enums\RoomStatus;
 use App\Models\Room;
 use App\Models\RoomStatusLog;
-use App\Services\RoomStatusService;
+use App\Services\Kamar\RoomStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\Concerns\DataContohWisma;

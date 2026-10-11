@@ -71,7 +71,7 @@
                 @if ($profil)
                     <div class="flex flex-col gap-2 sm:col-span-2" data-pelanggan-lama>
                         <div class="text-[13px]">Pelanggan terdaftar: <strong>{{ $pelanggan->full_name }}</strong></div>
-                        @include('livewire.staf.partials.kartu-profil-pelanggan', ['profil' => $profil, 'label' => \App\Services\ProfilPelanggan::labelBerikutnya($profil)])
+                        @include('livewire.staf.partials.kartu-profil-pelanggan', ['profil' => $profil, 'label' => \App\Services\Pelanggan\ProfilPelanggan::labelBerikutnya($profil)])
                         @if ($favoritBebas)
                             <button type="button" wire:click="pilihKamar({{ $favoritBebas['id'] }})" class="wt-btn-sm h-9 self-start" data-pilih-favorit>Pilih Kamar {{ $favoritBebas['nomor'] }}</button>
                         @endif

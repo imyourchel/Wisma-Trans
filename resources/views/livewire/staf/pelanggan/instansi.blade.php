@@ -1,7 +1,7 @@
 @php
     use App\Livewire\Staf\Pelanggan\Instansi;
     use App\Models\Institution;
-    use App\Services\FolioService;
+    use App\Services\Reservasi\FolioService;
 
     $rp = fn ($n) => FolioService::rp($n);
     $galat = fn (string $k) => $errors->has($k) ? 'is-invalid' : '';

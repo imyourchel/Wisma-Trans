@@ -1,7 +1,7 @@
 @php
     use App\Models\Payment;
-    use App\Services\FolioService;
-    use App\Services\PiutangService;
+    use App\Services\Reservasi\FolioService;
+    use App\Services\Keuangan\PiutangService;
 
     $rp = fn ($n) => FolioService::rp($n);
     $warnaUmur = ['belum' => '#5C9E67', '1-30' => '#D69A2E', '31-60' => '#C9793A', '60+' => '#D4514A'];

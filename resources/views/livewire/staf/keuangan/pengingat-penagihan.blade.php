@@ -1,7 +1,7 @@
 @php
     use App\Models\BillingReminder;
-    use App\Services\FolioService;
-    use App\Services\PengingatPenagihan;
+    use App\Services\Reservasi\FolioService;
+    use App\Services\Keuangan\PengingatPenagihan;
 
     $rp = fn ($n) => FolioService::rp($n);
     $warna = [
