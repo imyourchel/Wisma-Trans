@@ -1,0 +1,125 @@
+---
+title: "M6 - Smart Cleaning Priority dan Workload Balancing"
+---
+erDiagram
+    USERS |o--o{ AHP_SESSIONS : "calculated_by"
+    CLEANING_CRITERIA ||--o{ AHP_COMPARISONS : "criteria_column_id"
+    CLEANING_CRITERIA ||--o{ AHP_COMPARISONS : "criteria_row_id"
+    AHP_SESSIONS ||--o{ AHP_COMPARISONS : "ahp_session_id"
+    CLEANING_CRITERIA ||--o{ AHP_CRITERIA_WEIGHTS : "criteria_id"
+    AHP_SESSIONS ||--o{ AHP_CRITERIA_WEIGHTS : "ahp_session_id"
+    USERS |o--o{ CLEANING_PRIORITY_BATCHES : "generated_by"
+    AHP_SESSIONS ||--o{ CLEANING_PRIORITY_BATCHES : "ahp_session_id"
+    CLEANING_PRIORITY_BATCHES ||--o{ CLEANING_PRIORITY_ITEMS : "cleaning_priority_batch_id"
+    ROOMS ||--o{ CLEANING_PRIORITY_ITEMS : "room_id"
+    CLEANING_CRITERIA ||--o{ CLEANING_PRIORITY_SCORES : "criteria_id"
+    CLEANING_PRIORITY_ITEMS ||--o{ CLEANING_PRIORITY_SCORES : "cleaning_priority_item_id"
+    USERS |o--o{ HOUSEKEEPING_TASKS : "assigned_by"
+    CLEANING_PRIORITY_ITEMS |o--o{ HOUSEKEEPING_TASKS : "cleaning_priority_item_id"
+    ROOMS ||--o{ HOUSEKEEPING_TASKS : "room_id"
+    USERS |o--o{ HOUSEKEEPING_TASKS : "verified_by"
+    HOUSEKEEPING_TASKS ||--o{ HOUSEKEEPING_TASK_ASSIGNEES : "housekeeping_task_id"
+    USERS ||--o{ HOUSEKEEPING_TASK_ASSIGNEES : "user_id"
+    USERS ||--o{ STAFF_AVAILABILITIES : "user_id"
+
+    CLEANING_CRITERIA {
+        bigint id PK
+        varchar code UK
+        varchar name
+        enum attribute_type "benefit, cost"
+        varchar description "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    AHP_SESSIONS {
+        bigint id PK
+        varchar session_name "nullable"
+        bigint calculated_by FK "nullable"
+        datetime calculated_at
+        decimal lambda_max "nullable"
+        decimal consistency_index "nullable"
+        decimal random_index "nullable"
+        decimal consistency_ratio "nullable"
+        boolean is_active
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    AHP_COMPARISONS {
+        bigint id PK
+        bigint ahp_session_id FK
+        bigint criteria_row_id FK
+        bigint criteria_column_id FK
+        decimal comparison_value
+    }
+    AHP_CRITERIA_WEIGHTS {
+        bigint id PK
+        bigint ahp_session_id FK
+        bigint criteria_id FK
+        decimal weight
+    }
+    CLEANING_PRIORITY_BATCHES {
+        bigint id PK
+        date batch_date
+        datetime generated_at
+        bigint generated_by FK "nullable"
+        bigint ahp_session_id FK
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    CLEANING_PRIORITY_ITEMS {
+        bigint id PK
+        bigint cleaning_priority_batch_id FK
+        bigint room_id FK
+        decimal preference_score
+        smallint priority_rank
+    }
+    CLEANING_PRIORITY_SCORES {
+        bigint id PK
+        bigint cleaning_priority_item_id FK
+        bigint criteria_id FK
+        decimal raw_value
+        decimal normalized_value
+        decimal weighted_value
+    }
+    HOUSEKEEPING_TASKS {
+        bigint id PK
+        bigint room_id FK
+        date task_date
+        bigint cleaning_priority_item_id FK "nullable"
+        decimal workload_point
+        enum assignment_method "greedy, manual"
+        enum status "assigned, in_progress, completed, verified, cancelled"
+        datetime started_at "nullable"
+        datetime completed_at "nullable"
+        bigint assigned_by FK "nullable"
+        bigint verified_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    HOUSEKEEPING_TASK_ASSIGNEES {
+        bigint id PK
+        bigint housekeeping_task_id FK
+        bigint user_id FK
+        decimal workload_share
+    }
+    STAFF_AVAILABILITIES {
+        bigint id PK
+        bigint user_id FK
+        date work_date
+        boolean is_available
+        varchar secondary_duty "nullable"
+        decimal max_workload "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    ROOMS {
+        bigint id PK
+    }
+    USERS {
+        bigint id PK
+    }

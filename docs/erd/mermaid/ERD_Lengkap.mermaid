@@ -1,0 +1,550 @@
+---
+title: "ERD SIM Wisma Trans (lengkap)"
+---
+erDiagram
+    ROLES ||--o{ USER_ROLES : "role_id"
+    USERS ||--o{ USER_ROLES : "user_id"
+    USERS ||--o{ SOCIAL_ACCOUNTS : "user_id"
+    INSTITUTIONS |o--o{ CUSTOMERS : "institution_id"
+    USERS |o--o| CUSTOMERS : "user_id"
+    CUSTOMERS |o--o| INSTITUTIONS : "primary_contact_id"
+    USERS |o--o{ SETTINGS : "updated_by"
+    ROOM_TYPES ||--o{ ROOMS : "room_type_id"
+    FACILITIES ||--o{ ROOM_TYPE_FACILITIES : "facility_id"
+    ROOM_TYPES ||--o{ ROOM_TYPE_FACILITIES : "room_type_id"
+    FACILITIES ||--o{ FACILITY_UNITS : "facility_id"
+    ROOMS |o--o{ FACILITY_UNITS : "room_id"
+    USERS |o--o{ ROOM_STATUS_LOGS : "changed_by"
+    ROOMS ||--o{ ROOM_STATUS_LOGS : "room_id"
+    USERS |o--o{ RESERVATIONS : "created_by"
+    CUSTOMERS ||--o{ RESERVATIONS : "customer_id"
+    INSTITUTIONS |o--o{ RESERVATIONS : "institution_id"
+    RESERVATION_ROOMS |o--o{ RESERVATION_ROOMS : "moved_from_id"
+    RESERVATIONS ||--o{ RESERVATION_ROOMS : "reservation_id"
+    ROOMS |o--o{ RESERVATION_ROOMS : "room_id"
+    ROOM_TYPES ||--o{ RESERVATION_ROOMS : "room_type_id"
+    RESERVATIONS ||--o| RESERVATION_REQUESTS : "reservation_id"
+    RESERVATIONS ||--o{ RESERVATION_LOGS : "reservation_id"
+    USERS |o--o{ RESERVATION_LOGS : "changed_by"
+    USERS |o--o{ SERVICE_ORDERS : "created_by"
+    CUSTOMERS |o--o{ SERVICE_ORDERS : "customer_id"
+    INVOICES |o--o{ SERVICE_ORDERS : "invoice_id"
+    RESERVATION_ROOMS |o--o{ SERVICE_ORDERS : "reservation_room_id"
+    SERVICES ||--o{ SERVICE_ORDER_ITEMS : "service_id"
+    SERVICE_ORDERS ||--o{ SERVICE_ORDER_ITEMS : "service_order_id"
+    USERS |o--o{ HALL_BOOKINGS : "created_by"
+    CUSTOMERS ||--o{ HALL_BOOKINGS : "customer_id"
+    HALLS ||--o{ HALL_BOOKINGS : "hall_id"
+    INVOICES |o--o{ HALL_BOOKINGS : "invoice_id"
+    RESERVATIONS |o--o{ HALL_BOOKINGS : "reservation_id"
+    CUSTOMERS ||--o{ INVOICES : "customer_id"
+    INSTITUTIONS |o--o{ INVOICES : "institution_id"
+    USERS |o--o{ INVOICES : "issued_by"
+    RESERVATIONS |o--o{ INVOICES : "reservation_id"
+    BILLING_STATEMENTS |o--o{ INVOICES : "billing_statement_id"
+    INVOICES ||--o{ INVOICE_ITEMS : "invoice_id"
+    INVOICES |o--o{ PAYMENTS : "invoice_id"
+    USERS |o--o{ PAYMENTS : "received_by"
+    BILLING_STATEMENTS |o--o{ PAYMENTS : "billing_statement_id"
+    INSTITUTIONS ||--o{ BILLING_STATEMENTS : "institution_id"
+    USERS |o--o{ BILLING_STATEMENTS : "issued_by"
+    INVOICES |o--o{ BILLING_REMINDERS : "invoice_id"
+    BILLING_STATEMENTS |o--o{ BILLING_REMINDERS : "billing_statement_id"
+    USERS |o--o{ BILLING_REMINDERS : "verified_by"
+    USERS |o--o{ AHP_SESSIONS : "calculated_by"
+    CLEANING_CRITERIA ||--o{ AHP_COMPARISONS : "criteria_column_id"
+    CLEANING_CRITERIA ||--o{ AHP_COMPARISONS : "criteria_row_id"
+    AHP_SESSIONS ||--o{ AHP_COMPARISONS : "ahp_session_id"
+    CLEANING_CRITERIA ||--o{ AHP_CRITERIA_WEIGHTS : "criteria_id"
+    AHP_SESSIONS ||--o{ AHP_CRITERIA_WEIGHTS : "ahp_session_id"
+    USERS |o--o{ CLEANING_PRIORITY_BATCHES : "generated_by"
+    AHP_SESSIONS ||--o{ CLEANING_PRIORITY_BATCHES : "ahp_session_id"
+    CLEANING_PRIORITY_BATCHES ||--o{ CLEANING_PRIORITY_ITEMS : "cleaning_priority_batch_id"
+    ROOMS ||--o{ CLEANING_PRIORITY_ITEMS : "room_id"
+    CLEANING_CRITERIA ||--o{ CLEANING_PRIORITY_SCORES : "criteria_id"
+    CLEANING_PRIORITY_ITEMS ||--o{ CLEANING_PRIORITY_SCORES : "cleaning_priority_item_id"
+    USERS |o--o{ HOUSEKEEPING_TASKS : "assigned_by"
+    CLEANING_PRIORITY_ITEMS |o--o{ HOUSEKEEPING_TASKS : "cleaning_priority_item_id"
+    ROOMS ||--o{ HOUSEKEEPING_TASKS : "room_id"
+    USERS |o--o{ HOUSEKEEPING_TASKS : "verified_by"
+    HOUSEKEEPING_TASKS ||--o{ HOUSEKEEPING_TASK_ASSIGNEES : "housekeeping_task_id"
+    USERS ||--o{ HOUSEKEEPING_TASK_ASSIGNEES : "user_id"
+    USERS ||--o{ STAFF_AVAILABILITIES : "user_id"
+    FACILITIES ||--o{ MAINTENANCE_SCHEDULES : "facility_id"
+    USERS |o--o{ MAINTENANCE_REQUESTS : "handled_by"
+    USERS |o--o{ MAINTENANCE_REQUESTS : "reported_by"
+    ROOMS |o--o{ MAINTENANCE_REQUESTS : "room_id"
+    MAINTENANCE_SCHEDULES |o--o{ MAINTENANCE_REQUESTS : "maintenance_schedule_id"
+    FACILITY_UNITS |o--o{ MAINTENANCE_REQUESTS : "facility_unit_id"
+
+    USERS {
+        bigint id PK
+        varchar name
+        varchar email UK
+        varchar password "nullable"
+        varchar phone "nullable"
+        boolean is_active
+        timestamp email_verified_at "nullable"
+        varchar remember_token "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+        timestamp deleted_at "nullable"
+    }
+    ROLES {
+        bigint id PK
+        varchar code UK
+        varchar name
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    USER_ROLES {
+        bigint user_id PK,FK
+        bigint role_id PK,FK
+        timestamp assigned_at "nullable"
+    }
+    SOCIAL_ACCOUNTS {
+        bigint id PK
+        bigint user_id FK
+        enum provider "google, facebook, apple"
+        varchar provider_user_id
+        varchar provider_email "nullable"
+        timestamp created_at "nullable"
+    }
+    CUSTOMERS {
+        bigint id PK
+        bigint user_id FK,UK "nullable"
+        bigint institution_id FK "nullable"
+        varchar full_name
+        varchar phone UK
+        varchar email "nullable"
+        enum gender "L, P | nullable"
+        date date_of_birth "nullable"
+        text address "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+        timestamp deleted_at "nullable"
+    }
+    INSTITUTIONS {
+        bigint id PK
+        varchar code UK "nullable"
+        varchar name
+        text address "nullable"
+        varchar phone "nullable"
+        varchar email "nullable"
+        bigint primary_contact_id FK,UK "nullable"
+        enum default_billing_scheme "upfront, monthly_fixed_date, due_after_checkout"
+        tinyint billing_day "nullable"
+        smallint due_days "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    SETTINGS {
+        varchar setting_key PK
+        varchar value
+        enum type "string, integer, decimal, boolean, time"
+        varchar description "nullable"
+        bigint updated_by FK "nullable"
+        timestamp updated_at "nullable"
+    }
+    ROOM_TYPES {
+        bigint id PK
+        varchar code UK
+        varchar name
+        text description "nullable"
+        decimal base_price
+        tinyint max_capacity
+        text photos "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    ROOMS {
+        bigint id PK
+        varchar room_number UK
+        bigint room_type_id FK
+        tinyint floor
+        enum bed_type "single, twin, double, king"
+        enum status "available, occupied_clean, occupied_dirty, vacant_dirty, cleaning, maintenance"
+        datetime dirty_since "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    FACILITIES {
+        bigint id PK
+        varchar name UK
+        enum category "room, public"
+        boolean is_maintainable
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    ROOM_TYPE_FACILITIES {
+        bigint room_type_id PK,FK
+        bigint facility_id PK,FK
+    }
+    FACILITY_UNITS {
+        bigint id PK
+        bigint facility_id FK
+        bigint room_id FK "nullable"
+        varchar area_label
+        varchar unit_label UK
+        date installed_at "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    ROOM_STATUS_LOGS {
+        bigint id PK
+        bigint room_id FK
+        enum status "available, occupied_clean, occupied_dirty, vacant_dirty, cleaning, maintenance"
+        bigint changed_by FK "nullable"
+        datetime changed_at
+        varchar note "nullable"
+    }
+    RESERVATIONS {
+        bigint id PK
+        varchar reservation_code UK
+        bigint customer_id FK
+        bigint institution_id FK "nullable"
+        enum billing_scheme "upfront, monthly_fixed_date, due_after_checkout | nullable"
+        enum service_billing_scheme "satu_nota, dua_nota, tamu_bayar"
+        enum booking_channel "online, walk_in"
+        enum status "pending_payment, waiting_approval, confirmed, checked_in, checked_out, cancelled, rejected, no_show"
+        text special_request "nullable"
+        decimal dp_amount_required "nullable"
+        datetime dp_due_at "nullable"
+        boolean id_card_held
+        varchar id_card_holder_name "nullable"
+        varchar access_token UK "nullable"
+        bigint created_by FK "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    RESERVATION_ROOMS {
+        bigint id PK
+        bigint reservation_id FK
+        bigint room_type_id FK
+        bigint room_id FK "nullable"
+        date check_in_date
+        date check_out_date
+        decimal price_per_night
+        enum discount_type "percent, amount | nullable"
+        decimal discount_value "nullable"
+        datetime actual_check_in_at "nullable"
+        datetime actual_check_out_at "nullable"
+        enum status "booked, checked_in, moved, checked_out, cancelled"
+        bigint moved_from_id FK "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    RESERVATION_REQUESTS {
+        bigint id PK
+        bigint reservation_id FK,UK
+        date check_in_date
+        date check_out_date
+        tinyint room_count
+        varchar event_name "nullable"
+        timestamp created_at "nullable"
+    }
+    RESERVATION_LOGS {
+        bigint id PK
+        bigint reservation_id FK
+        enum event_type "status_change, id_card_received, id_card_returned"
+        enum status "pending_payment, waiting_approval, confirmed, checked_in, checked_out, cancelled, rejected, no_show | nullable"
+        bigint changed_by FK "nullable"
+        datetime changed_at
+        varchar note "nullable"
+        timestamp created_at "nullable"
+    }
+    SERVICES {
+        bigint id PK
+        varchar code UK
+        varchar name
+        varchar description "nullable"
+        enum category "fnb, laundry, amenity"
+        varchar menu_group "nullable"
+        enum department "fnb, housekeeping, front_office"
+        varchar unit
+        decimal price "nullable"
+        varchar photo "nullable"
+        boolean is_active
+        boolean is_sold_out
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    SERVICE_ORDERS {
+        bigint id PK
+        varchar order_code UK
+        varchar access_token UK "nullable"
+        enum order_type "in_house, outside_guest"
+        bigint customer_id FK "nullable"
+        bigint reservation_room_id FK "nullable"
+        date service_start_date "nullable"
+        date service_end_date "nullable"
+        enum serving_type "dine_in, room_service, take_away"
+        bigint invoice_id FK "nullable"
+        enum payment_mode "pay_now, charge_to_room"
+        datetime order_date
+        enum status "pending, in_progress, ready, delivered, cancelled"
+        bigint created_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    SERVICE_ORDER_ITEMS {
+        bigint id PK
+        bigint service_order_id FK
+        bigint service_id FK
+        decimal quantity
+        decimal unit_price
+        decimal subtotal
+        varchar note "nullable"
+    }
+    HALLS {
+        bigint id PK
+        varchar name UK
+        smallint capacity
+        text description "nullable"
+        text photos "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    HALL_BOOKINGS {
+        bigint id PK
+        varchar booking_code UK
+        bigint hall_id FK
+        bigint customer_id FK
+        bigint reservation_id FK "nullable"
+        bigint invoice_id FK "nullable"
+        datetime start_at
+        datetime end_at
+        smallint participant_count "nullable"
+        decimal rental_price
+        varchar purpose "nullable"
+        enum status "pending, confirmed, rejected, cancelled, completed"
+        bigint created_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    INVOICES {
+        bigint id PK
+        varchar invoice_number UK
+        enum invoice_type "stay, service, hall"
+        bigint customer_id FK
+        bigint reservation_id FK "nullable"
+        bigint institution_id FK "nullable"
+        bigint billing_statement_id FK "nullable"
+        enum payment_term "immediate, credit"
+        date issue_date "nullable"
+        date period_start "nullable"
+        date period_end "nullable"
+        date due_date "nullable"
+        decimal subtotal
+        enum discount_type "percent, amount | nullable"
+        decimal discount_value "nullable"
+        decimal discount_amount
+        decimal total_amount
+        decimal paid_amount
+        enum status "open, issued, partially_paid, paid, overdue, cancelled"
+        bigint issued_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    INVOICE_ITEMS {
+        bigint id PK
+        bigint invoice_id FK
+        enum item_type "room, fnb, laundry, amenity, hall, late_checkout, other"
+        varchar description
+        date service_date "nullable"
+        decimal quantity
+        decimal unit_price
+        enum discount_type "percent, amount | nullable"
+        decimal discount_value "nullable"
+        decimal discount_amount
+        decimal subtotal
+        timestamp created_at "nullable"
+    }
+    PAYMENTS {
+        bigint id PK
+        varchar payment_code UK
+        bigint invoice_id FK "nullable"
+        bigint billing_statement_id FK "nullable"
+        enum transaction_type "payment, refund"
+        enum payment_purpose "down_payment, settlement, service, hall, other"
+        decimal amount
+        enum method "cash, bank_transfer, qris, debit_card, credit_card, virtual_account, retail_outlet"
+        enum channel "online, manual"
+        enum status "pending, success, failed, expired"
+        datetime paid_at "nullable"
+        varchar midtrans_order_id UK "nullable"
+        varchar midtrans_transaction_id "nullable"
+        text gateway_response "nullable"
+        bigint received_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    BILLING_STATEMENTS {
+        bigint id PK
+        varchar statement_number UK
+        bigint institution_id FK
+        date period_start
+        date period_end
+        date issue_date "nullable"
+        date due_date
+        decimal total_amount
+        decimal paid_amount
+        enum status "draft, issued, partially_paid, paid, overdue, cancelled"
+        bigint issued_by FK "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    BILLING_REMINDERS {
+        bigint id PK
+        bigint invoice_id FK "nullable"
+        bigint billing_statement_id FK "nullable"
+        enum reminder_stage "internal, to_institution"
+        date scheduled_date
+        enum channel "email, whatsapp, letter"
+        varchar recipient "nullable"
+        enum status "pending, verified, sent, failed, cancelled"
+        bigint verified_by FK "nullable"
+        datetime verified_at "nullable"
+        datetime sent_at "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    CLEANING_CRITERIA {
+        bigint id PK
+        varchar code UK
+        varchar name
+        enum attribute_type "benefit, cost"
+        varchar description "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    AHP_SESSIONS {
+        bigint id PK
+        varchar session_name "nullable"
+        bigint calculated_by FK "nullable"
+        datetime calculated_at
+        decimal lambda_max "nullable"
+        decimal consistency_index "nullable"
+        decimal random_index "nullable"
+        decimal consistency_ratio "nullable"
+        boolean is_active
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    AHP_COMPARISONS {
+        bigint id PK
+        bigint ahp_session_id FK
+        bigint criteria_row_id FK
+        bigint criteria_column_id FK
+        decimal comparison_value
+    }
+    AHP_CRITERIA_WEIGHTS {
+        bigint id PK
+        bigint ahp_session_id FK
+        bigint criteria_id FK
+        decimal weight
+    }
+    CLEANING_PRIORITY_BATCHES {
+        bigint id PK
+        date batch_date
+        datetime generated_at
+        bigint generated_by FK "nullable"
+        bigint ahp_session_id FK
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    CLEANING_PRIORITY_ITEMS {
+        bigint id PK
+        bigint cleaning_priority_batch_id FK
+        bigint room_id FK
+        decimal preference_score
+        smallint priority_rank
+    }
+    CLEANING_PRIORITY_SCORES {
+        bigint id PK
+        bigint cleaning_priority_item_id FK
+        bigint criteria_id FK
+        decimal raw_value
+        decimal normalized_value
+        decimal weighted_value
+    }
+    HOUSEKEEPING_TASKS {
+        bigint id PK
+        bigint room_id FK
+        date task_date
+        bigint cleaning_priority_item_id FK "nullable"
+        decimal workload_point
+        enum assignment_method "greedy, manual"
+        enum status "assigned, in_progress, completed, verified, cancelled"
+        datetime started_at "nullable"
+        datetime completed_at "nullable"
+        bigint assigned_by FK "nullable"
+        bigint verified_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    HOUSEKEEPING_TASK_ASSIGNEES {
+        bigint id PK
+        bigint housekeeping_task_id FK
+        bigint user_id FK
+        decimal workload_share
+    }
+    STAFF_AVAILABILITIES {
+        bigint id PK
+        bigint user_id FK
+        date work_date
+        boolean is_available
+        varchar secondary_duty "nullable"
+        decimal max_workload "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    MAINTENANCE_SCHEDULES {
+        bigint id PK
+        bigint facility_id FK
+        varchar area_label
+        tinyint interval_months
+        date last_maintenance_date "nullable"
+        date next_due_date
+        varchar vendor_name "nullable"
+        boolean is_active
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    MAINTENANCE_REQUESTS {
+        bigint id PK
+        varchar request_code UK
+        enum maintenance_type "corrective, preventive"
+        bigint maintenance_schedule_id FK "nullable"
+        bigint facility_unit_id FK "nullable"
+        bigint room_id FK "nullable"
+        text damage_description
+        text photos "nullable"
+        enum priority "low, medium, high"
+        boolean blocks_room
+        bigint reported_by FK "nullable"
+        datetime reported_at
+        enum status "reported, in_progress, completed, cancelled"
+        bigint handled_by FK "nullable"
+        varchar vendor_name "nullable"
+        datetime started_at "nullable"
+        datetime completed_at "nullable"
+        decimal cost "nullable"
+        text resolution_note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }

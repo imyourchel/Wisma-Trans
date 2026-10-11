@@ -1,0 +1,103 @@
+---
+title: "M4 - Layanan Tambahan: F&B, Laundry, dan Aula"
+---
+erDiagram
+    USERS |o--o{ SERVICE_ORDERS : "created_by"
+    CUSTOMERS |o--o{ SERVICE_ORDERS : "customer_id"
+    INVOICES |o--o{ SERVICE_ORDERS : "invoice_id"
+    RESERVATION_ROOMS |o--o{ SERVICE_ORDERS : "reservation_room_id"
+    SERVICES ||--o{ SERVICE_ORDER_ITEMS : "service_id"
+    SERVICE_ORDERS ||--o{ SERVICE_ORDER_ITEMS : "service_order_id"
+    USERS |o--o{ HALL_BOOKINGS : "created_by"
+    CUSTOMERS ||--o{ HALL_BOOKINGS : "customer_id"
+    HALLS ||--o{ HALL_BOOKINGS : "hall_id"
+    INVOICES |o--o{ HALL_BOOKINGS : "invoice_id"
+    RESERVATIONS |o--o{ HALL_BOOKINGS : "reservation_id"
+
+    SERVICES {
+        bigint id PK
+        varchar code UK
+        varchar name
+        varchar description "nullable"
+        enum category "fnb, laundry, amenity"
+        varchar menu_group "nullable"
+        enum department "fnb, housekeeping, front_office"
+        varchar unit
+        decimal price "nullable"
+        varchar photo "nullable"
+        boolean is_active
+        boolean is_sold_out
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    SERVICE_ORDERS {
+        bigint id PK
+        varchar order_code UK
+        varchar access_token UK "nullable"
+        enum order_type "in_house, outside_guest"
+        bigint customer_id FK "nullable"
+        bigint reservation_room_id FK "nullable"
+        date service_start_date "nullable"
+        date service_end_date "nullable"
+        enum serving_type "dine_in, room_service, take_away"
+        bigint invoice_id FK "nullable"
+        enum payment_mode "pay_now, charge_to_room"
+        datetime order_date
+        enum status "pending, in_progress, ready, delivered, cancelled"
+        bigint created_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    SERVICE_ORDER_ITEMS {
+        bigint id PK
+        bigint service_order_id FK
+        bigint service_id FK
+        decimal quantity
+        decimal unit_price
+        decimal subtotal
+        varchar note "nullable"
+    }
+    HALLS {
+        bigint id PK
+        varchar name UK
+        smallint capacity
+        text description "nullable"
+        text photos "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    HALL_BOOKINGS {
+        bigint id PK
+        varchar booking_code UK
+        bigint hall_id FK
+        bigint customer_id FK
+        bigint reservation_id FK "nullable"
+        bigint invoice_id FK "nullable"
+        datetime start_at
+        datetime end_at
+        smallint participant_count "nullable"
+        decimal rental_price
+        varchar purpose "nullable"
+        enum status "pending, confirmed, rejected, cancelled, completed"
+        bigint created_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    CUSTOMERS {
+        bigint id PK
+    }
+    INVOICES {
+        bigint id PK
+    }
+    RESERVATION_ROOMS {
+        bigint id PK
+    }
+    RESERVATIONS {
+        bigint id PK
+    }
+    USERS {
+        bigint id PK
+    }

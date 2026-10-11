@@ -1,0 +1,120 @@
+---
+title: "M5 - Tagihan, Pembayaran, dan Piutang Instansi"
+---
+erDiagram
+    CUSTOMERS ||--o{ INVOICES : "customer_id"
+    INSTITUTIONS |o--o{ INVOICES : "institution_id"
+    USERS |o--o{ INVOICES : "issued_by"
+    RESERVATIONS |o--o{ INVOICES : "reservation_id"
+    BILLING_STATEMENTS |o--o{ INVOICES : "billing_statement_id"
+    INVOICES ||--o{ INVOICE_ITEMS : "invoice_id"
+    INVOICES |o--o{ PAYMENTS : "invoice_id"
+    USERS |o--o{ PAYMENTS : "received_by"
+    BILLING_STATEMENTS |o--o{ PAYMENTS : "billing_statement_id"
+    INSTITUTIONS ||--o{ BILLING_STATEMENTS : "institution_id"
+    USERS |o--o{ BILLING_STATEMENTS : "issued_by"
+    INVOICES |o--o{ BILLING_REMINDERS : "invoice_id"
+    BILLING_STATEMENTS |o--o{ BILLING_REMINDERS : "billing_statement_id"
+    USERS |o--o{ BILLING_REMINDERS : "verified_by"
+
+    INVOICES {
+        bigint id PK
+        varchar invoice_number UK
+        enum invoice_type "stay, service, hall"
+        bigint customer_id FK
+        bigint reservation_id FK "nullable"
+        bigint institution_id FK "nullable"
+        bigint billing_statement_id FK "nullable"
+        enum payment_term "immediate, credit"
+        date issue_date "nullable"
+        date period_start "nullable"
+        date period_end "nullable"
+        date due_date "nullable"
+        decimal subtotal
+        enum discount_type "percent, amount | nullable"
+        decimal discount_value "nullable"
+        decimal discount_amount
+        decimal total_amount
+        decimal paid_amount
+        enum status "open, issued, partially_paid, paid, overdue, cancelled"
+        bigint issued_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    INVOICE_ITEMS {
+        bigint id PK
+        bigint invoice_id FK
+        enum item_type "room, fnb, laundry, amenity, hall, late_checkout, other"
+        varchar description
+        date service_date "nullable"
+        decimal quantity
+        decimal unit_price
+        enum discount_type "percent, amount | nullable"
+        decimal discount_value "nullable"
+        decimal discount_amount
+        decimal subtotal
+        timestamp created_at "nullable"
+    }
+    PAYMENTS {
+        bigint id PK
+        varchar payment_code UK
+        bigint invoice_id FK "nullable"
+        bigint billing_statement_id FK "nullable"
+        enum transaction_type "payment, refund"
+        enum payment_purpose "down_payment, settlement, service, hall, other"
+        decimal amount
+        enum method "cash, bank_transfer, qris, debit_card, credit_card, virtual_account, retail_outlet"
+        enum channel "online, manual"
+        enum status "pending, success, failed, expired"
+        datetime paid_at "nullable"
+        varchar midtrans_order_id UK "nullable"
+        varchar midtrans_transaction_id "nullable"
+        text gateway_response "nullable"
+        bigint received_by FK "nullable"
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    BILLING_STATEMENTS {
+        bigint id PK
+        varchar statement_number UK
+        bigint institution_id FK
+        date period_start
+        date period_end
+        date issue_date "nullable"
+        date due_date
+        decimal total_amount
+        decimal paid_amount
+        enum status "draft, issued, partially_paid, paid, overdue, cancelled"
+        bigint issued_by FK "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    BILLING_REMINDERS {
+        bigint id PK
+        bigint invoice_id FK "nullable"
+        bigint billing_statement_id FK "nullable"
+        enum reminder_stage "internal, to_institution"
+        date scheduled_date
+        enum channel "email, whatsapp, letter"
+        varchar recipient "nullable"
+        enum status "pending, verified, sent, failed, cancelled"
+        bigint verified_by FK "nullable"
+        datetime verified_at "nullable"
+        datetime sent_at "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    CUSTOMERS {
+        bigint id PK
+    }
+    INSTITUTIONS {
+        bigint id PK
+    }
+    RESERVATIONS {
+        bigint id PK
+    }
+    USERS {
+        bigint id PK
+    }

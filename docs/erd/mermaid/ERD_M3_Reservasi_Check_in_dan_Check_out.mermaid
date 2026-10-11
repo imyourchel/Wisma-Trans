@@ -1,0 +1,85 @@
+---
+title: "M3 - Reservasi, Check-in, dan Check-out"
+---
+erDiagram
+    USERS |o--o{ RESERVATIONS : "created_by"
+    CUSTOMERS ||--o{ RESERVATIONS : "customer_id"
+    INSTITUTIONS |o--o{ RESERVATIONS : "institution_id"
+    RESERVATION_ROOMS |o--o{ RESERVATION_ROOMS : "moved_from_id"
+    RESERVATIONS ||--o{ RESERVATION_ROOMS : "reservation_id"
+    ROOMS |o--o{ RESERVATION_ROOMS : "room_id"
+    ROOM_TYPES ||--o{ RESERVATION_ROOMS : "room_type_id"
+    RESERVATIONS ||--o| RESERVATION_REQUESTS : "reservation_id"
+    RESERVATIONS ||--o{ RESERVATION_LOGS : "reservation_id"
+    USERS |o--o{ RESERVATION_LOGS : "changed_by"
+
+    RESERVATIONS {
+        bigint id PK
+        varchar reservation_code UK
+        bigint customer_id FK
+        bigint institution_id FK "nullable"
+        enum billing_scheme "upfront, monthly_fixed_date, due_after_checkout | nullable"
+        enum service_billing_scheme "satu_nota, dua_nota, tamu_bayar"
+        enum booking_channel "online, walk_in"
+        enum status "pending_payment, waiting_approval, confirmed, checked_in, checked_out, cancelled, rejected, no_show"
+        text special_request "nullable"
+        decimal dp_amount_required "nullable"
+        datetime dp_due_at "nullable"
+        boolean id_card_held
+        varchar id_card_holder_name "nullable"
+        varchar access_token UK "nullable"
+        bigint created_by FK "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    RESERVATION_ROOMS {
+        bigint id PK
+        bigint reservation_id FK
+        bigint room_type_id FK
+        bigint room_id FK "nullable"
+        date check_in_date
+        date check_out_date
+        decimal price_per_night
+        enum discount_type "percent, amount | nullable"
+        decimal discount_value "nullable"
+        datetime actual_check_in_at "nullable"
+        datetime actual_check_out_at "nullable"
+        enum status "booked, checked_in, moved, checked_out, cancelled"
+        bigint moved_from_id FK "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    RESERVATION_REQUESTS {
+        bigint id PK
+        bigint reservation_id FK,UK
+        date check_in_date
+        date check_out_date
+        tinyint room_count
+        varchar event_name "nullable"
+        timestamp created_at "nullable"
+    }
+    RESERVATION_LOGS {
+        bigint id PK
+        bigint reservation_id FK
+        enum event_type "status_change, id_card_received, id_card_returned"
+        enum status "pending_payment, waiting_approval, confirmed, checked_in, checked_out, cancelled, rejected, no_show | nullable"
+        bigint changed_by FK "nullable"
+        datetime changed_at
+        varchar note "nullable"
+        timestamp created_at "nullable"
+    }
+    CUSTOMERS {
+        bigint id PK
+    }
+    INSTITUTIONS {
+        bigint id PK
+    }
+    ROOM_TYPES {
+        bigint id PK
+    }
+    ROOMS {
+        bigint id PK
+    }
+    USERS {
+        bigint id PK
+    }

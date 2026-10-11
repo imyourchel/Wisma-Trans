@@ -1,0 +1,82 @@
+---
+title: "M1 - Pengguna, Hak Akses, dan Pelanggan"
+---
+erDiagram
+    ROLES ||--o{ USER_ROLES : "role_id"
+    USERS ||--o{ USER_ROLES : "user_id"
+    USERS ||--o{ SOCIAL_ACCOUNTS : "user_id"
+    INSTITUTIONS |o--o{ CUSTOMERS : "institution_id"
+    USERS |o--o| CUSTOMERS : "user_id"
+    CUSTOMERS |o--o| INSTITUTIONS : "primary_contact_id"
+    USERS |o--o{ SETTINGS : "updated_by"
+
+    USERS {
+        bigint id PK
+        varchar name
+        varchar email UK
+        varchar password "nullable"
+        varchar phone "nullable"
+        boolean is_active
+        timestamp email_verified_at "nullable"
+        varchar remember_token "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+        timestamp deleted_at "nullable"
+    }
+    ROLES {
+        bigint id PK
+        varchar code UK
+        varchar name
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    USER_ROLES {
+        bigint user_id PK,FK
+        bigint role_id PK,FK
+        timestamp assigned_at "nullable"
+    }
+    SOCIAL_ACCOUNTS {
+        bigint id PK
+        bigint user_id FK
+        enum provider "google, facebook, apple"
+        varchar provider_user_id
+        varchar provider_email "nullable"
+        timestamp created_at "nullable"
+    }
+    CUSTOMERS {
+        bigint id PK
+        bigint user_id FK,UK "nullable"
+        bigint institution_id FK "nullable"
+        varchar full_name
+        varchar phone UK
+        varchar email "nullable"
+        enum gender "L, P | nullable"
+        date date_of_birth "nullable"
+        text address "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+        timestamp deleted_at "nullable"
+    }
+    INSTITUTIONS {
+        bigint id PK
+        varchar code UK "nullable"
+        varchar name
+        text address "nullable"
+        varchar phone "nullable"
+        varchar email "nullable"
+        bigint primary_contact_id FK,UK "nullable"
+        enum default_billing_scheme "upfront, monthly_fixed_date, due_after_checkout"
+        tinyint billing_day "nullable"
+        smallint due_days "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    SETTINGS {
+        varchar setting_key PK
+        varchar value
+        enum type "string, integer, decimal, boolean, time"
+        varchar description "nullable"
+        bigint updated_by FK "nullable"
+        timestamp updated_at "nullable"
+    }

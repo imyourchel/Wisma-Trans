@@ -1,0 +1,69 @@
+---
+title: "M2 - Master Kamar, Fasilitas, dan Status Kamar"
+---
+erDiagram
+    ROOM_TYPES ||--o{ ROOMS : "room_type_id"
+    FACILITIES ||--o{ ROOM_TYPE_FACILITIES : "facility_id"
+    ROOM_TYPES ||--o{ ROOM_TYPE_FACILITIES : "room_type_id"
+    FACILITIES ||--o{ FACILITY_UNITS : "facility_id"
+    ROOMS |o--o{ FACILITY_UNITS : "room_id"
+    USERS |o--o{ ROOM_STATUS_LOGS : "changed_by"
+    ROOMS ||--o{ ROOM_STATUS_LOGS : "room_id"
+
+    ROOM_TYPES {
+        bigint id PK
+        varchar code UK
+        varchar name
+        text description "nullable"
+        decimal base_price
+        tinyint max_capacity
+        text photos "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    ROOMS {
+        bigint id PK
+        varchar room_number UK
+        bigint room_type_id FK
+        tinyint floor
+        enum bed_type "single, twin, double, king"
+        enum status "available, occupied_clean, occupied_dirty, vacant_dirty, cleaning, maintenance"
+        datetime dirty_since "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    FACILITIES {
+        bigint id PK
+        varchar name UK
+        enum category "room, public"
+        boolean is_maintainable
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    ROOM_TYPE_FACILITIES {
+        bigint room_type_id PK,FK
+        bigint facility_id PK,FK
+    }
+    FACILITY_UNITS {
+        bigint id PK
+        bigint facility_id FK
+        bigint room_id FK "nullable"
+        varchar area_label
+        varchar unit_label UK
+        date installed_at "nullable"
+        boolean is_active
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    ROOM_STATUS_LOGS {
+        bigint id PK
+        bigint room_id FK
+        enum status "available, occupied_clean, occupied_dirty, vacant_dirty, cleaning, maintenance"
+        bigint changed_by FK "nullable"
+        datetime changed_at
+        varchar note "nullable"
+    }
+    USERS {
+        bigint id PK
+    }

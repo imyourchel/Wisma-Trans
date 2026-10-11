@@ -1,0 +1,59 @@
+---
+title: "M7 - Maintenance Management"
+---
+erDiagram
+    FACILITIES ||--o{ MAINTENANCE_SCHEDULES : "facility_id"
+    USERS |o--o{ MAINTENANCE_REQUESTS : "handled_by"
+    USERS |o--o{ MAINTENANCE_REQUESTS : "reported_by"
+    ROOMS |o--o{ MAINTENANCE_REQUESTS : "room_id"
+    MAINTENANCE_SCHEDULES |o--o{ MAINTENANCE_REQUESTS : "maintenance_schedule_id"
+    FACILITY_UNITS |o--o{ MAINTENANCE_REQUESTS : "facility_unit_id"
+
+    MAINTENANCE_SCHEDULES {
+        bigint id PK
+        bigint facility_id FK
+        varchar area_label
+        tinyint interval_months
+        date last_maintenance_date "nullable"
+        date next_due_date
+        varchar vendor_name "nullable"
+        boolean is_active
+        varchar note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    MAINTENANCE_REQUESTS {
+        bigint id PK
+        varchar request_code UK
+        enum maintenance_type "corrective, preventive"
+        bigint maintenance_schedule_id FK "nullable"
+        bigint facility_unit_id FK "nullable"
+        bigint room_id FK "nullable"
+        text damage_description
+        text photos "nullable"
+        enum priority "low, medium, high"
+        boolean blocks_room
+        bigint reported_by FK "nullable"
+        datetime reported_at
+        enum status "reported, in_progress, completed, cancelled"
+        bigint handled_by FK "nullable"
+        varchar vendor_name "nullable"
+        datetime started_at "nullable"
+        datetime completed_at "nullable"
+        decimal cost "nullable"
+        text resolution_note "nullable"
+        timestamp created_at "nullable"
+        timestamp updated_at "nullable"
+    }
+    FACILITIES {
+        bigint id PK
+    }
+    FACILITY_UNITS {
+        bigint id PK
+    }
+    ROOMS {
+        bigint id PK
+    }
+    USERS {
+        bigint id PK
+    }
