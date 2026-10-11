@@ -14,6 +14,11 @@
             this.$watch('unit', () => { this.tetapKirim = false; this.hapus('tetap_kirim'); });
         },
         get daftarUnit() { return this.lokasi === 'kamar' ? (this.unitKamar[this.room_id] || []) : (this.unitArea[this.area_label] || []); },
+        // Pilihan dropdown unit: mengikuti kamar/area terpilih, ditutup pilihan Lainnya
+        get opsiUnit() {
+            if (!(this.lokasi === 'kamar' ? this.room_id : this.area_label)) return [{ v: '', l: 'Pilih lokasi dulu' }];
+            return [{ v: '', l: 'Pilih unit' }, ...this.daftarUnit.map((u) => ({ v: String(u.id), l: u.label })), { v: 'lainnya', l: 'Lainnya / tidak ada di daftar' }];
+        },
         // Laporan yang masih terbuka untuk unit terpilih (peringatan laporan ganda)
         get ganda() { return this.unitTerbuka[this.unit] || []; },
         get kamarDipilih() { return this.kamar.find((k) => String(k.id) === String(this.room_id)); },
@@ -59,30 +64,36 @@
             </div>
 
             <x-staf.field nama="unit" label="Unit fasilitas" tag="div">
-                <select name="unit" x-model="unit" @change="hapus('unit')" class="wt-input" :class="pesan('unit') && 'is-invalid'"
-                        :disabled="lokasi === 'kamar' ? !room_id : !area_label">
-                    <option value="" x-text="(lokasi === 'kamar' ? room_id : area_label) ? 'Pilih unit' : 'Pilih lokasi dulu'"></option>
-                    <template x-for="u in daftarUnit" :key="u.id"><option :value="u.id" x-text="u.label"></option></template>
-                    <option value="lainnya">Lainnya / tidak ada di daftar</option>
-                </select>
+                <x-staf.pilih name="unit" model="unit" label="Unit fasilitas" galat="pesan('unit')" sumber="opsiUnit"
+                              x-on:change="hapus('unit')" />
             </x-staf.field>
         </div>
 
         <div x-show="ganda.length || pesan('tetap_kirim')" x-cloak class="rounded-md border border-[rgba(232,172,69,.45)] bg-[rgba(232,172,69,.12)] p-4" role="alert">
-            <p x-show="ganda.length" class="m-0 text-[13px] text-[#7A520C]">
-                <span class="font-semibold">Unit ini sudah dilaporkan</span> (<span x-text="ganda.join(', ')"></span>) dan belum selesai.
-                Bila kerusakannya sama, tidak perlu melapor lagi; cek di Laporan Saya atau tanyakan ke Manager.
-            </p>
+            <div x-show="ganda.length" class="text-[13px] text-[#7A520C]">
+                <p class="m-0 font-semibold">Unit ini sudah punya laporan yang belum selesai:</p>
+                <ul class="m-0 mt-1.5 flex list-none flex-col gap-1 p-0">
+                    <template x-for="l in ganda" :key="l.kode">
+                        <li class="flex gap-1.5"><span aria-hidden="true">•</span>
+                            <span><span class="font-semibold tabular-nums" x-text="l.kode"></span> · <span x-text="'“' + l.deskripsi + '”'"></span>
+                                · <span x-text="l.pelapor + ', ' + l.waktu"></span> · <span x-text="l.status"></span></span>
+                        </li>
+                    </template>
+                </ul>
+                <p class="mb-0 mt-1.5">Kalau kerusakan yang Anda temukan sama, tidak perlu dikirim. Kalau berbeda, centang “Tetap kirim”.</p>
+            </div>
             <label class="mt-3 flex cursor-pointer items-start gap-3">
                 <input type="checkbox" name="tetap_kirim" value="1" x-model="tetapKirim" @change="hapus('tetap_kirim')" class="mt-0.5 h-4 w-4 accent-clay-500">
                 <span class="text-[13px] font-semibold">Tetap kirim, kerusakannya berbeda</span>
             </label>
-            <p x-show="pesan('tetap_kirim')" x-text="pesan('tetap_kirim')" data-galat class="mb-0 mt-2 text-[11px] font-medium text-status-dirty"></p>
+            {{-- Daftar dari server ditampilkan bila halaman belum tahu laporan itu (misalnya dilaporkan staf lain barusan) --}}
+            <p x-show="pesan('tetap_kirim')" x-text="ganda.length ? 'Centang “Tetap kirim” bila kerusakannya berbeda.' : pesan('tetap_kirim')" data-galat
+               class="mb-0 mt-2 whitespace-pre-line text-xs font-medium text-status-dirty"></p>
         </div>
 
         <x-staf.field nama="deskripsi" label="Deskripsi kerusakan">
             <textarea name="deskripsi" x-model="deskripsi" @input="hapus('deskripsi')" rows="4" maxlength="1000"
-                      placeholder="Contoh: AC tidak dingin, keluar air dari unit dalam sejak pagi." class="wt-input" :class="pesan('deskripsi') && 'is-invalid'"></textarea>
+                      placeholder="Tulis gejalanya, misalnya: AC tidak dingin, AC menetes air, AC tidak menyala." class="wt-input" :class="pesan('deskripsi') && 'is-invalid'"></textarea>
             <span class="mt-1 block text-right text-[11px] tabular-nums text-ink-500" x-text="deskripsi.length + ' / 1000'"></span>
         </x-staf.field>
 
@@ -125,14 +136,14 @@
                 </span>
             </label>
             <p x-show="tidakBisa && terisi" x-cloak class="mb-0 mt-3 rounded bg-[rgba(232,172,69,.16)] px-3 py-2 text-xs text-[#7A520C]">
-                Kamar <span x-text="kamarDipilih?.nomor"></span> sedang terisi tamu. Status kamar tidak akan diubah; koordinasikan pindah kamar dengan Front Office.
+                Kamar <span x-text="kamarDipilih?.nomor"></span> sedang terisi tamu. Status kamar tidak akan diubah; Front Office diberi tahu untuk memindahkan tamu.
             </p>
         </div>
 
         <div class="flex flex-wrap items-center gap-3 border-t border-cream-300 pt-5">
             <button type="submit" :disabled="proses" :aria-busy="proses" class="h-11 rounded border-0 bg-clay-500 px-6 font-display text-[13px] font-bold text-cream-50 hover:bg-clay-600 disabled:opacity-70"
                     x-text="proses ? 'Mengirim…' : 'Kirim laporan'">Kirim laporan</button>
-            <a href="{{ route('staf.maintenance.saya') }}" class="text-[13px] font-semibold">Lihat laporan saya</a>
+            <a href="{{ route('staf.maintenance.saya', ['tab' => 'saya']) }}" class="text-[13px] font-semibold">Lihat laporan saya</a>
         </div>
     </form>
 </div>

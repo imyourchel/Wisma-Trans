@@ -43,6 +43,8 @@
         <div class="flex min-w-0 flex-col gap-6">
             <section class="wt-card p-5 sm:p-6" aria-labelledby="judul-pemesan">
                 <h2 id="judul-pemesan" class="m-0 font-display text-[13px] font-bold uppercase tracking-[.08em]">Pemesan</h2>
+                {{-- Tanggal, tamu, dan kamar terpilih ada di alamat halaman, jadi tetap ada setelah masuk --}}
+                <x-tawaran-masuk class="mt-4" manfaat="data pemesan terisi otomatis dan reservasi tersimpan di Pesanan saya" />
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     @foreach ([
                         ['nama', 'Nama lengkap', 'text', 'name', 'Sesuai kartu identitas', 'sm:col-span-2'],

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Maintenance;
 
+use App\Models\MaintenanceRequest;
 use Illuminate\Foundation\Http\FormRequest;
 
 /** Catat pelaksanaan satu jadwal perawatan rutin. */
@@ -25,7 +26,7 @@ class PelaksanaanRequest extends FormRequest
         return $this->aturanPengerja() + [
             'tanggal' => ['required', 'date', 'before_or_equal:today'],
             'cost' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
-            'catatan' => ['nullable', 'string', 'max:1000'],
+            'catatan' => ['nullable', 'string', 'max:1000', MaintenanceRequest::aturanBukanJalurCepat()],
         ];
     }
 

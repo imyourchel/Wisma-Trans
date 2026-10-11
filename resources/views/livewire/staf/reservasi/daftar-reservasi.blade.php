@@ -115,6 +115,12 @@
                         @endif
                     </dl>
 
+                    @if ($profilPemesan)
+                        <div class="mt-5">@include('livewire.staf.partials.kartu-profil-pelanggan', $profilPemesan)</div>
+                    @elseif ($polaRombongan)
+                        <div class="mt-5">@include('livewire.staf.partials.kartu-pola-rombongan', $polaRombongan)</div>
+                    @endif
+
                     {{-- Kamar --}}
                     <h3 class="mb-2 mt-6 font-display text-[13px] font-bold uppercase tracking-[.06em] text-ink-500">Kamar</h3>
                     @if ($kamar->isEmpty())
@@ -142,8 +148,13 @@
                         </div>
                     @endif
 
-                    {{-- Nota --}}
-                    @if ($nota)
+                    {{-- Nota; selama menginap tampil tagihan sementara (kamar, layanan tagihan kamar, terlambat) --}}
+                    @if ($folio)
+                        <div class="mt-4">
+                            <div class="wt-field-label mb-2">Tagihan sementara</div>
+                            <x-tagihan-sementara :folio="$folio" :staf="true" />
+                        </div>
+                    @elseif ($nota)
                         <dl class="m-0 mt-4 grid grid-cols-3 gap-3 rounded bg-cream-200 px-4 py-3 text-[13px]">
                             <div><dt class="text-[11px] text-ink-500">Total nota {{ $nota->invoice_number }}</dt><dd class="m-0 font-semibold tabular-nums">{{ $rp($nota->total_amount) }}</dd></div>
                             <div><dt class="text-[11px] text-ink-500">Dibayar{{ $r->dp_amount_required ? ' (uang muka '.$rp($r->dp_amount_required).')' : '' }}</dt><dd class="m-0 font-semibold tabular-nums">{{ $rp($nota->paid_amount) }}</dd></div>
@@ -154,7 +165,14 @@
                     {{-- Aksi --}}
                     <div class="mt-5 flex flex-wrap gap-2 border-t border-cream-300 pt-5">
                         @if ($r->status === 'confirmed' && $m && ! $m->isFuture() && $bolehKelola)
-                            <a href="{{ route('staf.check-in', ['cari' => $r->reservation_code]) }}" class="inline-flex h-9 items-center rounded bg-clay-500 px-4 font-display text-xs font-bold text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">Check-in</a>
+                            {{-- Reservasi instansi check-in lewat kode bukti pemesanan --}}
+                            <a href="{{ route('staf.check-in', $buktiBerlaku ? ['kode' => $r->reservation_code] : ['cari' => $r->reservation_code]) }}" class="inline-flex h-9 items-center rounded bg-clay-500 px-4 font-display text-xs font-bold text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">{{ $buktiBerlaku ? 'Verifikasi bukti' : 'Check-in' }}</a>
+                        @endif
+                        @if ($r->status === 'checked_in')
+                            <a href="{{ route('staf.check-out', ['cari' => $r->reservation_code]) }}" class="inline-flex h-9 items-center rounded bg-clay-500 px-4 font-display text-xs font-bold text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">Check-out</a>
+                        @endif
+                        @if ($bolehKelola && $buktiBerlaku)
+                            <button type="button" wire:click="kirimUlangBukti" wire:loading.attr="disabled" wire:target="kirimUlangBukti" class="wt-btn-sm">Kirim ulang bukti</button>
                         @endif
                         @if ($r->status === 'waiting_approval')
                             <a href="{{ route('staf.pengajuan-instansi') }}" class="wt-btn-sm hover:no-underline">Buka pengajuan instansi</a>

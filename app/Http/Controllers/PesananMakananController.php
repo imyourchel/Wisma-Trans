@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Invoice;
+use App\Models\ReservationRoom;
 use App\Models\Service;
 use App\Models\ServiceOrder;
 use App\Rules\EmailWajar;
 use App\Rules\NomorHp;
+use App\Services\KodeKamar;
 use App\Services\PembayaranMidtrans;
 use App\Support\Nomor;
 use App\Support\Pelanggan;
@@ -19,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
 
@@ -30,28 +33,63 @@ class PesananMakananController extends Controller
 {
     public function __construct(private PembayaranMidtrans $midtrans) {}
 
+    /**
+     * Cocokkan kode kamar tamu menginap (throttle 10/menit per IP). Mengembalikan kamar yang sedang ditempati
+     * reservasi itu, hanya nomor kamar dan tanggal keluar. Kode yang cocok disimpan di session.
+     */
+    public function cocokkanKamar(Request $request, KodeKamar $kodeKamar): JsonResponse
+    {
+        try {
+            $r = $kodeKamar->cocokkan((string) $request->input('kode_kamar'), (string) $request->ip());
+        } catch (ValidationException $e) {
+            return response()->json(['pesan' => collect($e->errors())->flatten()->first()], $e->status);
+        }
+
+        return response()->json(['kamar' => $kodeKamar->kamarUntuk(null, $r->id)]);
+    }
+
+    /** Tombol Ganti: lupakan kode kamar di session; kamar milik akun yang masuk tetap tersedia. */
+    public function lupakanKamar(Request $request, KodeKamar $kodeKamar): JsonResponse
+    {
+        $kodeKamar->lupakan();
+
+        return response()->json(['kamar' => $kodeKamar->kamarUntuk($request->user(), null)]);
+    }
+
+    /**
+     * Pesanan dari halaman Resto. Tamu luar: nama dan WhatsApp, selalu bayar di muka lewat Midtrans.
+     * Tamu menginap: kamar yang sedang ditempati (dicocokkan ulang di server), lalu masuk tagihan kamar
+     * (langsung masuk dapur, tanpa nota) atau bayar sekarang lewat Midtrans.
+     */
     public function store(Request $request): JsonResponse
     {
-        if (! PembayaranMidtrans::siap()) {
+        $menginap = $request->filled('reservation_room_id');
+        $tagihKamar = $menginap && $request->input('tagih', 'kamar') === 'kamar';
+        if (! $tagihKamar && ! PembayaranMidtrans::siap()) {
             return response()->json(['pesan' => 'Pembayaran online belum tersedia. Silakan pesan langsung di restoran.'], 503);
         }
 
-        $request->merge([
-            'name' => PersonName::normalize((string) $request->input('name')),
-            'phone' => Phone::normalizeInput((string) $request->input('phone')),
-            'email' => filled($request->input('email')) ? Str::lower(trim((string) $request->input('email'))) : null,
-        ]);
+        if (! $menginap) {
+            $request->merge([
+                'name' => PersonName::normalize((string) $request->input('name')),
+                'phone' => Phone::normalizeInput((string) $request->input('phone')),
+                'email' => filled($request->input('email')) ? Str::lower(trim((string) $request->input('email'))) : null,
+            ]);
+        }
         $data = $request->validate([
             'items' => ['required', 'array', 'min:1', 'max:30'],
             'items.*.id' => ['required', 'integer', 'distinct'],
             'items.*.qty' => ['required', 'integer', 'min:1', 'max:20'],
             'items.*.note' => ['nullable', 'string', 'max:150'],
-            'name' => ['required', 'string', 'min:3', 'max:100', PersonName::rule()],
-            'phone' => ['required', new NomorHp],
+            'name' => [$menginap ? 'nullable' : 'required', 'string', 'min:3', 'max:100', PersonName::rule()],
+            'phone' => [$menginap ? 'nullable' : 'required', $menginap ? 'string' : new NomorHp],
             'email' => ['nullable', 'max:150', new EmailWajar],
-            'serving_type' => ['required', Rule::in(['take_away', 'dine_in'])],
+            // Antar ke kamar hanya untuk tamu menginap
+            'serving_type' => ['required', Rule::in($menginap ? ['room_service', 'dine_in', 'take_away'] : ['take_away', 'dine_in'])],
             'note' => ['nullable', 'string', 'max:255'],
-            'metode' => ['required', Rule::in(array_keys(PembayaranMidtrans::METODE))],
+            'metode' => [$tagihKamar ? 'nullable' : 'required', Rule::in(array_keys(PembayaranMidtrans::METODE))],
+            'reservation_room_id' => ['nullable', 'integer'],
+            'tagih' => ['nullable', Rule::in(['kamar', 'sekarang'])],
         ], [
             'items.required' => 'Keranjang masih kosong.',
             'items.min' => 'Keranjang masih kosong.',
@@ -59,9 +97,19 @@ class PesananMakananController extends Controller
             'items.*.note.max' => 'Catatan per menu maksimal 150 karakter.',
             'name.min' => 'Minimal 3 huruf.',
             'name.regex' => PersonName::MESSAGE,
-            'serving_type.required' => 'Pilih ambil atau makan di tempat.',
+            'serving_type.required' => 'Pilih cara menikmati.',
+            'serving_type.in' => 'Antar ke kamar hanya untuk tamu yang sedang menginap.',
             'metode.*' => 'Pilih metode pembayaran.',
         ]);
+
+        // Tamu menginap: jangan percaya peramban, periksa ulang kamar dengan kode kamar di session atau akun pemilik
+        $baris = null;
+        if ($menginap) {
+            $baris = ReservationRoom::with('reservation.customer')->find((int) $data['reservation_room_id']);
+            if (! $baris || ! app(KodeKamar::class)->bolehMemakai($request->user(), $baris)) {
+                return response()->json(['pesan' => KodeKamar::TIDAK_BOLEH, 'errors' => ['kamar' => [KodeKamar::TIDAK_BOLEH]]], 422);
+            }
+        }
 
         // Harga selalu diambil dari basis data, bukan dari peramban
         $menu = Service::whereIn('id', collect($data['items'])->pluck('id'))
@@ -69,58 +117,77 @@ class PesananMakananController extends Controller
             ->reject(fn (Service $s) => $s->habis())->keyBy('id');
         $hilang = collect($data['items'])->reject(fn ($i) => $menu->has($i['id']));
         if ($hilang->isNotEmpty()) {
+            $nama = Service::whereIn('id', $hilang->pluck('id'))->pluck('name')->join(', ');
+
             return response()->json([
-                'pesan' => 'Sebagian menu di keranjang sudah tidak tersedia. Muat ulang halaman lalu periksa keranjang Anda.',
+                'pesan' => ($nama !== '' ? $nama.' sudah tidak tersedia.' : 'Sebagian menu di keranjang sudah tidak tersedia.').' Muat ulang halaman lalu periksa keranjang Anda.',
                 'hapus' => $hilang->pluck('id')->values(),
             ], 422);
         }
 
-        $order = DB::transaction(function () use ($data, $menu, $request) {
-            $customer = Pelanggan::dariIsian($data, $request->user());
-            $total = collect($data['items'])->sum(fn ($i) => $menu[$i['id']]->price * $i['qty']);
+        try {
+            $order = DB::transaction(function () use ($data, $menu, $request, $baris, $tagihKamar) {
+                // Periksa ulang dengan kunci: check-out yang berjalan bersamaan tidak boleh melewatkan pesanan ini
+                $baris = $baris ? ReservationRoom::kunciMenginap($baris->id)->load('reservation.customer') : null;
+                $customer = $baris ? $baris->reservation->customer : Pelanggan::dariIsian($data, $request->user());
+                $total = collect($data['items'])->sum(fn ($i) => $menu[$i['id']]->price * $i['qty']);
 
-            $invoice = Invoice::create([
-                'invoice_number' => Nomor::nota(),
-                'invoice_type' => 'service',
-                'customer_id' => $customer->id,
-                'payment_term' => 'immediate',
-                'issue_date' => now()->toDateString(),
-                'subtotal' => $total,
-                'total_amount' => $total,
-                'paid_amount' => 0,
-                'status' => 'issued',
-                'note' => 'Pesanan makanan online',
-            ]);
-
-            $order = ServiceOrder::create([
-                'order_code' => Nomor::pesanan(),
-                'access_token' => ServiceOrder::tokenBaru(),
-                'order_type' => 'outside_guest',
-                'customer_id' => $customer->id,
-                'serving_type' => $data['serving_type'],
-                'invoice_id' => $invoice->id,
-                'payment_mode' => 'pay_now',
-                'order_date' => now(),
-                'status' => 'pending',
-                'note' => $data['note'] ?? null,
-            ]);
-
-            foreach ($data['items'] as $i) {
-                $m = $menu[$i['id']];
-                // Catatan per menu untuk dapur, misalnya "tidak pedas"
-                $catatan = trim((string) ($i['note'] ?? ''));
-                $order->items()->create([
-                    'service_id' => $m->id, 'quantity' => $i['qty'], 'unit_price' => $m->price, 'subtotal' => $m->price * $i['qty'],
-                    'note' => $catatan === '' ? null : $catatan,
+                // Masuk tagihan kamar: tanpa nota sendiri, ditagih bersama nota kamar saat check-out
+                $invoice = $tagihKamar ? null : Invoice::create([
+                    'invoice_number' => Nomor::nota(),
+                    'invoice_type' => 'service',
+                    'customer_id' => $customer->id,
+                    'payment_term' => 'immediate',
+                    'issue_date' => now()->toDateString(),
+                    'subtotal' => $total,
+                    'total_amount' => $total,
+                    'paid_amount' => 0,
+                    'status' => 'issued',
+                    'note' => 'Pesanan makanan online',
                 ]);
-                $invoice->items()->create([
-                    'item_type' => 'fnb', 'description' => Str::limit($m->name, 150, ''), 'service_date' => now()->toDateString(),
-                    'quantity' => $i['qty'], 'unit_price' => $m->price, 'subtotal' => $m->price * $i['qty'],
+
+                $order = ServiceOrder::create([
+                    'order_code' => Nomor::pesanan(),
+                    'access_token' => ServiceOrder::tokenBaru(),
+                    'order_type' => $baris ? 'in_house' : 'outside_guest',
+                    'customer_id' => $customer->id,
+                    'reservation_room_id' => $baris?->id,
+                    'serving_type' => $data['serving_type'],
+                    'invoice_id' => $invoice?->id,
+                    'payment_mode' => $tagihKamar ? 'charge_to_room' : 'pay_now',
+                    'order_date' => now(),
+                    'status' => 'pending',
+                    'note' => $data['note'] ?? null,
                 ]);
+
+                foreach ($data['items'] as $i) {
+                    $m = $menu[$i['id']];
+                    // Catatan per menu untuk dapur, misalnya "tidak pedas"
+                    $catatan = trim((string) ($i['note'] ?? ''));
+                    $order->items()->create([
+                        'service_id' => $m->id, 'quantity' => $i['qty'], 'unit_price' => $m->price, 'subtotal' => $m->price * $i['qty'],
+                        'note' => $catatan === '' ? null : $catatan,
+                    ]);
+                    $invoice?->items()->create([
+                        'item_type' => 'fnb', 'description' => Str::limit($m->name, 150, ''), 'service_date' => now()->toDateString(),
+                        'quantity' => $i['qty'], 'unit_price' => $m->price, 'subtotal' => $m->price * $i['qty'],
+                    ]);
+                }
+
+                return $order;
+            });
+        } catch (ValidationException $e) {
+            if (! $baris || ! isset($e->errors()['kamar'])) {
+                throw $e;
             }
 
-            return $order;
-        });
+            // Tamu sudah check-out sejak kode kamar dicocokkan
+            return response()->json(['pesan' => KodeKamar::TIDAK_BOLEH, 'errors' => ['kamar' => [KodeKamar::TIDAK_BOLEH]]], 422);
+        }
+
+        if ($tagihKamar) {
+            return response()->json(['status_url' => $order->urlStatus()]);
+        }
 
         // Nomor VA atau QRIS dibuat sekarang, jadi halaman pesanan langsung menampilkannya
         try {
@@ -146,7 +213,7 @@ class PesananMakananController extends Controller
             return redirect($order->urlStatus());
         }
         $this->midtrans->sinkronkan($order);
-        $order = $order->fresh(['items.service', 'invoice.payments', 'customer'])->batalkanBilaKedaluwarsa();
+        $order = $order->fresh(['items.service', 'invoice.payments', 'customer', 'reservationRoom.room'])->batalkanBilaKedaluwarsa();
 
         return view('pesanan-status', [
             'order' => $order,

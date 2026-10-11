@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Actions\RegisterCustomer;
+use App\Http\Controllers\Auth\Concerns\RedirectsAfterLogin;
 use App\Http\Controllers\Controller;
 use App\Rules\EmailWajar;
 use App\Rules\NomorHp;
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;
 
 class RegisterController extends Controller
 {
+    use RedirectsAfterLogin;
+
     /**
      * Formulir di modal mengirim lewat fetch (JSON), jadi galat dikembalikan
      * sebagai 422 tanpa memuat ulang halaman. Pesan dibuat singkat karena
@@ -58,7 +61,9 @@ class RegisterController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        $redirect = redirect()->intended(route('home'))->with('status', RegisterCustomer::message($linkedOrders));
+        // Dari modal di formulir pemesanan: kembali ke formulir itu
+        $this->simpanKembali($request);
+        $redirect = $this->redirectTamu(RegisterCustomer::message($linkedOrders));
 
         return $request->expectsJson()
             ? response()->json(['redirect' => $redirect->getTargetUrl()])

@@ -17,6 +17,7 @@
         <div class="wt-card flex flex-col gap-5 p-5 sm:p-6">
             <fieldset class="m-0 grid min-w-0 gap-4 border-0 p-0 sm:grid-cols-2">
                 <legend class="mb-3 p-0 font-display text-[13px] font-bold uppercase tracking-[.08em]">Instansi dan narahubung</legend>
+                <x-tawaran-masuk class="sm:col-span-2" manfaat="data narahubung terisi otomatis" />
                 @foreach ([
                     ['instansi', 'Nama instansi', 'text', 'organization', 'Contoh: Dinas Kesehatan Luwu Timur', 'sm:col-span-2', null],
                     ['name', 'Nama narahubung', 'text', 'name', 'Nama lengkap', '', $pelanggan?->full_name ?? $pengguna?->name],

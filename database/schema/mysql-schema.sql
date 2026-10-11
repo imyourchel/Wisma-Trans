@@ -309,7 +309,7 @@ CREATE TABLE `housekeeping_tasks` (
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_hktasks_date_room` (`task_date`,`room_id`),
+  KEY `idx_hktasks_date_room` (`task_date`,`room_id`),
   KEY `idx_housekeeping_tasks_date_status` (`task_date`,`status`),
   KEY `idx_housekeeping_tasks_room_id` (`room_id`),
   KEY `idx_housekeeping_tasks_cleaning_priority_item_id` (`cleaning_priority_item_id`),

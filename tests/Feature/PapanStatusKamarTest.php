@@ -125,11 +125,11 @@ class PapanStatusKamarTest extends TestCase
         $pesan('RSV-T3', 'Tamu Batal', '204', 'cancelled', 'cancelled');
 
         $this->papan('fo')
-            ->call('setView', 'kalender')
+            ->set('view', 'kalender')
             ->set('start', '2026-10-01')
             ->assertViewHas('kalender', fn ($k) => $k['perKamar']->has($this->kamar('203')->id) && $k['tanpaKamar']->count() === 1)
             ->assertSee('Hasan Basri')
-            ->assertSee('Belum ditetapkan kamarnya')
+            ->assertSee('Belum dapat kamar · Deluxe Room')
             ->assertSee('Dian Permata')
             ->assertDontSee('Tamu Batal');
     }
@@ -137,7 +137,7 @@ class PapanStatusKamarTest extends TestCase
     public function test_KL02_pilih_tanggal_menjadi_kolom_pertama_kalender(): void
     {
         $this->papan('fo')
-            ->call('setView', 'kalender')
+            ->set('view', 'kalender')
             ->call('pickDate', '2026-10-20')
             ->assertSet('start', '2026-10-20')
             ->assertViewHas('kalender', fn ($k) => $k['hari']->first()->toDateString() === '2026-10-20' && $k['akhir']->toDateString() === '2026-11-02')

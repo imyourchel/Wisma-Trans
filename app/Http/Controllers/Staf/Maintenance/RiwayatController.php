@@ -25,6 +25,7 @@ class RiwayatController extends MaintenanceController
             'jenis' => in_array($request->query('jenis'), array_keys(MaintenanceRequest::JENIS), true) ? $request->query('jenis') : '',
             'dari' => $tanggal($request->query('dari')),
             'sampai' => $tanggal($request->query('sampai')),
+            'jalur' => $request->query('jalur') === 'ya' ? 'ya' : '',
         ];
 
         $q = $this->query($saring);
@@ -55,6 +56,7 @@ class RiwayatController extends MaintenanceController
             ->when($saring['area'] !== '', fn ($q) => $q->where(fn ($q) => $q->whereHas('unit', fn ($u) => $u->where('area_label', $saring['area']))
                 ->orWhereHas('schedule', fn ($s) => $s->where('area_label', $saring['area']))))
             ->when($saring['dari'] !== '', fn ($q) => $q->where('completed_at', '>=', $saring['dari'].' 00:00:00'))
-            ->when($saring['sampai'] !== '', fn ($q) => $q->where('completed_at', '<=', $saring['sampai'].' 23:59:59'));
+            ->when($saring['sampai'] !== '', fn ($q) => $q->where('completed_at', '<=', $saring['sampai'].' 23:59:59'))
+            ->when(($saring['jalur'] ?? '') === 'ya', fn ($q) => $q->jalurCepat());
     }
 }

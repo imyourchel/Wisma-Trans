@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Maintenance;
 
+use App\Models\MaintenanceRequest;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,7 +24,7 @@ class SelesaikanRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'resolution_note' => ['required', 'string', 'max:1000'],
+            'resolution_note' => ['required', 'string', 'max:1000', MaintenanceRequest::aturanBukanJalurCepat()],
             'cost' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
             'status_kamar' => ['nullable', Rule::in(['vacant_dirty', 'available'])],
         ];

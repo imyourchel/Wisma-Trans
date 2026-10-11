@@ -3,7 +3,10 @@
 use App\Services\NotifikasiReservasi;
 use App\Services\PembayaranMidtrans;
 use App\Services\PengingatJadwalPerawatan;
+use App\Services\PengingatPenagihan;
+use App\Services\PiutangService;
 use App\Services\ReservasiService;
+use App\Services\SmartCleaning\TugasHousekeepingService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -33,6 +36,27 @@ Artisan::command('maintenance:pengingat-jadwal {--paksa : kirim lagi walau hari 
     $this->info($jumlah ? "Pengingat {$jumlah} jadwal perawatan dikirim ke Manager." : 'Tidak ada pengingat yang dikirim.');
 })->purpose('Ingatkan Manager tentang perawatan rutin yang terlambat atau segera dilakukan');
 
+// Tugas Housekeeping hari sebelumnya yang belum dimulai: dibatalkan, kamar yang masih kotor ikut prioritas berikutnya
+Artisan::command('housekeeping:batalkan-tugas-lama', function (TugasHousekeepingService $tugas) {
+    $this->info($tugas->batalkanTugasLama().' tugas Housekeeping hari sebelumnya dibatalkan.');
+})->purpose('Batalkan tugas Housekeeping hari sebelumnya yang belum dimulai');
+
+// Penagihan instansi harian (idempoten, menyusul bila sempat tidak berjalan): nota sewa aula instansi, nota periode
+// menginap panjang, draft tagihan bulanan, dan status lewat jatuh tempo
+Artisan::command('penagihan:harian', function (PiutangService $piutang) {
+    $h = $piutang->harian();
+    $this->info("Nota aula {$h['aula']}, nota periode {$h['periode']}, draft tagihan bulanan {$h['bulanan']}, ditandai lewat jatuh tempo {$h['overdue']}.");
+})->purpose('Buat nota aula dan periode instansi, draft tagihan bulanan, dan tandai tagihan lewat jatuh tempo');
+
+// Pengingat penagihan: ringkasan ke Manager (H-n), lalu pengingat ke instansi menunggu diperiksa Manager
+Artisan::command('penagihan:pengingat', function (PengingatPenagihan $pengingat) {
+    $h = $pengingat->jalankan();
+    $this->info("Pengingat internal {$h['internal']}, pengingat instansi menunggu diperiksa {$h['instansi']}, dibatalkan {$h['dibatalkan']}.");
+})->purpose('Kirim ringkasan tagihan instansi ke Manager dan siapkan pengingat ke instansi');
+
+Schedule::command('penagihan:harian')->dailyAt('00:10')->withoutOverlapping();
+Schedule::command('penagihan:pengingat')->dailyAt('07:30')->withoutOverlapping();
 Schedule::command('reservasi:batalkan-kedaluwarsa')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('reservasi:tandai-tidak-datang')->dailyAt('00:05')->withoutOverlapping();
+Schedule::command('housekeeping:batalkan-tugas-lama')->dailyAt('00:05')->withoutOverlapping();
 Schedule::command('maintenance:pengingat-jadwal')->dailyAt('07:00')->withoutOverlapping();

@@ -12,6 +12,8 @@ use Illuminate\Support\Str;
  * Kode peran: admin, manager, front_office, fnb, housekeeping.
  * Menu yang belum punya 'route' diarahkan ke halaman "segera" lewat slug-nya.
  * Menu dengan kunci 'gate' tampil sesuai Gate (lihat AppServiceProvider), bukan daftar 'peran'.
+ * Menu dengan kunci 'params' memakai route yang sama dengan query string tertentu (misalnya Kalender Ketersediaan
+ * = Papan Status dengan tampilan=kalender) dan aktif hanya bila query string itu cocok.
  * Staf yang merangkap peran melihat gabungan menunya.
  */
 class MenuStaf
@@ -39,32 +41,32 @@ class MenuStaf
             ]],
 
             ['label' => 'Reservasi', 'ikon' => 'reservasi', 'anak' => [
-                ['label' => 'Kalender Ketersediaan', 'peran' => [self::M, self::FO]],
+                ['label' => 'Kalender Ketersediaan', 'route' => 'staf.papan-status', 'params' => ['tampilan' => 'kalender'], 'gate' => 'view-reservations'],
                 ['label' => 'Daftar Reservasi', 'route' => 'staf.reservasi', 'gate' => 'view-reservations'],
                 // FO melihat pengajuan, tetapi hanya Manager yang dapat menyetujui atau menolak
                 ['label' => 'Pengajuan Instansi', 'route' => 'staf.pengajuan-instansi', 'gate' => 'view-reservations'],
                 ['label' => 'Reservasi Langsung', 'route' => 'staf.reservasi-langsung', 'gate' => 'manage-reservations'],
                 ['label' => 'Check-in', 'route' => 'staf.check-in', 'gate' => 'view-reservations'],
-                ['label' => 'Check-out', 'peran' => [self::M, self::FO]],
+                ['label' => 'Check-out', 'route' => 'staf.check-out', 'gate' => 'view-reservations'],
             ]],
 
             ['label' => 'Kamar', 'ikon' => 'kamar', 'anak' => [
-                ['label' => 'Riwayat Status', 'peran' => [self::M, self::FO]],
+                ['label' => 'Riwayat Status', 'route' => 'staf.kamar.riwayat-status', 'gate' => 'view-reservations'],
             ]],
 
             ['label' => 'Housekeeping', 'ikon' => 'housekeeping', 'anak' => [
-                ['label' => 'Prioritas Pembersihan', 'peran' => [self::M]],
-                ['label' => 'Pembagian Tugas', 'peran' => [self::M]],
-                ['label' => 'Ketersediaan Staf', 'peran' => [self::M]],
-                ['label' => 'Tugas Saya', 'peran' => [self::HK]],
-                ['label' => 'Bobot Kriteria', 'peran' => [self::M]],
+                ['label' => 'Prioritas Pembersihan', 'route' => 'staf.housekeeping.prioritas', 'gate' => 'view-cleaning-priority'],
+                ['label' => 'Pembagian Tugas', 'route' => 'staf.housekeeping.pembagian', 'gate' => 'manage-housekeeping'],
+                ['label' => 'Ketersediaan Staf', 'route' => 'staf.housekeeping.ketersediaan', 'gate' => 'manage-housekeeping'],
+                ['label' => 'Tugas Saya', 'route' => 'staf.housekeeping.tugas-saya', 'gate' => 'do-housekeeping-task'],
+                ['label' => 'Bobot Kriteria', 'route' => 'staf.housekeeping.bobot', 'gate' => 'view-cleaning-priority'],
             ]],
 
             ['label' => 'Layanan', 'ikon' => 'layanan', 'anak' => [
-                ['label' => 'Kasir', 'peran' => [self::M, self::FB]],
-                ['label' => 'Papan Pesanan', 'peran' => [self::M, self::FB]],
-                ['label' => 'Riwayat Pesanan', 'peran' => [self::M, self::FB]],
-                ['label' => 'Ketersediaan Menu', 'peran' => [self::M, self::FB]],
+                ['label' => 'Kasir', 'route' => 'staf.fnb.kasir', 'gate' => 'take-fnb-order'],
+                ['label' => 'Papan Pesanan', 'route' => 'staf.fnb.papan', 'gate' => 'view-fnb'],
+                ['label' => 'Riwayat Pesanan', 'route' => 'staf.fnb.riwayat', 'gate' => 'view-fnb'],
+                ['label' => 'Ketersediaan Menu', 'route' => 'staf.fnb.ketersediaan', 'gate' => 'view-fnb'],
                 ['label' => 'Laundry', 'route' => 'staf.laundry', 'gate' => 'view-laundry'],
             ]],
 
@@ -74,33 +76,33 @@ class MenuStaf
             ]],
 
             ['label' => 'Keuangan', 'ikon' => 'keuangan', 'anak' => [
-                ['label' => 'Nota', 'peran' => [self::M, self::FO, self::FB]],
-                ['label' => 'Pembayaran', 'peran' => [self::M, self::FO, self::FB]],
-                ['label' => 'Piutang Instansi', 'peran' => [self::M]],
-                ['label' => 'Tagihan Bulanan', 'peran' => [self::M]],
-                ['label' => 'Pengingat Penagihan', 'peran' => [self::M]],
+                ['label' => 'Nota', 'route' => 'staf.keuangan.nota', 'gate' => 'view-finance'],
+                ['label' => 'Pembayaran', 'route' => 'staf.keuangan.pembayaran', 'gate' => 'view-finance'],
+                ['label' => 'Piutang Instansi', 'route' => 'staf.keuangan.piutang', 'gate' => 'manage-receivables'],
+                ['label' => 'Tagihan Bulanan', 'route' => 'staf.keuangan.tagihan-bulanan', 'gate' => 'manage-receivables'],
+                ['label' => 'Pengingat Penagihan', 'route' => 'staf.keuangan.pengingat', 'gate' => 'manage-receivables'],
             ]],
 
             // Semua staf operasional boleh melaporkan kerusakan; penanganannya diputuskan Manager
             ['label' => 'Maintenance', 'ikon' => 'maintenance', 'anak' => [
                 ['label' => 'Lapor Kerusakan', 'route' => 'staf.maintenance.lapor', 'gate' => 'report-damage'],
-                ['label' => 'Laporan Saya', 'route' => 'staf.maintenance.saya', 'gate' => 'report-damage'],
+                ['label' => 'Laporan Kerusakan', 'route' => 'staf.maintenance.saya', 'gate' => 'report-damage'],
                 ['label' => 'Penanganan', 'route' => 'staf.maintenance.index', 'gate' => 'manage-maintenance'],
                 ['label' => 'Jadwal Rutin', 'route' => 'staf.maintenance.jadwal', 'gate' => 'manage-maintenance'],
                 ['label' => 'Riwayat', 'route' => 'staf.maintenance.riwayat', 'gate' => 'manage-maintenance'],
             ]],
 
             ['label' => 'Pelanggan', 'ikon' => 'pelanggan', 'anak' => [
-                ['label' => 'Daftar Pelanggan', 'peran' => [self::M, self::FO]],
-                ['label' => 'Instansi', 'peran' => [self::M]],
-                ['label' => 'Riwayat Tamu', 'peran' => [self::M]],
+                ['label' => 'Daftar Pelanggan', 'route' => 'staf.pelanggan', 'gate' => 'view-customers'],
+                ['label' => 'Instansi', 'route' => 'staf.pelanggan.instansi', 'gate' => 'manage-institutions'],
+                ['label' => 'Riwayat Tamu', 'route' => 'staf.pelanggan.riwayat', 'gate' => 'manage-institutions'],
             ]],
 
             ['label' => 'Laporan', 'ikon' => 'laporan', 'anak' => [
-                ['label' => 'Pendapatan', 'slug' => 'laporan-pendapatan', 'peran' => [self::M]],
-                ['label' => 'Hunian', 'slug' => 'laporan-hunian', 'peran' => [self::M]],
-                ['label' => 'Pelanggan', 'slug' => 'laporan-pelanggan', 'peran' => [self::M]],
-                ['label' => 'Operasional', 'slug' => 'laporan-operasional', 'peran' => [self::M]],
+                ['label' => 'Pendapatan', 'route' => 'staf.laporan.pendapatan', 'gate' => 'view-reports'],
+                ['label' => 'Hunian', 'route' => 'staf.laporan.hunian', 'gate' => 'view-reports'],
+                ['label' => 'Pelanggan', 'route' => 'staf.laporan.pelanggan', 'gate' => 'view-reports'],
+                ['label' => 'Operasional', 'route' => 'staf.laporan.operasional', 'gate' => 'view-reports'],
             ]],
 
             ['label' => 'Data Master', 'ikon' => 'master', 'anak' => [
@@ -191,13 +193,23 @@ class MenuStaf
 
     private static function url(array $item): string
     {
-        return isset($item['route']) ? route($item['route']) : route('staf.segera', self::slug($item));
+        return isset($item['route']) ? route($item['route'], $item['params'] ?? []) : route('staf.segera', self::slug($item));
     }
 
     private static function aktif(array $item): bool
     {
         if (isset($item['route'])) {
-            return Route::currentRouteName() === $item['route'];
+            if (Route::currentRouteName() !== $item['route']) {
+                return false;
+            }
+            $cocok = fn (array $params) => collect($params)->every(fn ($v, $k) => (string) request()->query($k) === (string) $v);
+            if (isset($item['params'])) {
+                return $cocok($item['params']);
+            }
+
+            // Menu tanpa params tidak aktif bila menu lain dengan route yang sama dan params yang cocok sedang dibuka
+            return ! collect(self::definisi())->flatMap(fn ($g) => $g['anak'] ?? [$g])
+                ->contains(fn ($m) => ($m['route'] ?? null) === $item['route'] && isset($m['params']) && $cocok($m['params']));
         }
 
         return Route::currentRouteName() === 'staf.segera' && request()->route('slug') === self::slug($item);

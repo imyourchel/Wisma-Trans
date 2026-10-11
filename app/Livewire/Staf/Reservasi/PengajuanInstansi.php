@@ -8,6 +8,7 @@ use App\Models\Room;
 use App\Models\RoomType;
 use App\Services\KetersediaanKamar;
 use App\Services\NotifikasiReservasi;
+use App\Services\ProfilPelanggan;
 use App\Services\ReservasiService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -251,6 +252,9 @@ class PengajuanInstansi extends Component
             'hitung' => $hitung,
             'daftarInstansi' => Institution::orderBy('name')->pluck('name', 'id'),
             'bolehPutuskan' => Gate::allows('approve-reservations'),
+            // Pola rombongan instansi yang sudah pernah datang, untuk bahan keputusan Manager
+            'pola' => $r && $this->mode === 'setuju' && ctype_digit($this->instansi) && ($inst = Institution::find((int) $this->instansi))
+                ? ['pola' => app(ProfilPelanggan::class)->untukInstansi($inst), 'nama' => $inst->name] : null,
         ])->layout('components.layouts.staf', ['title' => 'Pengajuan Instansi']);
     }
 }

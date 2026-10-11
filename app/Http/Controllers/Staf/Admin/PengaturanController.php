@@ -33,6 +33,10 @@ class PengaturanController extends MasterController
         'Tagihan instansi' => [
             'reminder_days_before' => ['Pengingat tagihan mulai', 'hari sebelum jatuh tempo', 0, 60],
             'institution_letter_threshold' => ['Surat tagihan resmi untuk tagihan di atas', 'Rp', 0, 10000000000],
+            // Rekening tujuan yang tercetak di PDF tagihan bulanan dan surat tagihan (baris dari database/sql/2026-10-12-rekening-tagihan.sql)
+            'bank_name' => ['Bank rekening tujuan', 'teks', 0, 60],
+            'bank_account_number' => ['Nomor rekening', 'teks', 0, 40],
+            'bank_account_name' => ['Atas nama rekening', 'teks', 0, 100],
         ],
         'Restoran' => [
             'fnb_max_wait_minutes' => ['Batas tunggu pesanan makanan', 'menit', 1, 240],
@@ -59,8 +63,13 @@ class PengaturanController extends MasterController
         $aturan = [];
         foreach (self::KELOMPOK as $isi) {
             foreach ($isi as $kunci => [, , $min, $max]) {
-                $aturan[$kunci] = match ($settings[$kunci]?->type) {
+                // Baris yang belum ada di basis data (file SQL belum dijalankan) dilewati
+                if (! isset($settings[$kunci])) {
+                    continue;
+                }
+                $aturan[$kunci] = match ($settings[$kunci]->type) {
                     'time' => ['required', 'date_format:H:i'],
+                    'string' => ['nullable', 'string', "max:$max"],
                     'integer' => ['required', 'integer', "min:$min", "max:$max"],
                     default => ['required', 'numeric', "min:$min", "max:$max"],
                 };
@@ -71,7 +80,7 @@ class PengaturanController extends MasterController
         $diubah = 0;
         DB::transaction(function () use ($data, $settings, $request, &$diubah) {
             foreach ($data as $kunci => $nilai) {
-                $nilai = (string) $nilai;
+                $nilai = trim((string) $nilai);
                 if ($settings[$kunci]->value !== $nilai) {
                     $settings[$kunci]->update(['value' => $nilai, 'updated_by' => $request->user()->id]);
                     $diubah++;

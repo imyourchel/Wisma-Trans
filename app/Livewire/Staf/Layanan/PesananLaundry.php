@@ -11,6 +11,7 @@ use App\Services\WhatsAppService;
 use App\Support\Pelanggan;
 use App\Support\PersonName;
 use App\Support\Phone;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -31,6 +32,10 @@ class PesananLaundry extends Component
 
     #[Url(except: '')]
     public string $cari = '';
+
+    /** Tanggal masuk (Y-m-d) untuk tab Selesai dan Dibatalkan; kosong = semua tanggal */
+    #[Url(except: '')]
+    public string $tanggal = '';
 
     #[Locked]
     public ?int $selectedId = null;
@@ -63,6 +68,14 @@ class PesananLaundry extends Component
     public function mount(): void
     {
         Gate::authorize('view-laundry');
+    }
+
+    /** Papan Aktif selalu menampilkan semua cucian yang belum selesai, jadi saringan tanggal dilepas. */
+    public function updatedTab(): void
+    {
+        if ($this->tab === 'aktif') {
+            $this->tanggal = '';
+        }
     }
 
     public function open(int $id): void
@@ -216,10 +229,12 @@ class PesananLaundry extends Component
     public function render(): View
     {
         $kata = trim($this->cari);
+        $tanggal = $this->tab !== 'aktif' && strtotime($this->tanggal) !== false ? Carbon::parse($this->tanggal)->toDateString() : null;
         $status = ['aktif' => ['pending', 'in_progress', 'ready'], 'selesai' => ['delivered'], 'batal' => ['cancelled']][$this->tab] ?? ['pending', 'in_progress', 'ready'];
         $daftar = $this->pesanan()
             ->with(['items.service', 'invoice', 'customer', 'reservationRoom.room'])
             ->whereIn('status', $status)
+            ->when($tanggal, fn ($q) => $q->whereDate('order_date', $tanggal))
             ->when($kata !== '', fn ($q) => $q->where(fn ($q) => $q->where('order_code', 'like', "%{$kata}%")
                 ->orWhereHas('customer', fn ($c) => $c->where('full_name', 'like', "%{$kata}%"))
                 ->orWhereHas('reservationRoom.room', fn ($r) => $r->where('room_number', $kata))))
@@ -230,8 +245,10 @@ class PesananLaundry extends Component
 
         return view('livewire.staf.layanan.pesanan-laundry', [
             'daftar' => $daftar,
-            'jumlah' => $this->pesanan()->whereIn('status', ['pending', 'in_progress', 'ready'])->selectRaw('status, COUNT(*) n')->groupBy('status')->pluck('n', 'status'),
+            'jumlah' => $this->pesanan()->whereIn('status', ['pending', 'in_progress', 'ready'])->selectRaw('status, COUNT(*) n')->groupBy('status')->pluck('n', 'status')
+                ->put('delivered', $this->pesanan()->where('status', 'delivered')->whereDate('updated_at', today())->count()),
             'o' => $o,
+            'tanggalDipilih' => $tanggal ? Carbon::parse($tanggal) : null,
             'bolehKelola' => Gate::allows('manage-laundry'),
             'waUlang' => $o ? WhatsAppService::tautan($o->customer?->phone, app(NotifikasiLayanan::class)->teksLaundry($o)) : null,
             'kamarTerisi' => $this->formTerima ? $this->kamarTerisi() : collect(),

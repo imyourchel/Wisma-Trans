@@ -23,9 +23,14 @@
         sempit: window.innerWidth < 760,
         lihat: false,
         lupa: false,
+        // Halaman asal: setelah masuk/daftar (termasuk lewat Google) tamu kembali ke sini, misalnya formulir pesan kamar
+        kembali: location.href,
         get up() { return this.mode === 'daftar' },
-        buka(mode) {
+        buka(mode, kembali, hp) {
             this.mode = mode;
+            this.kembali = kembali || location.href;
+            // Ajakan setelah memesan: nomor WhatsApp pemesan langsung terisi
+            if (hp) this.$nextTick(() => window.dispatchEvent(new CustomEvent('isi-akun', { detail: { hp } })));
             this.lupa = false;
             this.open = true;
             this.$nextTick(() => this.fokus());
@@ -48,7 +53,7 @@
      }"
      x-init="if (new URLSearchParams(location.search).has('lupa')) { $nextTick(() => bukaLupa('')) } else if (open) { fokus() }"
      x-effect="document.body.style.overflow = open ? 'hidden' : ''"
-     @buka-akun.window="buka($event.detail.mode)"
+     @buka-akun.window="buka($event.detail.mode, $event.detail.kembali, $event.detail.hp)"
      @keydown.escape.window="open && tutup()"
      @resize.window="sempit = window.innerWidth < 760">
     <div x-show="open" x-cloak>
@@ -77,9 +82,10 @@
 
                             {{-- Dikirim lewat fetch: kata sandi salah tidak memuat ulang halaman --}}
                             <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-2.5" novalidate
-                                  x-data="formMasuk(@js(['login' => $errors->login->any() ? (string) old('login') : '', 'galat' => (string) $errors->login->first()]))"
+                                  x-data="formMasuk(@js(['login' => $errors->login->any() ? (string) old('login') : '', 'galat' => (string) $errors->login->first()]))" @isi-akun.window="isi.login = $event.detail.hp"
                                   @submit.prevent="kirim($el)" :class="goyang && 'wt-goyang'">
                                 @csrf
+                                <input type="hidden" name="kembali" :value="kembali">
                                 <label class="block flex-none">
                                     <span class="wt-field-label">Email atau nomor telepon</span>
                                     <span class="wt-line-field h-[42px]" :class="salah.login && 'is-invalid'">
@@ -112,7 +118,7 @@
                             </form>
 
                             <div class="flex flex-none items-center gap-3 text-xs text-ink-500"><span class="h-px flex-1 bg-cream-300"></span>atau<span class="h-px flex-1 bg-cream-300"></span></div>
-                            <a href="{{ route('auth.google') }}"
+                            <a href="{{ route('auth.google') }}" :href="@js(route('auth.google')) + '?kembali=' + encodeURIComponent(kembali)"
                                class="flex h-11 w-full flex-none items-center justify-center gap-2.5 rounded-[10px] border border-cream-300 bg-cream-50 text-sm font-medium text-ink-900 hover:border-[#D8CBB0] hover:bg-row-hover hover:text-ink-900 hover:no-underline">
                                 @include('partials.google-icon')
                                 Masuk dengan Google
@@ -178,8 +184,9 @@
                             {{-- Dikirim lewat fetch: bila ada yang salah, halaman tidak dimuat ulang dan isian tetap ada.
                                  Pesan galat tampil di samping label agar tinggi kartu tidak berubah. --}}
                             <form method="POST" action="{{ route('register.store') }}" class="flex flex-col gap-3" novalidate
-                                  x-data="formDaftar(@js($daftarAwal))" @submit.prevent="kirim($el)">
+                                  x-data="formDaftar(@js($daftarAwal))" @submit.prevent="kirim($el)" @isi-akun.window="isi.phone = $event.detail.hp">
                                 @csrf
+                                <input type="hidden" name="kembali" :value="kembali">
                                 <div class="flex flex-none flex-col gap-2.5">
                                     @foreach ([
                                         ['name', 'Nama lengkap', 'text', 'user-muted', 'Nama lengkap Anda', 'name', null],
@@ -216,7 +223,7 @@
 
                             {{-- Akun Google baru diarahkan melengkapi nomor telepon, lalu dibuat sebagai customer --}}
                             <div class="flex flex-none items-center gap-3 text-xs text-ink-500"><span class="h-px flex-1 bg-cream-300"></span>atau<span class="h-px flex-1 bg-cream-300"></span></div>
-                            <a href="{{ route('auth.google') }}"
+                            <a href="{{ route('auth.google') }}" :href="@js(route('auth.google')) + '?kembali=' + encodeURIComponent(kembali)"
                                class="flex h-10 w-full flex-none items-center justify-center gap-2.5 rounded-[10px] border border-cream-300 bg-cream-50 text-sm font-medium text-ink-900 hover:border-[#D8CBB0] hover:bg-row-hover hover:text-ink-900 hover:no-underline">
                                 @include('partials.google-icon')
                                 Daftar dengan Google

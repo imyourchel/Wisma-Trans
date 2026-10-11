@@ -182,7 +182,7 @@ class PerbaikanKamarMaintenanceTest extends TestCase
 
         // Tamu masih menginap: status kamar tidak diubah, tetapi laporan menahan kamar
         $this->lapor('204', $ac, tutup: true, tambahan: ['deskripsi' => 'AC tidak dingin'])->assertOk()
-            ->assertJsonPath('peringatan', 'Kamar sedang terisi. Status kamar tidak diubah; koordinasikan pindah kamar dengan Front Office.');
+            ->assertJsonPath('peringatan', 'Kamar sedang terisi. Status kamar tidak diubah. Front Office sudah diberi tahu lewat WhatsApp dan email untuk memindahkan tamu.');
         $this->assertSame(RoomStatus::OccupiedClean, $this->kamar('204')->status);
         $this->assertTrue($this->laporan('MNT-0001')->blocks_room);
 
@@ -209,7 +209,13 @@ class PerbaikanKamarMaintenanceTest extends TestCase
         $log = $kamar->statusLogs()->latest('id')->first();
         $this->assertSame(['MNT-0001: ditahan karena kerusakan belum selesai', $this->akun('hk')->id], [$log->note, $log->changed_by]);
 
-        // FO tidak bisa membuka kamar selama laporan belum selesai
+        // FO tidak bisa membuka kamar selama laporan belum selesai; pesan panjang tampil utuh di bawah pilihan, tidak terpotong
+        Livewire::actingAs($this->akun('fo'))->test(RoomStatusBoard::class)
+            ->call('open', $kamar->id)
+            ->set('status', 'available')
+            ->call('save')
+            ->assertHasErrors('status')
+            ->assertSeeHtml('<span class="mt-1.5 block text-xs font-medium leading-normal text-status-dirty" data-galat>Kamar 204 belum bisa dibuka karena masih ada laporan MNT-0001 (AC tidak dingin) yang belum selesai. Tutup laporannya dari Penanganan Maintenance.</span>');
         try {
             $status->change($kamar, RoomStatus::Available, null, $this->akun('fo'));
             $this->fail('Kamar seharusnya tidak bisa dibuka.');
@@ -257,6 +263,17 @@ class PerbaikanKamarMaintenanceTest extends TestCase
         } catch (ValidationException) {
             $this->assertSame(RoomStatus::Cleaning, $this->kamar('202')->status);
         }
+    }
+
+    public function test_P9_status_awal_laporan_bernama_belum_dikerjakan(): void
+    {
+        $this->lapor('105', 'lainnya')->assertOk();
+
+        $this->actingAs($this->akun('hk'))->get(route('staf.maintenance.saya'))->assertOk()
+            ->assertSee('Belum dikerjakan')->assertDontSee('Baru dilaporkan');
+        $this->actingAs($this->akun('manager'))->get(route('staf.maintenance.index'))->assertOk()
+            ->assertSee('Belum dikerjakan')->assertDontSee('Baru dilaporkan');
+        $this->actingAs($this->akun('manager'))->get(route('staf.dashboard'))->assertOk()->assertSee('Kerusakan belum dikerjakan');
     }
 
     /* ---------- 3 dan 4. Kamar yang sudah dipesan ---------- */
@@ -317,9 +334,9 @@ class PerbaikanKamarMaintenanceTest extends TestCase
         $this->pesan('RSV-0014', '105', '2026-10-08', '2026-10-10');   // lusa: tanpa peringatan
 
         $this->lapor('201', 'lainnya', tutup: true)->assertOk()
-            ->assertJsonPath('peringatan', 'Kamar 201 dijadwalkan untuk tamu RSV-0008 hari ini. Beri tahu Front Office untuk memindahkan kamar.');
+            ->assertJsonPath('peringatan', 'Kamar 201 dijadwalkan untuk tamu RSV-0008 hari ini. Front Office sudah diberi tahu lewat WhatsApp dan email untuk memindahkan tamu.');
         $this->lapor('112', 'lainnya', tutup: true)->assertOk()
-            ->assertJsonPath('peringatan', 'Kamar 112 dijadwalkan untuk tamu RSV-0013 besok. Beri tahu Front Office untuk memindahkan kamar.');
+            ->assertJsonPath('peringatan', 'Kamar 112 dijadwalkan untuk tamu RSV-0013 besok. Front Office sudah diberi tahu lewat WhatsApp dan email untuk memindahkan tamu.');
         $this->lapor('105', 'lainnya', tutup: true)->assertOk()->assertJsonPath('peringatan', null);
 
         foreach (['201', '112', '105'] as $nomor) {
@@ -338,7 +355,8 @@ class PerbaikanKamarMaintenanceTest extends TestCase
         $this->actingAs($this->akun('hk'))->get(route('staf.maintenance.lapor'))->assertOk()->assertSee('MNT-0001')->assertSee('Tetap kirim, kerusakannya berbeda');
 
         $this->lapor('105', $ac)->assertStatus(422)
-            ->assertJsonPath('errors.tetap_kirim.0', 'AC-105 sudah dilaporkan (MNT-0001) dan belum selesai. Centang "Tetap kirim" bila kerusakannya berbeda.');
+            ->assertJsonPath('errors.tetap_kirim.0', "AC-105 sudah punya laporan yang belum selesai:\n• MNT-0001 · \"Rusak\" · Rahmat, 6 Okt 10.00 · Belum dikerjakan\n"
+                .'Kalau kerusakan yang Anda temukan sama, tidak perlu dikirim. Kalau berbeda, centang "Tetap kirim".');
         $this->assertSame(1, MaintenanceRequest::count());
 
         $this->lapor('105', $ac, tambahan: ['tetap_kirim' => '1'])->assertOk();

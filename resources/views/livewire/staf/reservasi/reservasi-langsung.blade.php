@@ -27,6 +27,9 @@
                 </span>
             </div>
             @error('kamar')<p class="m-0 mt-2 text-xs font-medium text-status-dirty" role="alert">{{ $message }}</p>@enderror
+            @if ($peringatanKamar)
+                <p class="m-0 mt-2 rounded bg-[rgba(232,172,69,.14)] px-3 py-2 text-[13px] text-[#7A520C]" role="status" data-peringatan-kamar>{{ $peringatanKamar }}</p>
+            @endif
             @if (! $tanggalValid)
                 <p class="m-0 mt-3 text-[13px] text-ink-500">Pilih tanggal check-in dan check-out yang benar untuk melihat kamar kosong.</p>
             @else
@@ -63,8 +66,17 @@
             <h2 class="m-0 font-display text-[13px] font-bold uppercase tracking-[.06em]">3. Data tamu</h2>
             <div class="mt-3 grid gap-4 sm:grid-cols-2">
                 <x-staf.isian nama="nama" label="Nama pemesan" class="sm:col-span-2"><input type="text" wire:model="nama" maxlength="100" autocomplete="off" class="wt-input {{ $galat('nama') }}"></x-staf.isian>
-                <x-staf.isian nama="hp" label="Nomor HP / WhatsApp"><input type="tel" wire:model="hp" autocomplete="off" placeholder="08xxxxxxxxxx" class="wt-input {{ $galat('hp') }}"></x-staf.isian>
+                <x-staf.isian nama="hp" label="Nomor HP / WhatsApp"><input type="tel" wire:model.blur="hp" autocomplete="off" placeholder="08xxxxxxxxxx" class="wt-input {{ $galat('hp') }}"></x-staf.isian>
                 <x-staf.isian nama="email" label="Email (opsional)"><input type="email" wire:model="email" autocomplete="off" class="wt-input {{ $galat('email') }}"></x-staf.isian>
+                @if ($profil)
+                    <div class="flex flex-col gap-2 sm:col-span-2" data-pelanggan-lama>
+                        <div class="text-[13px]">Pelanggan terdaftar: <strong>{{ $pelanggan->full_name }}</strong></div>
+                        @include('livewire.staf.partials.kartu-profil-pelanggan', ['profil' => $profil, 'label' => \App\Services\ProfilPelanggan::labelBerikutnya($profil)])
+                        @if ($favoritBebas)
+                            <button type="button" wire:click="pilihKamar({{ $favoritBebas['id'] }})" class="wt-btn-sm h-9 self-start" data-pilih-favorit>Pilih Kamar {{ $favoritBebas['nomor'] }}</button>
+                        @endif
+                    </div>
+                @endif
                 <x-staf.isian nama="permintaan" label="Catatan (opsional)" class="sm:col-span-2"><input type="text" wire:model="permintaan" maxlength="500" class="wt-input {{ $galat('permintaan') }}"></x-staf.isian>
             </div>
             <p class="mb-0 mt-3 text-xs text-ink-500">Tamu yang nomornya sudah terdaftar memakai data pelanggan yang sama, jadi riwayatnya menyatu.</p>

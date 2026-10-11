@@ -5,6 +5,7 @@ namespace App\Http\Requests\Maintenance;
 use App\Models\FacilityUnit;
 use App\Models\MaintenanceRequest;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -28,15 +29,29 @@ class LaporRequest extends FormRequest
     }
 
     /**
-     * Kode laporan yang masih terbuka (baru atau sedang dikerjakan) per unit, untuk peringatan laporan ganda.
+     * Laporan yang masih terbuka (belum atau sedang dikerjakan) per unit, untuk peringatan laporan ganda.
+     * Deskripsi ikut ditampilkan supaya pelapor bisa menilai kerusakannya sama atau berbeda.
      *
-     * @return array<int, list<string>> id unit => kode laporan
+     * @return array<int, list<array{kode: string, deskripsi: string, pelapor: string, waktu: string, status: string}>>
      */
     public static function laporanTerbukaPerUnit(): array
     {
-        return MaintenanceRequest::whereNotNull('facility_unit_id')->whereIn('status', ['reported', 'in_progress'])
-            ->orderBy('reported_at')->get(['facility_unit_id', 'request_code'])
-            ->groupBy('facility_unit_id')->map(fn ($g) => $g->pluck('request_code')->all())->all();
+        return MaintenanceRequest::with('reporter:id,name')->whereNotNull('facility_unit_id')->whereIn('status', ['reported', 'in_progress'])
+            ->orderBy('reported_at')->orderBy('id')
+            ->get(['id', 'facility_unit_id', 'request_code', 'damage_description', 'reported_by', 'reported_at', 'status'])
+            ->groupBy('facility_unit_id')->map(fn ($g) => $g->map(fn ($l) => [
+                'kode' => $l->request_code,
+                'deskripsi' => Str::limit($l->damage_description, 80),
+                'pelapor' => Str::before((string) $l->reporter?->name, ' ') ?: '—',
+                'waktu' => $l->reported_at->translatedFormat('j M H.i'),
+                'status' => $l->labelStatus(),
+            ])->all())->all();
+    }
+
+    /** "• MNT-0006 · "AC tidak menyala" · Rahmat, 7 Okt 09.12 · Sedang dikerjakan" */
+    public static function barisLaporanTerbuka(array $l): string
+    {
+        return "• {$l['kode']} · \"{$l['deskripsi']}\" · {$l['pelapor']}, {$l['waktu']} · {$l['status']}";
     }
 
     /** Area umum yang punya unit fasilitas aktif. */
@@ -84,7 +99,9 @@ class LaporRequest extends FormRequest
             }
             $terbuka = self::laporanTerbukaPerUnit()[$unit->id] ?? [];
             if ($terbuka && ! $this->boolean('tetap_kirim')) {
-                $v->errors()->add('tetap_kirim', "{$unit->unit_label} sudah dilaporkan (".implode(', ', $terbuka).') dan belum selesai. Centang "Tetap kirim" bila kerusakannya berbeda.');
+                $v->errors()->add('tetap_kirim', "{$unit->unit_label} sudah punya laporan yang belum selesai:\n"
+                    .collect($terbuka)->map(fn ($l) => self::barisLaporanTerbuka($l))->implode("\n")
+                    ."\nKalau kerusakan yang Anda temukan sama, tidak perlu dikirim. Kalau berbeda, centang \"Tetap kirim\".");
             }
         }];
     }

@@ -11,6 +11,24 @@
         <div class="text-sm text-ink-500">{{ now()->translatedFormat('l, j F Y') }}</div>
     </div>
 
+    @if ($operasional)
+        <livewire:staf.dashboard-operasional />
+    @endif
+
+    @foreach (array_filter(['Layanan F&B' => $fnb ?? null, 'Housekeeping' => $housekeeping ?? null, 'Tugas Housekeeping' => $tugasSaya ?? null]) as $judulHk => $kartuHk)
+        <section aria-label="{{ $judulHk }}">
+            <h2 class="mb-2.5 mt-0 font-display text-sm font-bold uppercase tracking-[.08em]">{{ $judulHk }}</h2>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+                @foreach ($kartuHk as $k)
+                    <a href="{{ $k['url'] }}" class="wt-card block p-5 text-ink-900 hover:border-cream-400 hover:bg-row-hover hover:text-ink-900 hover:no-underline">
+                        <div class="text-xs font-semibold uppercase tracking-[.08em] text-ink-500">{{ $k['label'] }}</div>
+                        <div @class(['mt-1 font-display text-[28px] font-extrabold tabular-nums', 'text-status-dirty' => $k['awas']])>{{ $k['nilai'] }}</div>
+                    </a>
+                @endforeach
+            </div>
+        </section>
+    @endforeach
+
     @if ($maintenance)
         <section aria-labelledby="judul-mnt">
             <h2 id="judul-mnt" class="mb-2.5 mt-0 font-display text-sm font-bold uppercase tracking-[.08em]">Maintenance</h2>

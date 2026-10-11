@@ -23,6 +23,10 @@
                         @continue(! $s)
                         <x-staf.field :nama="$kunci" :label="$label">
                             <span class="flex items-center gap-2.5">
+                                @if ($s->type === 'string')
+                                    <input type="text" name="{{ $kunci }}" x-model="isi.{{ $kunci }}" @input="hapus('{{ $kunci }}')" maxlength="{{ $isi[$kunci][3] }}"
+                                           class="wt-input" :class="pesan('{{ $kunci }}') && 'is-invalid'">
+                                @else
                                 <span class="relative block w-[150px] flex-none">
                                     @if ($satuan === 'Rp')
                                         <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-500">Rp</span>
@@ -34,6 +38,7 @@
                                 </span>
                                 @if ($satuan !== 'Rp')
                                     <span class="text-[13px] leading-tight text-ink-500">{{ $satuan }}</span>
+                                @endif
                                 @endif
                             </span>
                         </x-staf.field>

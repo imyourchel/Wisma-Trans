@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Reservation;
+use App\Services\BuktiInstansi;
+use App\Services\FolioService;
 use App\Services\NotaPdf;
 use App\Services\PembayaranMidtrans;
 use App\Services\ReservasiService;
@@ -33,6 +35,8 @@ class ReservasiTamuController extends Controller
             'r' => $r,
             'title' => 'Reservasi '.$r->reservation_code,
             'tagihan' => $r->status === 'pending_payment' ? $this->midtrans->tagihanAktif($r) : null,
+            // Selama menginap tamu melihat tagihan berjalan, termasuk layanan yang ditagihkan ke kamar
+            'folio' => $r->status === 'checked_in' ? app(FolioService::class)->rincian($r) : null,
             'token' => $r->access_token,
             'bolehUbah' => $r->status === 'confirmed' && $this->reservasi->masihBolehDiubah($r) && $r->kamarBerlaku()->every(fn ($k) => $k->status === 'booked'),
             'bolehBatal' => $this->bolehBatal($r),
@@ -40,6 +44,8 @@ class ReservasiTamuController extends Controller
             // Nota bisa diunduh setelah ada pembayaran yang diterima
             'urlNota' => $r->stayInvoice && $r->stayInvoice->status !== 'cancelled' && (float) $r->stayInvoice->paid_amount > 0
                 ? app(NotaPdf::class)->tautan($r->stayInvoice) : null,
+            // Reservasi instansi yang disetujui: kode bukti untuk disebutkan di resepsionis, dan PDF-nya
+            'bukti' => BuktiInstansi::berlaku($r) ? ['url' => app(BuktiInstansi::class)->tautan($r)] : null,
         ]);
     }
 

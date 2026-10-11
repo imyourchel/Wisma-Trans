@@ -101,16 +101,16 @@ class LaundryAulaTest extends TestCase
         $this->assertSame('delivered', $o->fresh()->status);
     }
 
-    public function test_L02_tamu_menginap_lewat_kode_dan_token_ditagihkan_ke_kamar(): void
+    public function test_L02_tamu_menginap_lewat_kode_kamar_ditagihkan_ke_kamar(): void
     {
         $r = $this->tamuMenginap();
         $belum = app(ReservasiService::class)->buatLangsung(Customer::create(['full_name' => 'Dian Permata', 'phone' => '081388776655']),
             CarbonImmutable::parse('2026-10-20'), CarbonImmutable::parse('2026-10-21'), [$this->kamar('105')->id], $this->akun('fo'));
 
         Livewire::test(PesanLaundry::class)
-            ->set('kode', $belum->reservation_code)->set('token', $belum->token())->call('cocokkan')
-            ->assertHasErrors('kode')->assertSee('Laundry kamar hanya untuk tamu yang sedang menginap')
-            ->set('kode', strtolower($r->reservation_code))->set('token', $r->token())->call('cocokkan')
+            ->set('kodeKamar', $belum->token())->call('cariKamar')
+            ->assertHasErrors('kodeKamar')->assertSee('Kode ini hanya berlaku selama Anda menginap.')
+            ->set('kodeKamar', strtolower(str_replace('-', '', $r->token())))->call('cariKamar')
             ->assertHasNoErrors()->assertSee('Kamar 104')
             ->set('tagih', 'kamar')->set('catatan', 'Pisahkan pakaian putih')
             ->call('kirim')->assertHasNoErrors();
@@ -153,6 +153,28 @@ class LaundryAulaTest extends TestCase
             ->set('tanggal', $tanggal)->set('jamMulai', $mulai)->set('jamSelesai', $selesai)
             ->set('peserta', '120')->set('keperluan', 'Syukuran keluarga')->set('instansi', '')
             ->set('nama', 'Abdul Rahman')->set('hp', $hp)->call('kirim');
+    }
+
+    public function test_L04_riwayat_laundry_disaring_per_tanggal_masuk(): void
+    {
+        $hk = $this->akun('hk');
+        foreach (['2026-10-04 09:00:00' => ['Rina Marlina', '081377001100'], '2026-10-05 16:00:00' => ['Yosef Lado', '081377002200']] as $waktu => [$nama, $hp]) {
+            Carbon::setTestNow($waktu);
+            Livewire::actingAs($hk)->test(PesananLaundry::class)->call('bukaTerima')
+                ->set('jenisBaru', 'luar')->set('namaBaru', $nama)->set('hpBaru', $hp)->set('tagihBaru', 'sekarang')
+                ->call('terima')->assertHasNoErrors();
+        }
+        [$lama, $baru] = ServiceOrder::orderBy('order_date')->get()->all();
+        ServiceOrder::query()->update(['status' => 'delivered']);
+        Carbon::setTestNow('2026-10-06 10:00:00');
+
+        $t = Livewire::actingAs($hk)->test(PesananLaundry::class)->set('tab', 'selesai')
+            ->assertSee($lama->order_code)->assertSee($baru->order_code)
+            ->set('tanggal', '2026-10-05')->assertDontSee($lama->order_code)->assertSee($baru->order_code)->assertSee('Semua tanggal')
+            ->set('tanggal', '2026-10-01')->assertSee('Tidak ada cucian diserahkan yang masuk 1 Oktober 2026.');
+
+        // Papan Aktif tidak memakai saringan tanggal
+        $t->set('tab', 'aktif')->assertSet('tanggal', '')->assertDontSee('Semua tanggal');
     }
 
     public function test_A01_pengajuan_aula_tanpa_harga_dan_jadwal_bentrok_ditolak(): void
@@ -210,6 +232,13 @@ class LaundryAulaTest extends TestCase
             ->set('harga', '1500000')->set('instansi', (string) $vale->id)->call('setujui')->assertHasNoErrors();
         $b->refresh();
         $this->assertSame(['confirmed', null, $vale->id], [$b->status, $b->invoice_id, $b->customer->institution_id]);
+    }
+
+    public function test_A03b_data_penanggung_jawab_tidak_diisi_otomatis(): void
+    {
+        Livewire::actingAs($this->akun('customer'))->test(SewaAula::class)
+            ->assertSet('nama', '')->assertSet('email', '')->assertSet('hp', '')
+            ->assertSee('Orang yang dihubungi staf soal acara')->assertSee('Bila staf perlu menghubungi lewat email');
     }
 
     public function test_A04_kalender_kontak_dan_akses(): void

@@ -89,6 +89,10 @@
                             <textarea wire:model="alasan" rows="3" maxlength="200" placeholder="Contoh: hanya tersisa 7 kamar pada tanggal itu; silakan ajukan ulang dengan jumlah lebih sedikit" class="wt-input {{ $galat('alasan') }}"></textarea>
                         </x-staf.isian>
                     @else
+                        @if ($pola)
+                            @include('livewire.staf.partials.kartu-pola-rombongan', $pola)
+                        @endif
+
                         {{-- Instansi dan penagihan --}}
                         <section class="grid gap-4 sm:grid-cols-2">
                             <x-staf.isian nama="instansi" label="Instansi" tag="div">

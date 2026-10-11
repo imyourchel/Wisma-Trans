@@ -20,6 +20,7 @@ class PesananSayaController extends Controller
             'title' => 'Pesanan saya',
             'pesanan' => $semua,
             'jumlah' => $semua->countBy('keadaan')->put('semua', $semua->count()),
+            'kodeKamar' => PesananAkun::kodeKamar($request->user()),
         ]);
     }
 }

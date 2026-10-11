@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Contracts\BayarOnline;
+use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\ServiceOrder;
+use App\Models\User;
 use App\Support\Nomor;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
@@ -29,6 +31,16 @@ use Throwable;
  */
 class PembayaranMidtrans
 {
+    /** Penanda pada pembayaran asal yang membuat kelebihan bayar (bayar ganda, pesanan batal, QR lama). */
+    public const CATATAN_PERLU_REFUND = 'Pembayaran ganda/pesanan batal, perlu pengembalian dana';
+
+    /** Jumlah pengembalian dana yang masih menunggu (refund pending), sebatas nota yang boleh dilihat $user. */
+    public static function jumlahPerluRefund(?User $user = null): int
+    {
+        return Payment::where('transaction_type', 'refund')->where('status', 'pending')
+            ->when($user, fn ($q) => $q->whereHas('invoice', fn ($n) => $n->terlihatOleh($user)))->count();
+    }
+
     /** Metode yang ditawarkan: [nama, keterangan singkat]. */
     public const METODE = [
         'qris' => ['QRIS', 'GoPay, OVO, DANA, ShopeePay, LinkAja, dan m-banking'],
@@ -79,7 +91,8 @@ class PembayaranMidtrans
     public function buatTagihan(BayarOnline $x, string $metode): array
     {
         $lama = $this->tagihanAktif($x);
-        if ($lama && $lama['metode'] === $metode) {
+        // Dipakai ulang hanya bila jumlahnya masih sama; sisa nota bisa berubah setelah pembayaran lain
+        if ($lama && $lama['metode'] === $metode && $lama['jumlah'] === $x->jumlahBayar()) {
             return $lama;
         }
 
@@ -102,15 +115,26 @@ class PembayaranMidtrans
 
         $tagihan = ['metode' => $metode, 'order_id' => $idMidtrans, 'jumlah' => $jumlah, ...self::bacaHasil($hasil)];
         Cache::put(self::kunci($x, 'tagihan'), $tagihan, $x->batasBayar());
-        Cache::put(self::kunci($x, 'percobaan'), array_values(array_unique([
-            ...Cache::get(self::kunci($x, 'percobaan'), []), $idMidtrans,
-        ])), $x->batasBayar()->copy()->addDays(2));
+        $this->catatPercobaan($x, $idMidtrans, $jumlah);
 
         if ($lama) {
             $this->akhiri($lama['order_id']);
         }
 
         return $tagihan;
+    }
+
+    /**
+     * Ingat setiap percobaan bayar beserta jumlahnya. Status dari Midtrans dicocokkan dengan jumlah percobaan itu,
+     * bukan dengan sisa saat ini, karena sisa nota bisa berubah setelah tamu terlanjur membayar QR lama.
+     */
+    public function catatPercobaan(BayarOnline $x, string $idMidtrans, int $jumlah): void
+    {
+        $sampai = $x->batasBayar()->copy()->addDays(2);
+        Cache::put(self::kunci($x, 'percobaan'), array_values(array_unique([
+            ...Cache::get(self::kunci($x, 'percobaan'), []), $idMidtrans,
+        ])), $sampai);
+        Cache::put(self::kunci($x, 'jumlah'), [...Cache::get(self::kunci($x, 'jumlah'), []), $idMidtrans => $jumlah], $sampai);
     }
 
     /** Akhiri tagihan yang sedang berjalan, misalnya saat reservasi dibatalkan sebelum dibayar. */
@@ -178,13 +202,16 @@ class PembayaranMidtrans
         $x = match (true) {
             (bool) preg_match('/^WT-ORD(\d{4})(\d{2})-(\d{4})-/', $id, $m) => ServiceOrder::with('invoice')->where('order_code', "ORD/{$m[1]}/{$m[2]}/{$m[3]}")->first(),
             (bool) preg_match('/^WT-RSV(\d{4,})-DP-/', $id, $m) => Reservation::with('stayInvoice')->where('reservation_code', 'RSV-'.$m[1])->first(),
+            (bool) preg_match('/^WT-INV(\d{4})(\d{2})(\d{4})-/', $id, $m) => Invoice::where('invoice_number', "INV/{$m[1]}/{$m[2]}/{$m[3]}")->first(),
             default => null,
         };
         if (! $x || ! $x->notaBayar()) {
             return null;
         }
-        // Jumlah harus sama dengan tagihan; transaksi yang jumlahnya lain bukan milik data ini
-        if (isset($st['gross_amount']) && (int) round((float) $st['gross_amount']) !== $x->jumlahBayar()) {
+        // Jumlah harus sama dengan tagihan; transaksi yang jumlahnya lain bukan milik data ini.
+        // Nota: dicocokkan dengan jumlah percobaan yang tercatat untuk order_id itu (sisa nota bisa sudah berubah)
+        $diharapkan = $x instanceof Invoice ? (Cache::get(self::kunci($x, 'jumlah'), [])[$id] ?? null) : $x->jumlahBayar();
+        if ($diharapkan === null || (isset($st['gross_amount']) && (int) round((float) $st['gross_amount']) !== $diharapkan)) {
             Log::warning('Status Midtrans diabaikan: jumlah tidak sesuai tagihan', ['order_id' => $id, 'jumlah' => $st['gross_amount'], 'tagihan' => $x->jumlahBayar()]);
 
             return null;
@@ -199,7 +226,7 @@ class PembayaranMidtrans
             default => 'failed',
         };
 
-        $baruBerhasil = DB::transaction(function () use ($x, $st, $hasil, $status) {
+        $baruBerhasil = DB::transaction(function () use ($x, $st, $hasil, $status, $diharapkan) {
             $nota = $x->notaBayar();
             $bayar = Payment::where('midtrans_order_id', $st['order_id'])->lockForUpdate()->first();
             // Pembayaran yang sudah berhasil tidak diubah lagi oleh notifikasi yang datang terlambat
@@ -211,12 +238,16 @@ class PembayaranMidtrans
                 'payment_code' => Nomor::pembayaran(),
                 'invoice_id' => $nota->id,
                 'transaction_type' => 'payment',
-                'payment_purpose' => $x instanceof Reservation ? 'down_payment' : 'service',
+                'payment_purpose' => match (true) {
+                    $x instanceof Reservation => 'down_payment',
+                    $x instanceof Invoice => 'settlement',
+                    default => 'service',
+                },
                 'channel' => 'online',
                 'midtrans_order_id' => $st['order_id'],
             ]);
             $bayar->fill([
-                'amount' => (float) ($st['gross_amount'] ?? $x->jumlahBayar()),
+                'amount' => (float) ($st['gross_amount'] ?? $diharapkan),
                 'method' => self::metode($st['payment_type'] ?? ''),
                 'status' => $hasil,
                 'midtrans_transaction_id' => $st['transaction_id'] ?? null,
@@ -224,9 +255,11 @@ class PembayaranMidtrans
                 'paid_at' => $hasil === 'success' ? ($st['settlement_time'] ?? $st['transaction_time'] ?? now()) : null,
             ])->save();
 
-            return $x instanceof Reservation
-                ? $this->terapkanReservasi($x, $bayar, $hasil)
-                : $this->terapkanPesanan($x, $hasil, $status);
+            return match (true) {
+                $x instanceof Reservation => $this->terapkanReservasi($x, $bayar, $hasil),
+                $x instanceof Invoice => $this->terapkanNota($x, $bayar, $hasil),
+                default => $this->terapkanPesanan($x, $bayar, $hasil, $status),
+            };
         });
 
         if ($baruBerhasil && $x instanceof Reservation) {
@@ -236,9 +269,21 @@ class PembayaranMidtrans
         return $x->fresh();
     }
 
-    private function terapkanPesanan(ServiceOrder $order, string $hasil, string $status): bool
+    private function terapkanPesanan(ServiceOrder $order, Payment $bayar, string $hasil, string $status): bool
     {
         if ($hasil === 'success') {
+            // Sudah lunas lewat jalur lain (misalnya tunai di kasir) atau pesanan sudah batal: uang tetap tercatat masuk
+            // (paid_amount bertambah, status nota batal tetap batal) dan kelebihannya masuk antrean pengembalian dana
+            if ($order->invoice->status === 'paid' || $order->status === 'cancelled' || $order->invoice->status === 'cancelled') {
+                $bayar->update(['note' => self::CATATAN_PERLU_REFUND]);
+                $nota = $order->invoice;
+                $nota->paid_amount = (float) $nota->paid_amount + (float) $bayar->amount;
+                app(NotaService::class)->hitungUlang($nota);
+                app(PembayaranService::class)->ajukanKelebihan($nota, ($order->status === 'cancelled' ? 'Pesanan batal ' : 'Pembayaran ganda ').$order->order_code.' lewat Midtrans', $bayar);
+                Log::warning('Pembayaran Midtrans untuk pesanan yang sudah lunas atau batal', ['pesanan' => $order->order_code, 'order_id' => $bayar->midtrans_order_id]);
+
+                return false;
+            }
             $order->invoice->update(['paid_amount' => $order->invoice->total_amount, 'status' => 'paid']);
 
             return true;
@@ -250,6 +295,30 @@ class PembayaranMidtrans
             $order->invoice->update(['status' => 'cancelled']);
             Cache::forget(self::kunci($order, 'tagihan'));
         }
+
+        return false;
+    }
+
+    /**
+     * Pelunasan nota lewat QRIS di meja check-out. Uang yang benar-benar masuk selalu dicatat sebesar gross_amount;
+     * bila membuat nota lebih bayar (misalnya QR lama dibayar setelah FO mencatat tunai), pembayaran ditandai
+     * perlu pengembalian dana dan selisihnya tampil sebagai kelebihan bayar.
+     */
+    private function terapkanNota(Invoice $nota, Payment $bayar, string $hasil): bool
+    {
+        if ($hasil !== 'success') {
+            return false;
+        }
+        $nota = Invoice::whereKey($nota->id)->lockForUpdate()->first();
+        $sisa = app(PembayaranService::class)->sisaTagihan($nota);
+        $nota->paid_amount = (float) $nota->paid_amount + (float) $bayar->amount;
+        app(NotaService::class)->hitungUlang($nota);
+        if ((float) $bayar->amount > $sisa || $nota->status === 'cancelled') {
+            $bayar->update(['note' => self::CATATAN_PERLU_REFUND]);
+            app(PembayaranService::class)->ajukanKelebihan($nota, 'QRIS terbayar melebihi sisa nota '.$nota->invoice_number, $bayar);
+            Log::warning('Pembayaran Midtrans membuat nota lebih bayar', ['nota' => $nota->invoice_number, 'order_id' => $bayar->midtrans_order_id]);
+        }
+        Cache::forget(self::kunci($nota, 'tagihan'));
 
         return false;
     }

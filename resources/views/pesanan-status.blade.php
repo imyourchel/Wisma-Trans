@@ -7,31 +7,46 @@
     $dibayar = $order->sudahDibayar();
     $batal = $order->status === 'cancelled';
     $ambil = $order->serving_type === 'take_away';
+    $antar = $order->serving_type === 'room_service';
+    // Tamu menginap yang menagihkan ke kamar: langsung diproses dapur tanpa menunggu pembayaran
+    $tagihKamar = $order->payment_mode === 'charge_to_room';
+    $nomorKamar = $order->reservationRoom?->room?->room_number;
+    $masukDapur = $dibayar || $tagihKamar;
     $bayarBerhasil = $order->invoice?->payments->firstWhere('status', 'success');
     $batasBayar = $order->batasBayar();
     // Belum dibayar: tamu memilih metode dan melihat nomor VA atau QRIS langsung di halaman ini
-    $siapBayar = ! $dibayar && ! $batal && PembayaranMidtrans::siap();
-    $total = (int) $order->invoice?->total_amount;
+    $siapBayar = ! $masukDapur && ! $batal && PembayaranMidtrans::siap();
+    $total = (int) ($order->invoice?->total_amount ?? $order->items->sum('subtotal'));
     $hp = $order->customer?->phone;
     $hpSamar = $hp ? substr($hp, 0, 4).str_repeat('•', max(0, strlen($hp) - 7)).substr($hp, -3) : '—';
 
     $urutan = ['pending' => 0, 'in_progress' => 1, 'ready' => 2, 'delivered' => 3];
-    $posisi = $batal ? -1 : ($dibayar ? $urutan[$order->status] ?? 0 : -1);
+    $posisi = $batal ? -1 : ($masukDapur ? $urutan[$order->status] ?? 0 : -1);
     $langkah = [
-        ['Dibayar', $dibayar ? 'Pembayaran diterima' : 'Menunggu pembayaran'],
+        $tagihKamar ? ['Dipesan', 'Masuk tagihan kamar'] : ['Dibayar', $dibayar ? 'Pembayaran diterima' : 'Menunggu pembayaran'],
         ['Disiapkan', 'Dapur menyiapkan pesanan'],
-        [$ambil ? 'Siap diambil' : 'Siap disajikan', $ambil ? 'Ambil di restoran' : 'Disajikan di meja Anda'],
+        match (true) {
+            $ambil => ['Siap diambil', 'Ambil di restoran'],
+            $antar => ['Siap diantar', 'Diantar ke kamar '.$nomorKamar],
+            default => ['Siap disajikan', 'Disajikan di meja Anda'],
+        },
         ['Selesai', 'Terima kasih'],
     ];
-    // Langkah ke-i selesai bila posisi pesanan sudah melewatinya (dibayar = langkah 0 selesai)
-    $selesai = fn ($i) => $dibayar && ($i === 0 || $posisi >= $i);
+    // Langkah ke-i selesai bila posisi pesanan sudah melewatinya (dibayar atau dipesan = langkah 0 selesai)
+    $selesai = fn ($i) => $masukDapur && ($i === 0 || $posisi >= $i);
 
     [$judul, $pesan, $warna] = match (true) {
+        $batal && ($tagihKamar || $dibayar) => ['Pesanan dibatalkan', 'Pesanan ini dibatalkan restoran. Hubungi resepsionis bila ada pertanyaan.', 'dirty'],
         $batal => ['Pesanan dibatalkan', 'Pembayaran tidak diterima sampai batas waktu. Silakan pesan ulang dari halaman Resto.', 'dirty'],
-        ! $dibayar => ['Menunggu pembayaran', 'Selesaikan pembayaran sebelum '.$batasBayar->format('H.i').' WITA. Pesanan diproses dapur setelah pembayaran berhasil.', 'maintenance'],
-        $order->status === 'ready' => [$ambil ? 'Pesanan Anda siap diambil di restoran' : 'Pesanan Anda siap disajikan', $ambil ? 'Tunjukkan kode pesanan ini kepada staf restoran.' : 'Staf kami segera mengantar pesanan ke meja Anda.', 'available'],
+        ! $masukDapur => ['Menunggu pembayaran', 'Selesaikan pembayaran sebelum '.$batasBayar->format('H.i').' WITA. Pesanan diproses dapur setelah pembayaran berhasil.', 'maintenance'],
+        $order->status === 'ready' => match (true) {
+            $ambil => ['Pesanan Anda siap diambil di restoran', 'Tunjukkan kode pesanan ini kepada staf restoran.', 'available'],
+            $antar => ['Pesanan Anda siap diantar', 'Staf kami segera mengantar pesanan ke kamar '.$nomorKamar.'.', 'available'],
+            default => ['Pesanan Anda siap disajikan', 'Staf kami segera mengantar pesanan ke meja Anda.', 'available'],
+        },
         $order->status === 'in_progress' => ['Pesanan sedang disiapkan', 'Dapur sedang menyiapkan pesanan Anda. Halaman ini diperbarui otomatis.', 'available'],
         $order->status === 'delivered' => ['Pesanan selesai', 'Terima kasih sudah memesan di Wisma Trans.', 'available'],
+        $tagihKamar => ['Pesanan diterima', 'Pesanan Anda masuk antrean dapur dan ditagihkan ke kamar '.$nomorKamar.'. Halaman ini diperbarui otomatis.', 'available'],
         default => ['Pembayaran berhasil', 'Pesanan Anda masuk antrean dapur. Halaman ini diperbarui otomatis.', 'available'],
     };
     $gaya = [
@@ -40,7 +55,7 @@
         'available' => 'border-[rgba(92,158,103,.35)] bg-[rgba(92,158,103,.10)] text-status-available',
     ][$warna];
     // Muat ulang otomatis hanya setelah dibayar, agar formulir bayar yang sedang diisi tidak hilang
-    $pantau = $dibayar && $order->status !== 'delivered';
+    $pantau = $masukDapur && ! $batal && $order->status !== 'delivered';
 @endphp
 
 <x-layouts.guest :title="$title">
@@ -57,7 +72,7 @@
             <div class="wt-eyebrow">Pesanan makanan</div>
             <h1 class="mb-0 mt-1.5 font-display text-2xl font-extrabold tracking-[.02em] tabular-nums">{{ $order->order_code }}</h1>
             <div class="mt-1 text-sm text-ink-500">
-                {{ $order->order_date->translatedFormat('l, j F Y · H.i') }} WITA · {{ ServiceOrder::SERVING[$order->serving_type] ?? $order->serving_type }}
+                {{ $order->order_date->translatedFormat('l, j F Y · H.i') }} WITA · {{ ServiceOrder::SERVING[$order->serving_type] ?? $order->serving_type }}@if ($nomorKamar) · Kamar {{ $nomorKamar }}@endif
             </div>
         </div>
         <button type="button" @click="salin()" class="inline-flex h-9 items-center gap-2 rounded-full border border-cream-300 bg-cream-50 px-4 text-[13px] text-brown-800 hover:bg-cream-200">
@@ -111,7 +126,7 @@
     @endif
 
     {{-- Garis waktu --}}
-    @unless ($batal || ! $dibayar)
+    @unless ($batal || ! $masukDapur)
         <ol class="mt-8 grid grid-cols-4 gap-2 p-0" aria-label="Tahapan pesanan">
             @foreach ($langkah as $i => [$nama, $ket])
                 @php $sudah = $selesai($i); $kini = ! $sudah && ($i === 0 ? ! $dibayar : $selesai($i - 1)); @endphp
@@ -159,18 +174,26 @@
         @endif
         <div class="flex items-baseline justify-between border-t border-cream-300 bg-cream-100 px-5 py-4">
             <span class="text-sm text-ink-500">Total</span>
-            <span class="font-display text-xl font-extrabold tabular-nums">{{ $rp($order->invoice?->total_amount) }}</span>
+            <span class="font-display text-xl font-extrabold tabular-nums">{{ $rp($total) }}</span>
         </div>
     </div>
 
     <dl class="mt-6 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
         <div><dt class="text-xs text-ink-500">Nama pemesan</dt><dd class="m-0 font-semibold">{{ $order->customer?->full_name }}</dd></div>
-        <div><dt class="text-xs text-ink-500">Nomor WhatsApp</dt><dd class="m-0 font-semibold tabular-nums">{{ $hpSamar }}</dd></div>
-        <div><dt class="text-xs text-ink-500">Nomor nota</dt><dd class="m-0 font-semibold tabular-nums">{{ $order->invoice?->invoice_number }}</dd></div>
+        @if ($nomorKamar)
+            <div><dt class="text-xs text-ink-500">Kamar</dt><dd class="m-0 font-semibold tabular-nums">Kamar {{ $nomorKamar }}</dd></div>
+        @else
+            <div><dt class="text-xs text-ink-500">Nomor WhatsApp</dt><dd class="m-0 font-semibold tabular-nums">{{ $hpSamar }}</dd></div>
+        @endif
+        @if ($order->invoice)
+            <div><dt class="text-xs text-ink-500">Nomor nota</dt><dd class="m-0 font-semibold tabular-nums">{{ $order->invoice->invoice_number }}</dd></div>
+        @endif
         <div>
             <dt class="text-xs text-ink-500">Pembayaran</dt>
             <dd class="m-0 font-semibold">
-                @if ($bayarBerhasil)
+                @if ($tagihKamar)
+                    Masuk tagihan kamar, dibayar saat check-out
+                @elseif ($bayarBerhasil)
                     {{ Payment::METHODS[$bayarBerhasil->method] ?? $bayarBerhasil->method }} · {{ $bayarBerhasil->paid_at?->format('H.i') }} WITA
                 @elseif ($batal)
                     Tidak dibayar
@@ -181,6 +204,8 @@
         </div>
     </dl>
     @endunless
+
+    <x-ajakan-akun :hp="$order->customer?->phone" class="mt-8" />
 
     <p class="mt-8 text-center text-xs text-ink-500">
         Simpan tautan halaman ini untuk memantau pesanan. Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.

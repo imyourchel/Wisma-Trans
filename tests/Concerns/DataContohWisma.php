@@ -6,6 +6,7 @@ use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -114,6 +115,52 @@ trait DataContohWisma
             ['room_id' => 19, 'status' => 'occupied_dirty', 'changed_by' => 10, 'changed_at' => '2026-10-06 09:30:00', 'note' => 'Tamu minta kamar dibersihkan'],
             ['room_id' => 12, 'status' => 'vacant_dirty', 'changed_by' => 3, 'changed_at' => '2026-10-06 09:40:00', 'note' => 'Check-out RSV-0010'],
         ]);
+    }
+
+    /**
+     * Kriteria Smart Cleaning (nama sesuai naskah) dan bobot AHP dari penelitian terdahulu, seperti di basis data utama.
+     * Matriks perbandingan: C1:C2 = 3, C1:C3 = 5, C2:C3 = 2.
+     */
+    protected function siapkanKriteriaAhp(): void
+    {
+        DB::table('cleaning_criteria')->insert([
+            ['id' => 1, 'code' => 'C1', 'name' => 'Waktu menuju check-in tamu berikutnya', 'attribute_type' => 'cost',
+                'description' => 'Menit sampai jam check-in tamu berikutnya; tanpa kedatangan hari ini = 1440', 'is_active' => 1],
+            ['id' => 2, 'code' => 'C2', 'name' => 'Status kamar', 'attribute_type' => 'benefit',
+                'description' => 'Kosong kotor = 3, terisi kotor = 2', 'is_active' => 1],
+            ['id' => 3, 'code' => 'C3', 'name' => 'Durasi kamar sudah kotor', 'attribute_type' => 'benefit',
+                'description' => 'Menit sejak kamar menjadi kotor (rooms.dirty_since)', 'is_active' => 1],
+        ]);
+        DB::table('ahp_sessions')->insert([
+            'id' => 1, 'session_name' => 'Bobot dari penelitian terdahulu', 'calculated_at' => '2026-09-01 08:00:00', 'lambda_max' => 3.003697,
+            'consistency_index' => 0.001848, 'random_index' => 0.58, 'consistency_ratio' => 0.003187, 'is_active' => 1,
+        ]);
+        DB::table('ahp_comparisons')->insert([
+            ['ahp_session_id' => 1, 'criteria_row_id' => 1, 'criteria_column_id' => 2, 'comparison_value' => 3],
+            ['ahp_session_id' => 1, 'criteria_row_id' => 1, 'criteria_column_id' => 3, 'comparison_value' => 5],
+            ['ahp_session_id' => 1, 'criteria_row_id' => 2, 'criteria_column_id' => 3, 'comparison_value' => 2],
+        ]);
+        DB::table('ahp_criteria_weights')->insert([
+            ['ahp_session_id' => 1, 'criteria_id' => 1, 'weight' => 0.647947],
+            ['ahp_session_id' => 1, 'criteria_id' => 2, 'weight' => 0.229871],
+            ['ahp_session_id' => 1, 'criteria_id' => 3, 'weight' => 0.122182],
+        ]);
+    }
+
+    /**
+     * Pengaturan tagihan instansi, termasuk rekening tujuan dari database/sql/2026-10-12-rekening-tagihan.sql,
+     * supaya tes PDF tidak bergantung pada file SQL yang dijalankan manual.
+     */
+    protected function siapkanSettingTagihan(): void
+    {
+        DB::table('settings')->insert([
+            ['setting_key' => 'reminder_days_before', 'value' => '3', 'type' => 'integer', 'description' => 'Pengingat tagihan mulai H-n'],
+            ['setting_key' => 'institution_letter_threshold', 'value' => '10000000', 'type' => 'decimal', 'description' => 'Ambang surat tagihan resmi'],
+            ['setting_key' => 'bank_name', 'value' => 'Bank BRI', 'type' => 'string', 'description' => 'Bank rekening tujuan'],
+            ['setting_key' => 'bank_account_number', 'value' => '0123-01-000456-30-1', 'type' => 'string', 'description' => 'Nomor rekening tujuan'],
+            ['setting_key' => 'bank_account_name', 'value' => 'Wisma Trans Malili', 'type' => 'string', 'description' => 'Atas nama rekening'],
+        ]);
+        Cache::forget('settings.all');
     }
 
     /** admin, manager, fo, fnb, hk, customer, atau fo_hk. */

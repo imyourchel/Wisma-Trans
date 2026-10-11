@@ -17,8 +17,19 @@
 @endphp
 
 <x-layouts.guest :title="$title">
-<div class="animate-wt-masuk" x-data="menuResto(@js($daftarGrup), @js($katalog), @js(['pemesan' => $pemesan, 'urlPesan' => route('resto.pesan'), 'bayarOnline' => $bayarOnline]))"
+<div class="animate-wt-masuk" x-data="menuResto(@js($daftarGrup), @js($katalog), @js(['pemesan' => $pemesan, 'urlPesan' => route('resto.pesan'), 'bayarOnline' => $bayarOnline,
+        'kamarTamu' => $kamarTamu, 'jenisAwal' => $jenisAwal, 'kodeGalat' => $kodeGalat,
+        'urlKodeKamar' => route('resto.kode-kamar'), 'urlLupakan' => route('resto.kode-kamar.lupakan')]))"
      x-effect="document.body.style.overflow = panel ? 'hidden' : ''">
+
+    {{-- Datang lewat tautan kode kamar --}}
+    @if ($kodeGalat)
+        <div class="bg-[rgba(212,81,74,.08)] px-4 py-2.5 text-center text-[13px] font-medium text-status-dirty" role="alert">{{ $kodeGalat }}</div>
+    @elseif ($jenisAwal === 'menginap' && $kamarTamu->isNotEmpty())
+        <div class="bg-[rgba(92,158,103,.1)] px-4 py-2.5 text-center text-[13px] font-medium text-status-available" role="status">
+            Kode kamar cocok · Kamar {{ $kamarTamu->pluck('nomor')->join(', ') }}. Pesanan bisa diantar dan ditagihkan ke kamar.
+        </div>
+    @endif
 
     {{-- Kepala halaman --}}
     <section class="relative isolate overflow-hidden bg-brown-900">
@@ -78,7 +89,7 @@
                 </div>
                 <div class="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible sm:px-0 lg:grid-cols-5">
                     @foreach ($terlaris as $i => $m)
-                        <article class="group flex w-[210px] flex-none snap-start flex-col overflow-hidden rounded-xl border border-cream-300 bg-cream-50 transition duration-300 hover:-translate-y-1 hover:border-cream-400 hover:shadow-wt-md sm:w-auto">
+                        <article @class(['group flex w-[210px] flex-none snap-start flex-col overflow-hidden rounded-xl border border-cream-300 bg-cream-50 transition duration-300 hover:-translate-y-1 hover:border-cream-400 hover:shadow-wt-md sm:w-auto', 'opacity-60' => $m->habis()])>
                             <div class="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(150deg,#F4EADB,#E6D3B3)]">
                                 @if ($foto = $m->fotoUrl())
                                     <img src="{{ $foto }}" alt="{{ $m->name }}" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105">
@@ -191,7 +202,7 @@
                             @endisset
                             <div class="mt-6 flex flex-col" :class="kata && 'mt-3!'">
                                 @foreach ($isi as $m)
-                                    <article x-show="cocok(@js(Str::lower($m->name.' '.$m->description)))" class="flex items-center gap-4 border-b border-cream-300/70 py-4 last:border-b-0">
+                                    <article x-show="cocok(@js(Str::lower($m->name.' '.$m->description)))" @class(['flex items-center gap-4 border-b border-cream-300/70 py-4 last:border-b-0', 'opacity-60' => $m->habis()])>
                                         @if ($foto = $m->fotoUrl())
                                             <img src="{{ $foto }}" alt="{{ $m->name }}" class="h-14 w-14 flex-none rounded-full object-cover" loading="lazy">
                                         @endif
@@ -306,6 +317,65 @@
         <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
             {{-- Langkah 1 --}}
             <div x-show="langkah === 1" class="flex flex-col gap-6">
+                {{-- Saran masuk paling atas: tamu luar (data pemesan) dan tamu menginap yang belum punya kamar (tanpa kode kamar) --}}
+                <div x-show="jenis === 'luar'">
+                    <x-tawaran-masuk :kembali="route('menu', ['lanjut' => 1])" manfaat="data pemesan terisi otomatis dan pesanan tersimpan di Pesanan saya" />
+                </div>
+                <div x-show="jenis === 'menginap' && !kamarList.length" x-cloak>
+                    <x-tawaran-masuk :kembali="route('menu', ['lanjut' => 1])" manfaat="kamar Anda langsung tampil tanpa kode kamar dan pesanan tersimpan di Pesanan saya" />
+                </div>
+
+                {{-- Tamu menginap memesan ke kamarnya dengan kode kamar; tamu luar membayar di muka --}}
+                <div data-isian="kamar">
+                    <div class="grid grid-cols-2 gap-1 rounded-lg border border-cream-300 bg-cream-100 p-1" role="radiogroup" aria-label="Jenis tamu">
+                        @foreach (['luar' => 'Saya tamu luar', 'menginap' => 'Saya tamu yang sedang menginap'] as $nilai => $label)
+                            <button type="button" role="radio" :aria-checked="jenis === '{{ $nilai }}'" @click="pilihJenis('{{ $nilai }}')"
+                                    class="min-h-10 rounded-md border-0 px-2.5 py-1.5 text-[13px] font-semibold leading-tight transition"
+                                    :class="jenis === '{{ $nilai }}' ? 'bg-brown-800 text-cream-50 shadow-wt-xs' : 'bg-transparent text-ink-500 hover:text-ink-900'">{{ $label }}</button>
+                        @endforeach
+                    </div>
+
+                    <div x-show="jenis === 'menginap'" x-cloak class="mt-3">
+                        {{-- Kamar terpilih --}}
+                        <template x-if="kamarDipilih">
+                            <div class="flex items-center gap-3 rounded-lg border border-[rgba(92,158,103,.4)] bg-[rgba(92,158,103,.08)] px-3.5 py-3">
+                                <svg class="flex-none text-status-available" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                                <span class="min-w-0 flex-1 text-sm font-semibold" x-text="'Kamar ' + kamarDipilih.nomor + ' · menginap sampai ' + kamarDipilih.keluar"></span>
+                                <button type="button" @click="gantiKamar()" class="border-0 bg-transparent p-0 text-[13px] font-semibold text-clay-600 hover:underline">Ganti</button>
+                            </div>
+                        </template>
+                        {{-- Beberapa kamar: pilih salah satu --}}
+                        <template x-if="!kamarDipilih && kamarList.length">
+                            <div>
+                                <div class="wt-field-label mb-2">Pilih kamar Anda</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="k in kamarList" :key="k.id">
+                                        <button type="button" @click="kamarId = k.id; delete galat.kamar"
+                                                class="h-10 rounded-full border border-cream-300 bg-cream-50 px-4 text-sm font-semibold hover:border-clay-500" x-text="'Kamar ' + k.nomor"></button>
+                                    </template>
+                                </div>
+                                <button type="button" @click="lupakanKode()" class="mt-2 border-0 bg-transparent p-0 text-xs text-ink-500 hover:underline">Pakai kode kamar lain</button>
+                            </div>
+                        </template>
+                        {{-- Belum ada kamar: ketik kode kamar --}}
+                        <template x-if="!kamarList.length">
+                            <form @submit.prevent="cocokkan()" novalidate>
+                                <label class="wt-field-label mb-1.5 block" for="kode-kamar">Kode kamar</label>
+                                <div class="flex gap-2">
+                                    <input id="kode-kamar" type="text" x-model="kodeIsian" @input="kodeGalat = null" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                                           placeholder="Contoh: LK7Q-2M9X" class="wt-input h-11 min-w-0 flex-1 uppercase tracking-[.08em] placeholder:normal-case placeholder:tracking-normal"
+                                           :class="kodeGalat && 'is-invalid'">
+                                    <button type="submit" :disabled="cocokkanProses" class="h-11 flex-none rounded border-0 bg-brown-800 px-4 text-[13px] font-semibold text-cream-50 hover:bg-brown-900 disabled:opacity-70"
+                                            x-text="cocokkanProses ? 'Mencocokkan…' : 'Cocokkan'">Cocokkan</button>
+                                </div>
+                                <span x-show="kodeGalat" x-text="kodeGalat" x-cloak class="mt-1.5 block text-xs font-medium text-status-dirty" role="alert"></span>
+                                <p class="mb-0 mt-1.5 text-xs leading-snug text-ink-500">Kode kamar ada di pesan WhatsApp saat check-in dan di halaman reservasi Anda.</p>
+                            </form>
+                        </template>
+                        <span x-show="galat.kamar" x-text="galat.kamar" x-cloak class="mt-1.5 block text-xs font-medium text-status-dirty" role="alert"></span>
+                    </div>
+                </div>
+
                 <div class="flex flex-col divide-y divide-cream-300 rounded-lg border border-cream-300">
                     <template x-for="b in daftar" :key="b.id">
                         <div class="px-3.5 py-3">
@@ -361,8 +431,8 @@
                         <span x-show="galat.serving_type" x-text="galat.serving_type" x-cloak class="text-[11px] font-medium text-status-dirty"></span>
                     </div>
                     <div class="grid grid-cols-2 gap-2.5">
-                        @foreach ([['take_away', 'Ambil di tempat', 'Dibungkus, diambil di restoran'], ['dine_in', 'Makan di tempat', 'Disajikan di restoran']] as [$nilai, $label, $ket])
-                            <label class="relative cursor-pointer rounded-lg border border-cream-300 p-3.5 transition hover:bg-row-hover has-[:checked]:border-clay-500 has-[:checked]:bg-[rgba(181,113,74,.07)]"
+                        @foreach ([['room_service', 'Antar ke kamar', 'Diantar staf ke kamar Anda'], ['take_away', 'Ambil di tempat', 'Dibungkus, diambil di restoran'], ['dine_in', 'Makan di tempat', 'Disajikan di restoran']] as [$nilai, $label, $ket])
+                            <label @if ($nilai === 'room_service') x-show="jenis === 'menginap'" x-cloak @endif class="relative cursor-pointer rounded-lg border border-cream-300 p-3.5 transition hover:bg-row-hover has-[:checked]:border-clay-500 has-[:checked]:bg-[rgba(181,113,74,.07)]"
                                    :class="galat.serving_type && 'border-status-dirty'">
                                 <input type="radio" name="serving_type" value="{{ $nilai }}" x-model="isi.serving_type" @change="delete galat.serving_type" class="peer sr-only">
                                 <span class="absolute right-3 top-3 h-4 w-4 rounded-full border border-cream-400 peer-checked:border-[5px] peer-checked:border-clay-500"></span>
@@ -381,12 +451,30 @@
 
             {{-- Langkah 2 --}}
             <div x-show="langkah === 2" x-cloak class="flex flex-col gap-4">
+                {{-- Keranjang tersimpan di peramban; setelah masuk panel pesanan dibuka lagi (?lanjut) --}}
+                {{-- Tamu menginap: pemesan = pemesan reservasi, tinggal memilih cara bayar --}}
+                <template x-if="jenis === 'menginap'">
+                    <fieldset class="m-0 min-w-0 border-0 p-0">
+                        <legend class="wt-field-label mb-2 p-0">Pembayaran</legend>
+                        <div class="flex flex-col gap-2">
+                            @foreach ([['kamar', 'Masuk tagihan kamar', 'Dibayar saat check-out. Pesanan langsung diproses dapur.'], ['sekarang', 'Bayar sekarang', 'Virtual account atau QRIS']] as [$nilai, $label, $ket])
+                                <label class="relative cursor-pointer rounded-lg border border-cream-300 p-3.5 transition hover:bg-row-hover has-[:checked]:border-clay-500 has-[:checked]:bg-[rgba(181,113,74,.07)]">
+                                    <input type="radio" name="tagih" value="{{ $nilai }}" x-model="tagih" class="peer sr-only">
+                                    <span class="absolute right-3 top-3.5 h-4 w-4 rounded-full border border-cream-400 peer-checked:border-[5px] peer-checked:border-clay-500"></span>
+                                    <span class="block pr-6 text-sm font-semibold">{{ $label }}</span>
+                                    <span class="mt-0.5 block text-xs leading-snug text-ink-500">{{ $ket }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </fieldset>
+                </template>
+
                 @foreach ([
                     ['name', 'Nama pemesan', 'text', 'name', 'Nama Anda'],
                     ['phone', 'Nomor WhatsApp', 'tel', 'tel', 'Contoh: 081234567890'],
                     ['email', 'Email (opsional)', 'email', 'email', 'Untuk bukti pembayaran'],
                 ] as [$f, $label, $type, $auto, $ph])
-                    <label class="block">
+                    <label class="block" x-show="jenis === 'luar'">
                         <span class="wt-field-label mb-1.5 block">{{ $label }}</span>
                         <input type="{{ $type }}" x-model="isi.{{ $f }}" @input="delete galat.{{ $f }}" autocomplete="{{ $auto }}" placeholder="{{ $ph }}"
                                data-isian="{{ $f }}" class="wt-input h-11 text-[15px]" :class="galat.{{ $f }} && 'is-invalid'">
@@ -397,10 +485,11 @@
 
                 <div class="rounded-lg bg-cream-200 p-4 text-sm">
                     <div class="flex justify-between gap-3"><span class="text-ink-500">Pesanan</span><span class="font-semibold" x-text="totalItem + ' item'"></span></div>
-                    <div class="mt-1 flex justify-between gap-3"><span class="text-ink-500">Cara menikmati</span><span class="font-semibold" x-text="isi.serving_type === 'dine_in' ? 'Makan di tempat' : 'Ambil di tempat'"></span></div>
+                    <div class="mt-1 flex justify-between gap-3"><span class="text-ink-500">Cara menikmati</span><span class="font-semibold" x-text="{ dine_in: 'Makan di tempat', take_away: 'Ambil di tempat', room_service: 'Antar ke kamar' }[isi.serving_type]"></span></div>
+                    <div x-show="kamarDipilih && jenis === 'menginap'" class="mt-1 flex justify-between gap-3"><span class="text-ink-500">Kamar</span><span class="font-semibold" x-text="kamarDipilih?.nomor"></span></div>
                 </div>
                 {{-- Metode bayar: nomor VA atau QRIS langsung dibuat bersama pesanan --}}
-                <fieldset class="m-0 mt-1 min-w-0 border-0 p-0">
+                <fieldset x-show="perluBayar" class="m-0 mt-1 min-w-0 border-0 p-0">
                     <legend class="mb-2 flex w-full items-baseline justify-between gap-3 p-0">
                         <span class="wt-field-label">Metode pembayaran</span>
                         <span x-show="galat.metode" x-text="galat.metode" x-cloak class="text-[11px] font-medium text-status-dirty"></span>
@@ -434,7 +523,7 @@
                     class="h-12 w-full rounded border-0 bg-clay-500 font-display text-[13px] font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600">Lanjut</button>
             <button type="button" x-show="langkah === 2" x-cloak @click="bayar()" :disabled="proses"
                     class="h-12 w-full rounded border-0 bg-clay-500 font-display text-[13px] font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 disabled:cursor-wait disabled:opacity-70"
-                    x-text="proses ? 'Membuat pesanan…' : 'Bayar ' + rupiah(total)"></button>
+                    x-text="proses ? 'Membuat pesanan…' : (perluBayar ? 'Bayar ' : 'Pesan · ') + rupiah(total)"></button>
         </div>
     </aside>
 </div>
@@ -464,9 +553,72 @@
             ubahCatatan: null,
             panel: false,
             langkah: 1,
-            isi: { ...cfg.pemesan, serving_type: '', note: '', metode: metodeTerakhir() },
+            isi: { ...cfg.pemesan, serving_type: cfg.jenisAwal === 'menginap' ? 'room_service' : '', note: '', metode: metodeTerakhir() },
             galat: {},
             proses: false,
+
+            // Tamu menginap: kamar dari kode kamar (session) atau dari akun pemilik reservasi
+            jenis: cfg.jenisAwal,
+            kamarList: cfg.kamarTamu,
+            kamarId: cfg.kamarTamu.length === 1 ? cfg.kamarTamu[0].id : null,
+            kodeIsian: '',
+            kodeGalat: cfg.kodeGalat,
+            cocokkanProses: false,
+            tagih: 'kamar',
+            get kamarDipilih() { return this.kamarList.find((k) => k.id === this.kamarId) ?? null; },
+            get perluBayar() { return this.jenis === 'luar' || this.tagih === 'sekarang'; },
+            pilihJenis(j) {
+                this.jenis = j;
+                delete this.galat.kamar;
+                if (j === 'menginap' && !this.isi.serving_type) this.isi.serving_type = 'room_service';
+                if (j === 'luar' && this.isi.serving_type === 'room_service') this.isi.serving_type = '';
+            },
+            async kirimJson(url, body) {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                    },
+                    body: JSON.stringify(body),
+                });
+                return [res, await res.json().catch(() => ({}))];
+            },
+            async cocokkan() {
+                if (this.cocokkanProses) return;
+                if (!this.kodeIsian.trim()) { this.kodeGalat = 'Isi kode kamar.'; return; }
+                this.cocokkanProses = true;
+                try {
+                    const [res, data] = await this.kirimJson(cfg.urlKodeKamar, { kode_kamar: this.kodeIsian });
+                    if (res.ok) {
+                        this.kamarList = data.kamar;
+                        this.kamarId = data.kamar.length === 1 ? data.kamar[0].id : null;
+                        this.kodeIsian = '';
+                        delete this.galat.kamar;
+                    } else if (res.status === 419) {
+                        this.kodeGalat = 'Sesi Anda sudah berakhir. Muat ulang halaman, lalu coba lagi.';
+                    } else if (res.status === 429) {
+                        this.kodeGalat = 'Terlalu banyak percobaan. Tunggu sebentar, lalu coba lagi.';
+                    } else {
+                        this.kodeGalat = data.pesan || 'Kode kamar tidak cocok.';
+                    }
+                } catch {
+                    this.kodeGalat = 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
+                }
+                this.cocokkanProses = false;
+            },
+            gantiKamar() {
+                if (this.kamarList.length > 1) { this.kamarId = null; return; }
+                this.lupakanKode();
+            },
+            async lupakanKode() {
+                this.kamarId = null;
+                try {
+                    const [res, data] = await this.kirimJson(cfg.urlLupakan, {});
+                    if (res.ok) this.kamarList = data.kamar;
+                    else if (res.status === 419) Alpine.store('toasts').tampil('Sesi Anda sudah berakhir. Muat ulang halaman, lalu coba lagi.', '#D4514A');
+                } catch { this.kamarList = []; }
+            },
 
             jumlah(id) { return this.keranjang[id] || 0; },
             tambah(id) {
@@ -513,6 +665,10 @@
             tutupPanel() { if (!this.proses) { this.simpanCatatan(); this.panel = false; } },
             lanjut() {
                 this.simpanCatatan();
+                if (this.jenis === 'menginap' && !this.kamarDipilih) {
+                    this.galat = { ...this.galat, kamar: this.kamarList.length ? 'Pilih kamar Anda.' : 'Cocokkan kode kamar dulu.' };
+                    return;
+                }
                 if (!this.isi.serving_type) {
                     this.galat = { ...this.galat, serving_type: 'Pilih salah satu.' };
                     return;
@@ -524,16 +680,18 @@
             async bayar() {
                 if (this.proses) return;
                 const g = {};
-                const nama = this.isi.name.trim();
-                if (!nama) g.name = 'Wajib diisi.'; else if (nama.length < 3) g.name = 'Minimal 3 huruf.';
-                if (!this.isi.phone.trim()) g.phone = 'Wajib diisi.';
-                if (!this.isi.metode) g.metode = 'Pilih metode pembayaran.';
+                if (this.jenis === 'luar') {
+                    const nama = this.isi.name.trim();
+                    if (!nama) g.name = 'Wajib diisi.'; else if (nama.length < 3) g.name = 'Minimal 3 huruf.';
+                    if (!this.isi.phone.trim()) g.phone = 'Wajib diisi.';
+                }
+                if (this.perluBayar && !this.isi.metode) g.metode = 'Pilih metode pembayaran.';
                 this.galat = g;
                 if (Object.keys(g).length) {
                     this.$refs.panel.querySelector(`[data-isian="${Object.keys(g)[0]}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     return;
                 }
-                if (!cfg.bayarOnline) return Alpine.store('toasts').tampil('Pembayaran online belum tersedia. Silakan pesan langsung di restoran.', '#E8AC45');
+                if (this.perluBayar && !cfg.bayarOnline) return Alpine.store('toasts').tampil('Pembayaran online belum tersedia. Silakan pesan langsung di restoran.', '#E8AC45');
 
                 const gagal = (teks) => Alpine.store('toasts').tampil(teks, '#D4514A');
                 this.proses = true;
@@ -544,7 +702,13 @@
                             'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest',
                             'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
                         },
-                        body: JSON.stringify({ ...this.isi, items: this.daftar.map((b) => ({ id: b.id, qty: b.qty, note: b.note || null })) }),
+                        body: JSON.stringify({
+                            ...(this.jenis === 'luar' ? this.isi : {
+                                serving_type: this.isi.serving_type, note: this.isi.note, metode: this.tagih === 'sekarang' ? this.isi.metode : null,
+                                reservation_room_id: this.kamarId, tagih: this.tagih,
+                            }),
+                            items: this.daftar.map((b) => ({ id: b.id, qty: b.qty, note: b.note || null })),
+                        }),
                     });
                     const data = await res.json().catch(() => ({}));
 
@@ -553,7 +717,7 @@
                         const keStatus = () => {
                             this.keranjang = {}; this.catatan = {};
                             simpanan.tulis({}); simpananCatatan.tulis({});
-                            try { localStorage.setItem('wt.metode-bayar', this.isi.metode); } catch { /* mode privat */ }
+                            if (this.perluBayar) { try { localStorage.setItem('wt.metode-bayar', this.isi.metode); } catch { /* mode privat */ } }
                             window.location.href = data.status_url;
                         };
                         // Halaman pesanan langsung menampilkan nomor VA atau QRIS untuk metode yang dipilih
@@ -565,7 +729,8 @@
                         const pesan = {};
                         for (const [k, v] of Object.entries(data.errors)) pesan[k.split('.')[0]] ??= v[0];
                         if (pesan.items) gagal(pesan.items);
-                        if (pesan.serving_type) this.langkah = 1;
+                        if (pesan.serving_type || pesan.kamar) this.langkah = 1;
+                        if (pesan.kamar) { this.kamarId = null; this.kamarList = []; }
                         this.galat = pesan;
                     } else if (res.status === 422 && data.hapus) {
                         const k = { ...this.keranjang };
@@ -601,6 +766,14 @@
                 this.catatan = Object.fromEntries(Object.entries(simpananCatatan.baca())
                     .filter(([id, teks]) => this.keranjang[id] && typeof teks === 'string' && teks.trim()).map(([id, teks]) => [id, teks.trim().slice(0, 150)]));
                 this.$watch('catatan', (v) => simpananCatatan.tulis(v));
+
+                // Kembali dari masuk/daftar di tengah memesan: buka lagi panel pesanan, lalu rapikan alamat
+                const alamat = new URL(location.href);
+                if (alamat.searchParams.has('lanjut')) {
+                    alamat.searchParams.delete('lanjut');
+                    history.replaceState(null, '', alamat);
+                    if (Object.keys(this.keranjang).length) this.$nextTick(() => this.bukaPanel());
+                }
 
                 // Kategori aktif = kelompok terakhir yang judulnya sudah melewati bagian atas layar
                 // (di bawah navbar, dan di bawah bilah tab pada layar kecil)

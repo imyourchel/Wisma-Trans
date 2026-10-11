@@ -4,6 +4,7 @@
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
+@source '../../app/Support/GayaPesanan.php';
 
 /* Token Wisma Trans (lihat design system: tokens/colors.css, typography.css, motion.css) */
 @theme {

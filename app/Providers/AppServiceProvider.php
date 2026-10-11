@@ -38,17 +38,40 @@ class AppServiceProvider extends ServiceProvider
         // Laundry dikerjakan Housekeeping dan diterima juga di resepsionis (FO); Manager melihat
         Gate::define('view-laundry', fn (User $user) => $user->hasRole('manager', 'housekeeping', 'front_office'));
         Gate::define('manage-laundry', fn (User $user) => $user->hasRole('housekeeping', 'front_office'));
+        // F&B: dapur dan ketersediaan menu dikelola F&B; Manager hanya memantau; kasir dipegang F&B dan FO
+        Gate::define('view-fnb', fn (User $user) => $user->hasRole('manager', 'fnb'));
+        Gate::define('manage-fnb', fn (User $user) => $user->hasRole('fnb'));
+        Gate::define('take-fnb-order', fn (User $user) => $user->hasRole('fnb', 'front_office'));
         // Aula dicatat FO dan F&B; Manager menyetujui atau menolak
         Gate::define('view-halls', fn (User $user) => $user->hasRole('manager', 'front_office', 'fnb'));
         Gate::define('manage-halls', fn (User $user) => $user->hasRole('front_office', 'fnb'));
         Gate::define('approve-halls', fn (User $user) => $user->hasRole('manager'));
 
+        // Keuangan: Nota dan Pembayaran. F&B hanya melihat nota layanan makanan (Invoice::terlihatOleh);
+        // diskon, koreksi, pembatalan nota, dan menghanguskan refund hanya Manager
+        Gate::define('view-finance', fn (User $user) => $user->hasRole('manager', 'front_office', 'fnb'));
+        Gate::define('record-payment', fn (User $user) => $user->hasRole('front_office', 'fnb'));
+        Gate::define('approve-finance', fn (User $user) => $user->hasRole('manager'));
+        // Penagihan instansi: piutang, tagihan bulanan, dan pengingat hanya Manager
+        Gate::define('manage-receivables', fn (User $user) => $user->hasRole('manager'));
+        // Laporan Manager: pendapatan, hunian, pelanggan, operasional
+        Gate::define('view-reports', fn (User $user) => $user->hasRole('manager'));
+        // CRM: Daftar Pelanggan dan ubah kontak (Manager, FO; total belanja hanya Manager); Instansi dan Riwayat Tamu hanya Manager
+        Gate::define('view-customers', fn (User $user) => $user->hasRole('manager', 'front_office'));
+        Gate::define('manage-institutions', fn (User $user) => $user->hasRole('manager'));
+
         // Maintenance: semua staf operasional boleh melapor; penanganan, jadwal, dan riwayat hanya Manager. Admin tidak ikut.
         Gate::define('report-damage', fn (User $user) => $user->hasRole('manager', 'front_office', 'fnb', 'housekeeping'));
         Gate::define('manage-maintenance', fn (User $user) => $user->hasRole('manager'));
 
+        // Smart Cleaning (M6): Manager menghitung prioritas, mengatur ketersediaan staf, dan membagi tugas;
+        // staf Housekeeping mengerjakan tugasnya. Admin tidak ikut (hanya data master).
+        Gate::define('view-cleaning-priority', fn (User $user) => $user->hasRole('manager'));
+        Gate::define('manage-housekeeping', fn (User $user) => $user->hasRole('manager'));
+        Gate::define('do-housekeeping-task', fn (User $user) => $user->hasRole('housekeeping'));
+
         // Info wisma yang tampil di navbar, footer, dan beranda
-        View::composer(['components.layouts.guest', 'home', 'resto', 'pesanan-status', 'pesanan-saya', 'reservasi-status', 'cek-pesanan', 'instansi', 'livewire.tamu.pesan-kamar', 'pdf.nota', 'kontak', 'laundry-status', 'livewire.tamu.pesan-laundry', 'livewire.tamu.sewa-aula', 'livewire.tamu.daftar-kamar', 'livewire.tamu.detail-kamar', 'errors::404', 'errors.404'], function ($view) {
+        View::composer(['components.layouts.guest', 'home', 'resto', 'pesanan-status', 'pesanan-saya', 'reservasi-status', 'cek-pesanan', 'instansi', 'livewire.tamu.pesan-kamar', 'pdf.nota', 'pdf.tagihan-bulanan', 'pdf.surat-tagihan', 'kontak', 'laundry-status', 'livewire.tamu.pesan-laundry', 'livewire.tamu.sewa-aula', 'livewire.tamu.daftar-kamar', 'livewire.tamu.detail-kamar', 'errors::403', 'errors.403', 'errors::404', 'errors.404', 'errors::429', 'errors.429'], function ($view) {
             $view->with('wisma', [
                 'telepon' => '0822-9222-4111',
                 'whatsapp' => '6282292224111',

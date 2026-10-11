@@ -33,15 +33,15 @@ class CekPesananController extends Controller
             'token' => ['required', 'string', 'size:8'],
         ], [
             'kode.required' => 'Isi kode reservasi.',
-            'token.required' => 'Isi token dari pesan konfirmasi.',
-            'token.size' => 'Token terdiri dari 8 huruf dan angka.',
+            'token.required' => 'Isi kode kamar dari pesan konfirmasi.',
+            'token.size' => 'Kode kamar terdiri dari 8 huruf dan angka.',
         ]);
 
         // Kode tanpa tanda hubung juga diterima: RSV0016 menjadi RSV-0016
         $kode = preg_replace('/^RSV-?/', 'RSV-', $data['kode']);
         $r = Reservation::where('reservation_code', $kode)->first();
         if (! $r || ! $r->access_token || ! hash_equals($r->access_token, $data['token'])) {
-            throw ValidationException::withMessages(['kode' => 'Kode reservasi atau token tidak cocok. Periksa lagi pesan konfirmasi Anda.']);
+            throw ValidationException::withMessages(['kode' => 'Kode reservasi atau kode kamar tidak cocok. Periksa lagi pesan konfirmasi Anda.']);
         }
 
         return redirect($r->urlStatus());

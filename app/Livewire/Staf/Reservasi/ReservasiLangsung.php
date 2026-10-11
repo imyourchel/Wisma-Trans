@@ -2,10 +2,13 @@
 
 namespace App\Livewire\Staf\Reservasi;
 
+use App\Models\Customer;
+use App\Models\Room;
 use App\Models\RoomType;
 use App\Rules\EmailWajar;
 use App\Rules\NomorHp;
 use App\Services\KetersediaanKamar;
+use App\Services\ProfilPelanggan;
 use App\Services\ReservasiService;
 use App\Support\Pelanggan;
 use App\Support\PersonName;
@@ -16,6 +19,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Throwable;
 
@@ -46,20 +50,61 @@ class ReservasiLangsung extends Component
 
     public string $namaKtp = '';
 
+    /** Pesan bila kamar dari kalender (?kamar=) tidak tersedia pada tanggal itu. */
+    public string $peringatanKamar = '';
+
+    /** Pelanggan lama yang cocok dengan nomor HP (dicari saat isian HP ditinggalkan), untuk kartu rekomendasi CRM. */
+    #[Locked]
+    public ?int $pelangganLama = null;
+
+    /** Dari klik sel kosong di Kalender Ketersediaan: ?kamar={id}&masuk={Y-m-d} mengisi awal formulir. */
     public function mount(): void
     {
         Gate::authorize('manage-reservations');
         $this->masuk = today()->toDateString();
-        $this->keluar = today()->addDay()->toDateString();
+        $masuk = (string) request()->query('masuk', '');
+        // Tanggal yang tidak valid atau sudah lewat diabaikan
+        $m = $masuk !== '' ? rescue(fn () => CarbonImmutable::createFromFormat('!Y-m-d', $masuk), null, false) : null;
+        if ($m && $m->format('Y-m-d') === $masuk && ! $m->lt(today())) {
+            $this->masuk = $masuk;
+        }
+        $this->keluar = CarbonImmutable::parse($this->masuk)->addDay()->toDateString();
+
+        if ($id = request()->integer('kamar')) {
+            $room = Room::find($id);
+            [$m, $k] = $this->tanggal();
+            $bebas = $room && app(KetersediaanKamar::class)->kamarBebas($m, $k)->contains('id', $room->id);
+            if ($bebas) {
+                $this->kamar = [(string) $room->id];
+            } elseif ($room) {
+                $this->peringatanKamar = "Kamar {$room->room_number} tidak tersedia pada ".$m->translatedFormat('j M').', pilih kamar lain.';
+            }
+        }
     }
 
     public function updated(string $nama): void
     {
+        if ($nama === 'hp') {
+            $hp = Phone::normalizeInput($this->hp);
+            $this->pelangganLama = Phone::isValidMobile($hp) ? Customer::where('phone', $hp)->value('id') : null;
+
+            return;
+        }
         // Ganti tanggal: kamar yang sudah tidak tersedia dilepas dari pilihan
         if (in_array($nama, ['masuk', 'keluar'], true) && $this->tanggal()) {
             [$m, $k] = $this->tanggal();
             $bebas = app(KetersediaanKamar::class)->kamarBebas($m, $k)->pluck('id')->map(fn ($id) => (string) $id)->all();
             $this->kamar = array_values(array_intersect($this->kamar, $bebas));
+        }
+    }
+
+    /** Kamar favorit dari kartu rekomendasi: hanya ditambahkan bila FO menekan tombolnya dan kamarnya bebas. */
+    public function pilihKamar(int $id): void
+    {
+        Gate::authorize('manage-reservations');
+        $tgl = $this->tanggal();
+        if ($tgl && app(KetersediaanKamar::class)->kamarBebas($tgl[0], $tgl[1])->contains('id', $id) && ! in_array((string) $id, $this->kamar, true)) {
+            $this->kamar[] = (string) $id;
         }
     }
 
@@ -126,6 +171,9 @@ class ReservasiLangsung extends Component
         $sisa = $tgl ? $ketersediaan->sisa($tgl[0], $tgl[1]) : [];
         $malam = $tgl ? (int) $tgl[0]->diffInDays($tgl[1]) : 0;
         $dipilih = $bebas->whereIn('id', array_map('intval', $this->kamar));
+        $lama = $this->pelangganLama ? Customer::find($this->pelangganLama) : null;
+        $profil = $lama ? app(ProfilPelanggan::class)->untuk($lama) : null;
+        $favorit = $profil['kamar']['favorit'] ?? null;
 
         return view('livewire.staf.reservasi.reservasi-langsung', [
             'tipe' => $tipe,
@@ -136,6 +184,10 @@ class ReservasiLangsung extends Component
             'total' => $dipilih->sum(fn ($k) => (float) $tipe[$k->room_type_id]->base_price * $malam),
             'hariIni' => $this->masuk === today()->toDateString(),
             'tanggalValid' => $tgl !== null,
+            'pelanggan' => $lama,
+            'profil' => $profil,
+            // Diusulkan saja (tidak dicentang otomatis), dan hanya bila bebas pada tanggal yang diisi
+            'favoritBebas' => $favorit && $bebas->contains('id', $favorit['id']) && ! in_array((string) $favorit['id'], $this->kamar, true) ? $favorit : null,
         ])->layout('components.layouts.staf', ['title' => 'Reservasi Langsung']);
     }
 }

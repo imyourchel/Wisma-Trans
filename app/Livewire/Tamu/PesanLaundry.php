@@ -2,28 +2,26 @@
 
 namespace App\Livewire\Tamu;
 
-use App\Models\Reservation;
 use App\Models\ReservationRoom;
 use App\Rules\EmailWajar;
 use App\Rules\NomorHp;
+use App\Services\KodeKamar;
 use App\Services\LaundryService;
 use App\Services\NotifikasiLayanan;
 use App\Support\Pelanggan;
 use App\Support\PersonName;
 use App\Support\Phone;
-use App\Support\TokenAkses;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
  * Halaman /laundry: pesan laundry kiloan.
- *  - Tamu menginap: kamar dipilih dari reservasi yang sedang check-in (akun pemilik, atau kode reservasi + token).
+ *  - Tamu menginap: kamar dipilih dari reservasi yang sedang check-in (akun pemilik, atau kode kamar seperti di Resto).
  *  - Tamu luar: nama dan nomor WhatsApp, cucian diantar ke resepsionis.
  */
 class PesanLaundry extends Component
@@ -32,13 +30,8 @@ class PesanLaundry extends Component
     #[Url(except: 'menginap')]
     public string $jenis = 'menginap';
 
-    public string $kode = '';
-
-    public string $token = '';
-
-    /** Reservasi yang sudah dicocokkan lewat kode dan token (tamu tanpa akun). */
-    #[Locked]
-    public ?int $reservasiId = null;
+    /** Kode kamar (token akses reservasi), boleh huruf kecil dan dengan/tanpa tanda hubung */
+    public string $kodeKamar = '';
 
     public string $kamar = '';
 
@@ -63,10 +56,11 @@ class PesanLaundry extends Component
             $this->hp = $c?->phone ?? (string) $user->phone;
             $this->email = $c?->email ?? $user->email;
         }
-        if (request()->filled('t') && request()->filled('kode')) {
-            $this->kode = (string) request('kode');
-            $this->token = (string) request('t');
-            $this->cocokkan();
+        // Tautan ?t= langsung dicocokkan; tautan lama ?kode=&t= tetap diterima (bagian kode diabaikan).
+        // Kode yang sudah cocok di Resto (session) langsung memunculkan kamar.
+        if (request()->filled('t')) {
+            $this->kodeKamar = (string) request('t');
+            $this->cariKamar(app(KodeKamar::class));
         }
         $kamar = $this->kamarTersedia();
         if ($kamar->count() === 1) {
@@ -74,57 +68,34 @@ class PesanLaundry extends Component
         }
     }
 
-    /** Cocokkan kode reservasi dan token dari pesan konfirmasi. */
-    public function cocokkan(): void
+    /** Cari kamar dengan kode kamar (aturan dan batas percobaan sama dengan Resto). */
+    public function cariKamar(KodeKamar $kodeKamar): void
     {
-        $kunci = 'laundry-token:'.request()->ip();
-        if (RateLimiter::tooManyAttempts($kunci, 10)) {
-            $this->addError('kode', 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.');
+        try {
+            $kodeKamar->cocokkan($this->kodeKamar, (string) request()->ip());
+        } catch (ValidationException $e) {
+            $this->addError('kodeKamar', collect($e->errors())->flatten()->first());
 
             return;
         }
-        RateLimiter::hit($kunci, 300);
-
-        $kode = preg_replace('/^RSV-?/', 'RSV-', Str::upper(trim($this->kode)));
-        $token = TokenAkses::rapikan($this->token);
-        $r = Reservation::where('reservation_code', $kode)->first();
-        if (! $r || ! $r->access_token || $token === '' || ! hash_equals($r->access_token, $token)) {
-            $this->addError('kode', 'Kode reservasi atau token tidak cocok.');
-
-            return;
-        }
-        if ($r->status !== 'checked_in') {
-            $this->addError('kode', 'Laundry kamar hanya untuk tamu yang sedang menginap. Reservasi ini: '.Str::lower($r->label()).'.');
-
-            return;
-        }
-        $this->resetErrorBag('kode');
-        $this->reservasiId = $r->id;
+        $this->resetErrorBag('kodeKamar');
+        $this->kodeKamar = '';
         $kamar = $this->kamarTersedia();
         $this->kamar = $kamar->count() === 1 ? (string) $kamar->first()['id'] : '';
     }
 
-    public function lepas(): void
+    /** Ganti kode kamar: lupakan hasil cocok di session; kamar milik akun yang masuk tetap tampil. */
+    public function lepas(KodeKamar $kodeKamar): void
     {
-        $this->reset('reservasiId', 'kamar', 'kode', 'token');
+        $kodeKamar->lupakan();
+        $this->reset('kamar', 'kodeKamar');
     }
 
-    /** Kamar yang sedang ditempati: dari reservasi yang dicocokkan, atau semua reservasi aktif milik akun. */
     private function kamarTersedia()
     {
-        $q = Reservation::with(['rooms' => fn ($q) => $q->where('status', 'checked_in')->with('room'), 'customer'])->where('status', 'checked_in');
-        if ($this->reservasiId) {
-            $q->whereKey($this->reservasiId);
-        } elseif (Auth::check()) {
-            $q->whereHas('customer', fn ($c) => $c->where('user_id', Auth::id()));
-        } else {
-            return collect();
-        }
+        $kodeKamar = app(KodeKamar::class);
 
-        return $q->get()->flatMap(fn (Reservation $r) => $r->rooms->map(fn ($b) => [
-            'id' => $b->id, 'nomor' => $b->room?->room_number, 'kode' => $r->reservation_code, 'nama' => $r->customer?->full_name,
-            'keluar' => $b->check_out_date->translatedFormat('j M'),
-        ]))->values();
+        return $kodeKamar->kamarUntuk(Auth::user(), $kodeKamar->reservasiSesi());
     }
 
     public function kirim(LaundryService $laundry, NotifikasiLayanan $notifikasi)
@@ -147,7 +118,7 @@ class PesanLaundry extends Component
             'catatan' => ['nullable', 'string', 'max:200'],
         ], [
             'kamar.required' => 'Pilih kamar Anda.',
-            'kamar.in' => 'Kamar tidak ditemukan. Cocokkan kode reservasi dulu.',
+            'kamar.in' => 'Kamar tidak ditemukan. Cocokkan kode kamar dulu.',
             'nama.required' => 'Isi nama Anda.',
             'nama.min' => 'Minimal 3 huruf.',
             'nama.regex' => PersonName::MESSAGE,
@@ -160,6 +131,12 @@ class PesanLaundry extends Component
 
         if ($menginap) {
             $baris = ReservationRoom::with('reservation.customer')->findOrFail((int) $this->kamar);
+            // Periksa ulang: reservasi masih check-in dan memang hasil cocok kode kamar atau milik akun ini
+            if (! app(KodeKamar::class)->bolehMemakai(Auth::user(), $baris)) {
+                $this->addError('kamar', KodeKamar::TIDAK_BOLEH);
+
+                return null;
+            }
             $pemesan = $baris->reservation->customer;
         } else {
             $baris = null;
@@ -180,6 +157,7 @@ class PesanLaundry extends Component
         return view('livewire.tamu.pesan-laundry', [
             'layanan' => $layanan,
             'kamarTersedia' => $this->kamarTersedia(),
+            'dariKode' => app(KodeKamar::class)->reservasiSesi() !== null,
             'minKg' => LaundryService::MIN_KG,
         ])->layout('components.layouts.guest', ['title' => 'Laundry']);
     }

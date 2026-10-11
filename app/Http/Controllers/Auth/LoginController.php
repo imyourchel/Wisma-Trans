@@ -53,7 +53,9 @@ class LoginController extends Controller
         RateLimiter::clear($throttleKey);
         $request->session()->regenerate();
 
-        // Modal masuk mengirim lewat fetch: galat dijawab 422 tanpa memuat ulang halaman
+        // Modal masuk mengirim lewat fetch: galat dijawab 422 tanpa memuat ulang halaman.
+        // Tamu kembali ke halaman tempat modal dibuka (misalnya formulir pesan kamar).
+        $this->simpanKembali($request);
         $redirect = $this->redirectAfterLogin($request->user());
 
         return $request->expectsJson()

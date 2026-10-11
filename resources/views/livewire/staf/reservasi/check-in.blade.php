@@ -15,6 +15,42 @@
         <span wire:poll.60s class="ml-auto text-[12px] text-ink-500">Diperbarui {{ now()->format('H.i') }} WITA</span>
     </div>
 
+    {{-- Verifikasi bukti pemesanan instansi: kode bukti disebutkan atau ditunjukkan tamu, lalu diketik di sini --}}
+    <div class="wt-card mb-4 p-4" x-data x-on:fokus-kode-bukti.window="$nextTick(() => $refs.kodeBukti?.focus())">
+        <div class="flex flex-wrap items-end gap-3">
+            <div class="min-w-0 flex-[1_1_100%] sm:flex-[0_0_auto]">
+                <div class="font-display text-[13px] font-bold uppercase tracking-[.06em]">Verifikasi bukti instansi</div>
+                <p class="m-0 mt-0.5 text-xs text-ink-500">
+                    @if ($kodeUntuk)
+                        Untuk <span class="font-semibold text-ink-900">{{ $kodeUntuk }}</span> ·
+                        <button type="button" wire:click="lepasVerifikasi" class="border-0 bg-transparent p-0 text-xs font-semibold text-clay-600 hover:underline">reservasi lain</button>
+                    @else
+                        Ketik kode bukti yang disebutkan atau ditunjukkan tamu instansi.
+                    @endif
+                </p>
+            </div>
+            <form wire:submit="verifikasi" novalidate class="flex min-w-0 flex-1 flex-wrap items-end gap-3">
+                <x-staf.isian nama="kodeBukti" label="Kode bukti" class="w-[200px]">
+                    <input type="text" wire:model="kodeBukti" x-ref="kodeBukti" maxlength="12" placeholder="Contoh: LK7Q-2M9X" autocapitalize="characters" spellcheck="false" autocomplete="off"
+                           @class(['wt-input uppercase tabular-nums tracking-[.08em] placeholder:normal-case placeholder:tracking-normal', 'is-invalid' => $errors->has('kodeBukti')])>
+                </x-staf.isian>
+                <button type="submit" wire:loading.attr="disabled" wire:target="verifikasi" class="h-10 rounded border-0 bg-brown-800 px-4 text-[13px] font-semibold text-cream-50 hover:bg-brown-900 disabled:opacity-70">Verifikasi</button>
+            </form>
+        </div>
+
+        @if ($hasil)
+            <div @class(['mt-3 flex flex-wrap items-center gap-3 rounded-md border px-4 py-3 text-[13px]',
+                    'border-[rgba(92,158,103,.35)] bg-[rgba(92,158,103,.10)] text-ink-900' => $hasil['bisaCheckIn'],
+                    'border-[rgba(232,172,69,.45)] bg-[rgba(232,172,69,.12)] text-[#7A520C]' => $hasil['sah'] && ! $hasil['bisaCheckIn'],
+                    'border-[rgba(212,81,74,.35)] bg-[rgba(212,81,74,.06)] text-status-dirty' => ! $hasil['sah']]) role="status" data-hasil-bukti>
+                <span class="min-w-0 flex-1 font-semibold">{{ $hasil['pesan'] }}</span>
+                @if ($hasil['bisaCheckIn'] && $bolehKelola)
+                    <button type="button" wire:click="open({{ $hasil['id'] }})" class="h-9 rounded border-0 bg-clay-500 px-4 font-display text-xs font-bold text-cream-50 hover:bg-clay-600">Check-in</button>
+                @endif
+            </div>
+        @endif
+    </div>
+
     @if ($belumWaktunya)
         <p class="mb-4 rounded bg-[rgba(232,172,69,.14)] px-4 py-3 text-[13px] text-[#7A520C]">Check-in dibuka pukul {{ $jamCheckIn }} WITA. Tamu yang datang lebih awal bisa menunggu atau dititipkan barangnya.</p>
     @endif
@@ -55,7 +91,10 @@
                         @if ($nota) · sisa bayar <span class="font-semibold text-ink-900">{{ $rp(max(0, (float) $nota->total_amount - (float) $nota->paid_amount)) }}</span>@endif
                         @if ($x->special_request)<div class="mt-1 line-clamp-2 italic text-ink-900">“{{ $x->special_request }}”</div>@endif
                     </div>
-                    @if ($bolehKelola)
+                    @if ($bolehKelola && $x->instansi() && $buktiUntuk !== $x->id)
+                        {{-- Reservasi instansi: check-in hanya setelah bukti pemesanan dari PIC diverifikasi --}}
+                        <button type="button" wire:click="mulaiVerifikasi({{ $x->id }})" class="mt-3 h-10 rounded border border-brown-800 bg-transparent font-display text-xs font-bold text-brown-800 hover:bg-cream-200">Verifikasi bukti</button>
+                    @elseif ($bolehKelola)
                         <button type="button" wire:click="open({{ $x->id }})" class="mt-3 h-10 rounded border-0 bg-clay-500 font-display text-xs font-bold text-cream-50 hover:bg-clay-600">Proses check-in</button>
                     @endif
                 </div>
@@ -83,6 +122,14 @@
                             <x-staf.pilih model="$wire.penempatan[{{ $b->id }}]" :nilai="$penempatan[$b->id] ?? ''" label="Nomor kamar"
                                           :galat="$errors->has('kamar.'.$b->id) ? 'true' : null"
                                           :pilihan="['' => 'Pilih nomor kamar'] + ($pilihanKamar[$b->id] ?? [])" />
+                            @isset($usulan[$b->id])
+                                <span class="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-500" data-usulan>
+                                    <x-staf.ikon nama="bintang" ukuran="14" class="text-clay-500" /> Usulan: Kamar {{ $usulan[$b->id]['nomor'] }} (kamar favorit tamu)
+                                    @if (($penempatan[$b->id] ?? '') !== (string) $usulan[$b->id]['id'])
+                                        <button type="button" wire:click="$set('penempatan.{{ $b->id }}', '{{ $usulan[$b->id]['id'] }}')" class="border-0 bg-transparent p-0 text-xs font-semibold text-clay-600 hover:underline">Pakai</button>
+                                    @endif
+                                </span>
+                            @endisset
                         </x-staf.isian>
                     @endforeach
                     <p class="m-0 text-xs text-ink-500">Hanya kamar berstatus Siap yang bisa dipakai. Kamar yang belum siap perlu dibersihkan dulu oleh Housekeeping.</p>

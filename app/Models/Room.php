@@ -59,6 +59,11 @@ class Room extends Model
             ->orderBy('reported_at')->orderBy('id')->get();
     }
 
+    public function housekeepingTasks(): HasMany
+    {
+        return $this->hasMany(HousekeepingTask::class);
+    }
+
     public function reservationRooms(): HasMany
     {
         return $this->hasMany(ReservationRoom::class);

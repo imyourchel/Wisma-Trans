@@ -120,6 +120,10 @@ class AulaService
             }
             $b->save();
         });
+        // Instansi bayar di muka: nota langsung dibuat begitu disetujui (skema lain menunggu acara selesai)
+        if ($instansi) {
+            app(PiutangService::class)->buatNotaAula($b->fresh());
+        }
     }
 
     public function tolak(HallBooking $b, string $alasan): void

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Invoice;
 use App\Models\Reservation;
 use App\Notifications\PesanReservasi;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +16,7 @@ use Throwable;
  */
 class NotifikasiReservasi
 {
-    public function __construct(private WhatsAppService $wa, private NotaPdf $notaPdf) {}
+    public function __construct(private WhatsAppService $wa, private NotaPdf $notaPdf, private BuktiInstansi $bukti) {}
 
     private static function rp(float|int|string|null $n): string
     {
@@ -92,14 +93,116 @@ class NotifikasiReservasi
             .'Silakan pesan ulang bila masih ingin menginap: '.route('kamar'));
     }
 
+    /** Disetujui: bukti pemesanan (kode bukti) dikirim ke PIC. Ditolak: alasan dikirim lewat WhatsApp. */
     public function keputusanInstansi(Reservation $r, ?string $alasan = null): void
     {
+        if ($r->status === 'confirmed') {
+            $this->kirimBukti($r, disetujui: true);
+
+            return;
+        }
         $nama = Str::before($r->customer->full_name, ' ');
-        $this->kirimWa($r, $r->status === 'confirmed'
-            ? "Halo {$nama}, pengajuan reservasi {$r->reservation_code} disetujui. ".$r->kamarBerlaku()->count().' kamar, '
-                .$r->masuk()?->translatedFormat('j M').' – '.$r->keluar()?->translatedFormat('j M Y').".\nCek rincian: {$r->urlStatus()}"
-            : "Halo {$nama}, mohon maaf, pengajuan reservasi {$r->reservation_code} belum dapat kami terima".($alasan ? ": {$alasan}" : '.')
-                ."\nCek rincian: {$r->urlStatus()}");
+        $this->kirimWa($r, "Halo {$nama}, mohon maaf, pengajuan reservasi {$r->reservation_code} belum dapat kami terima".($alasan ? ": {$alasan}" : '.')
+            ."\nCek rincian: {$r->urlStatus()}");
+    }
+
+    /** Teks WhatsApp bukti pemesanan instansi, berisi tautan PDF bertanda tangan. */
+    public function teksBukti(Reservation $r, bool $disetujui = false): string
+    {
+        $r->loadMissing('rooms.roomType', 'customer', 'institution', 'request');
+        $nama = Str::before($r->customer->full_name, ' ');
+
+        return "Halo {$nama}, ".($disetujui ? "pengajuan reservasi {$r->reservation_code} disetujui." : "berikut bukti pemesanan {$r->reservation_code} dengan data terbaru.")."\n\n"
+            .($r->institution ? "{$r->institution->name}\n" : '')
+            .BuktiInstansi::ringkasKamar($r).', '.ReservasiService::rentang($r->masuk(), $r->keluar())."\n"
+            .'Check-in mulai pukul '.ReservasiService::jamCheckIn()." WITA.\n\n"
+            ."Kode bukti: {$r->kodeBukti()}\n"
+            ."Bukti pemesanan (PDF): {$this->bukti->tautan($r)}\n\n"
+            .'Teruskan kode ini kepada staf yang ditugaskan menginap. Sebutkan atau tunjukkan di resepsionis saat kedatangan.';
+    }
+
+    /** Kirim bukti ke PIC: WhatsApp berisi tautan PDF, email dengan PDF terlampir. PDF selalu dibuat dari data terbaru. */
+    public function kirimBukti(Reservation $r, bool $disetujui = false): void
+    {
+        if (! BuktiInstansi::berlaku($r)) {
+            return;
+        }
+        $r->loadMissing('rooms.roomType', 'customer', 'institution', 'request');
+        $this->kirimWa($r, $this->teksBukti($r, $disetujui));
+        $this->kirimEmail($r, ($disetujui ? 'Pengajuan disetujui, bukti pemesanan ' : 'Bukti pemesanan ').$r->reservation_code.' Wisma Trans', [
+            $disetujui ? 'Pengajuan reservasi instansi '.$r->reservation_code.' disetujui.' : 'Berikut bukti pemesanan '.$r->reservation_code.' dengan data terbaru.',
+            BuktiInstansi::ringkasKamar($r).', '.$r->masuk()?->translatedFormat('j F Y').' sampai '.$r->keluar()?->translatedFormat('j F Y')
+                .'. Check-in mulai pukul '.ReservasiService::jamCheckIn().' WITA.',
+            'Kode bukti: '.$r->kodeBukti().'. Bukti pemesanan kami lampirkan dalam bentuk PDF.',
+            'Teruskan kode ini kepada staf yang ditugaskan menginap. Sebutkan atau tunjukkan di resepsionis saat kedatangan.',
+        ], 'Lihat reservasi', fn () => [$this->bukti->isi($r), $this->bukti->namaBerkas($r)]);
+    }
+
+    /** Check-in berhasil: kode kamar dan tautan Resto untuk memesan makanan dan laundry ke kamar. Gagal kirim tidak membatalkan check-in. */
+    public function selamatDatang(Reservation $r): void
+    {
+        $r->loadMissing(['rooms' => fn ($q) => $q->where('status', 'checked_in')->with('room'), 'customer']);
+        $kamar = $r->rooms->map(fn ($b) => $b->room?->room_number)->filter()->join(', ');
+        $this->kirimWa($r, "Selamat datang di Wisma Trans. Kamar Anda: {$kamar}. "
+            ."Pesan makanan dan laundry ke kamar dengan kode kamar {$r->kodeKamar()}. "
+            ."Makanan: {$r->urlPesanMakanan()} · Laundry: {$r->urlPesanLaundry()}");
+    }
+
+    /** Check-out selesai: ucapan terima kasih dengan tautan nota PDF. Gagal kirim tidak membatalkan check-out. */
+    public function terimaKasih(Reservation $r): void
+    {
+        $r->loadMissing('customer', 'institution');
+        $folio = app(FolioService::class);
+        $nota = collect([$folio->notaMenginap($r), $folio->notaLayanan($r)])->filter()->values();
+        $nama = Str::before((string) $r->customer?->full_name, ' ');
+        $tautan = $nota->map(fn ($n) => 'Nota '.$n->invoice_number.': '.$this->notaPdf->tautan($n))->join("\n");
+        $kredit = $nota->contains('payment_term', 'credit') && $r->institution ? "\nTagihan dikirim ke {$r->institution->name}." : '';
+
+        $this->kirimWa($r, "Terima kasih telah menginap di Wisma Trans, {$nama}. Check-out {$r->reservation_code} sudah selesai.{$kredit}\n\n{$tautan}\n\nSampai jumpa kembali.");
+        $utama = $nota->first();
+        $this->kirimEmail($r, 'Terima kasih telah menginap, '.$r->reservation_code.' Wisma Trans', [
+            'Check-out '.$r->reservation_code.' sudah selesai. Terima kasih telah menginap di Wisma Trans.',
+            $utama ? 'Nota '.$utama->invoice_number.' kami lampirkan dalam bentuk PDF.' : null,
+            $kredit !== '' ? trim($kredit) : null,
+        ], 'Lihat reservasi', $utama ? fn () => [$this->notaPdf->isi($utama), $this->notaPdf->namaBerkas($utama)] : null);
+    }
+
+    /**
+     * Kirim ulang nota apa pun (menginap, layanan, aula) ke pelanggannya: WhatsApp berisi tautan PDF, email dengan PDF terlampir.
+     * Mengembalikan kanal yang dicoba (whatsapp, email).
+     *
+     * @return list<string>
+     */
+    public function kirimNota(Invoice $nota): array
+    {
+        $nota->loadMissing('customer');
+        $c = $nota->customer;
+        $kanal = [];
+        $teks = 'Halo '.Str::before((string) $c?->full_name, ' ').', berikut nota '.$nota->invoice_number.' Wisma Trans senilai '
+            .self::rp($nota->total_amount).".\n\nUnduh nota: ".$this->notaPdf->tautan($nota);
+        if ($c?->phone) {
+            try {
+                if ($this->wa->kirim($c->phone, $teks)) {
+                    $kanal[] = 'whatsapp';
+                }
+            } catch (Throwable $e) {
+                Log::warning('Kirim ulang nota lewat WhatsApp gagal', ['nota' => $nota->invoice_number, 'pesan' => $e->getMessage()]);
+            }
+        }
+        if ($c?->email) {
+            try {
+                Notification::route('mail', $c->email)->notify(new PesanReservasi(
+                    'Nota '.$nota->invoice_number.' Wisma Trans', 'Halo, '.Str::before($c->full_name, ' ').'.',
+                    ['Berikut nota '.$nota->invoice_number.' senilai '.self::rp($nota->total_amount).'. Nota kami lampirkan dalam bentuk PDF.'],
+                    'Unduh nota', $this->notaPdf->tautan($nota), [$this->notaPdf->isi($nota), $this->notaPdf->namaBerkas($nota)],
+                ));
+                $kanal[] = 'email';
+            } catch (Throwable $e) {
+                Log::warning('Kirim ulang nota lewat email gagal', ['nota' => $nota->invoice_number, 'pesan' => $e->getMessage()]);
+            }
+        }
+
+        return $kanal;
     }
 
     private function kirimWa(Reservation $r, string $teks): void

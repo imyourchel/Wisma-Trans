@@ -102,7 +102,7 @@ class HalamanReservasiTest extends TestCase
 
         $this->post(route('cek.cari'), ['kode' => 'rsv0001', 'token' => strtolower($r->token())])->assertRedirect($r->urlStatus());
         $this->from(route('cek'))->post(route('cek.cari'), ['kode' => 'RSV-0001', 'token' => 'AAAA-BBBB'])
-            ->assertRedirect(route('cek'))->assertSessionHasErrors(['kode' => 'Kode reservasi atau token tidak cocok. Periksa lagi pesan konfirmasi Anda.']);
+            ->assertRedirect(route('cek'))->assertSessionHasErrors(['kode' => 'Kode reservasi atau kode kamar tidak cocok. Periksa lagi pesan konfirmasi Anda.']);
 
         // Akun pemilik membuka dari Pesanan saya
         $akun = $this->akun('customer');

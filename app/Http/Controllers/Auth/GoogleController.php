@@ -26,7 +26,8 @@ class GoogleController extends Controller
 
     private const PENDING = 'google_pending';
 
-    public function redirect(): RedirectResponse
+    /** ?kembali=: halaman tamu asal, dituju lagi setelah masuk atau daftar lewat Google. */
+    public function redirect(Request $request): RedirectResponse
     {
         $kosong = array_keys(array_filter([
             'GOOGLE_CLIENT_ID' => blank(config('services.google.client_id')),
@@ -41,6 +42,8 @@ class GoogleController extends Controller
 
             return redirect()->route('home')->with('error', $pesan);
         }
+
+        $this->simpanKembali($request);
 
         return Socialite::driver('google')->redirect();
     }
@@ -157,7 +160,7 @@ class GoogleController extends Controller
         Auth::login($user, remember: true);
         $request->session()->regenerate();
 
-        return redirect()->intended(route('home'))->with('status', RegisterCustomer::message($linkedOrders));
+        return $this->redirectTamu(RegisterCustomer::message($linkedOrders));
     }
 
     public function cancel(Request $request): RedirectResponse

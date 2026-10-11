@@ -44,6 +44,8 @@ class LaundryService
         $kg = max(self::MIN_KG, round((float) ($perkiraanKg ?? self::MIN_KG), 1));
 
         return DB::transaction(function () use ($pemesan, $kamar, $tagihKeKamar, $kg, $catatan, $oleh, $layanan) {
+            // Periksa ulang dengan kunci: check-out yang berjalan bersamaan tidak boleh melewatkan pesanan ini
+            $kamar = $kamar ? ReservationRoom::kunciMenginap($kamar->id) : null;
             $order = ServiceOrder::create([
                 'order_code' => Nomor::pesanan(),
                 'access_token' => ServiceOrder::tokenBaru(),

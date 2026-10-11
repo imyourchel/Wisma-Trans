@@ -17,6 +17,8 @@
     $catatanTerakhir = $r->logs->where('event_type', 'status_change')->sortByDesc('id')->first()?->note;
     $jamMasuk = ReservasiService::jamCheckIn();
     $jamKeluar = str_replace(':', '.', substr((string) \App\Models\Setting::get('check_out_time', '12:00'), 0, 5));
+    // Kartu kode kamar (salin dan bagikan) untuk reservasi yang akan atau sedang menginap
+    $kartuKode = ! $bukti && $r->access_token && in_array($r->status, ['confirmed', 'checked_in'], true);
 
     [$judul, $pesan, $warna] = match ($r->status) {
         'pending_payment' => ['Menunggu uang muka', 'Bayar uang muka sebelum '.$r->dp_due_at->translatedFormat('j F Y, H.i').' WITA. Lewat dari itu reservasi dibatalkan otomatis.', 'maintenance'],
@@ -52,8 +54,9 @@
             <h1 class="mb-0 mt-1.5 font-display text-2xl font-extrabold tracking-[.02em] tabular-nums">{{ $r->reservation_code }}</h1>
             <div class="mt-1 text-sm text-ink-500">
                 Dipesan {{ $r->created_at->translatedFormat('l, j F Y · H.i') }} WITA
-                @if ($r->access_token)
-                    · Token <span class="font-semibold tabular-nums tracking-[.06em] text-ink-900">{{ $r->token() }}</span>
+                {{-- Kode kamar tampil sekali saja: di sini, atau di kartu kode di bawah (termasuk kode bukti instansi) --}}
+                @if ($r->access_token && ! $bukti && ! $kartuKode)
+                    · Kode kamar <span class="font-semibold tabular-nums tracking-[.06em] text-ink-900">{{ $r->token() }}</span>
                 @endif
             </div>
         </div>
@@ -101,6 +104,39 @@
             @if (in_array($r->status, ['cancelled', 'no_show', 'rejected'], true))
                 <div class="mt-4">
                     <a href="{{ $instansi ? route('instansi') : route('kamar') }}" class="inline-flex h-10 items-center rounded bg-clay-500 px-5 font-display text-xs font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">{{ $instansi ? 'Ajukan ulang' : 'Pesan lagi' }}</a>
+                </div>
+            @endif
+        </div>
+    @endif
+
+    {{-- Bukti pemesanan instansi: kode bukti untuk staf yang ditugaskan menginap --}}
+    @if ($bukti)
+        <div class="wt-card mt-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+            <x-kode-kamar :reservasi="$r" label="Kode bukti / kode kamar" besar class="flex-1">
+                <p class="mb-0 mt-2 text-sm leading-relaxed text-ink-900">Teruskan kode ini kepada staf yang ditugaskan menginap. Sebutkan atau tunjukkan di resepsionis saat kedatangan.</p>
+            </x-kode-kamar>
+            <div class="flex flex-none flex-col gap-2">
+                @if ($r->status === 'checked_in')
+                    <a href="{{ $r->urlPesanMakanan() }}" class="inline-flex h-9 items-center justify-center rounded-full bg-clay-500 px-4 text-[13px] font-semibold text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">Pesan makanan</a>
+                    <a href="{{ $r->urlPesanLaundry() }}" class="inline-flex h-9 items-center justify-center rounded-full border border-clay-500 px-4 text-[13px] font-semibold text-clay-600 hover:bg-[rgba(181,113,74,.08)] hover:no-underline">Pesan laundry</a>
+                @endif
+                <a href="{{ $bukti['url'] }}" target="_blank" rel="noopener" class="inline-flex h-9 items-center gap-2 rounded-full bg-brown-800 px-4 text-[13px] font-semibold text-cream-50 hover:bg-brown-900 hover:text-cream-50 hover:no-underline">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
+                    Unduh bukti (PDF)
+                </a>
+            </div>
+        </div>
+    @endif
+
+    @if ($kartuKode)
+        <div class="wt-card mt-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+            <x-kode-kamar :reservasi="$r" besar class="flex-1">
+                <p class="mb-0 mt-2 text-sm leading-relaxed text-ink-900">Pakai kode ini untuk memesan makanan dan laundry ke kamar selama menginap.</p>
+            </x-kode-kamar>
+            @if ($r->status === 'checked_in')
+                <div class="flex flex-none flex-col gap-2">
+                    <a href="{{ $r->urlPesanMakanan() }}" class="inline-flex h-10 items-center justify-center rounded-full bg-clay-500 px-5 text-[13px] font-semibold text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">Pesan makanan</a>
+                    <a href="{{ $r->urlPesanLaundry() }}" class="inline-flex h-10 items-center justify-center rounded-full border border-clay-500 px-5 text-[13px] font-semibold text-clay-600 hover:bg-[rgba(181,113,74,.08)] hover:no-underline">Pesan laundry</a>
                 </div>
             @endif
         </div>
@@ -156,13 +192,25 @@
                         <div class="flex justify-between"><dt class="text-ink-500">Uang muka</dt>
                             <dd class="m-0 tabular-nums">{{ $rp($r->dp_amount_required) }} · <span @class(['font-semibold', 'text-status-available' => $dpDibayar > 0, 'text-[#8A5E10]' => $dpDibayar <= 0])>{{ $dpDibayar > 0 ? 'dibayar' : 'belum dibayar' }}</span></dd></div>
                     @endif
-                    @if (in_array($r->status, ['pending_payment', 'confirmed', 'checked_in'], true))
+                    @if (in_array($r->status, ['pending_payment', 'confirmed'], true))
                         <div class="flex justify-between"><dt class="text-ink-500">Sisa dilunasi di resepsionis</dt><dd class="m-0 font-semibold tabular-nums">{{ $rp(max(0, (float) $nota->total_amount - (float) $nota->paid_amount)) }}</dd></div>
                     @endif
                 </dl>
             @endif
         @endif
     </div>
+
+    @if ($folio)
+        {{-- Tagihan berjalan selama menginap, supaya biaya tambahan tidak baru diketahui saat check-out --}}
+        <section class="mt-8" aria-labelledby="judul-tagihan">
+            <h2 id="judul-tagihan" class="m-0 font-display text-[15px] font-extrabold uppercase tracking-[.06em]">Tagihan sementara</h2>
+            <p class="mb-3 mt-1 text-xs text-ink-500">Kamar, pesanan yang ditagihkan ke kamar, dan pembayaran yang sudah kami terima. Dilunasi di resepsionis saat check-out.</p>
+            <x-tagihan-sementara :folio="$folio" class="bg-cream-50" />
+            @if ($folio['kredit'])
+                <p class="mb-0 mt-2 text-xs text-ink-500">{{ $folio['kredit'] }}</p>
+            @endif
+        </section>
+    @endif
 
     <dl class="mt-6 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
         <div><dt class="text-xs text-ink-500">{{ $instansi ? 'Narahubung' : 'Nama pemesan' }}</dt><dd class="m-0 font-semibold">{{ $r->customer?->full_name }}</dd></div>
@@ -225,8 +273,10 @@
         <p class="mt-8 text-sm text-ink-500">Perubahan tanggal atau pembatalan kurang dari {{ ReservasiService::hariMinimalBatal() + 1 }} hari sebelum kedatangan dilayani resepsionis.</p>
     @endif
 
+    <x-ajakan-akun :hp="$r->customer?->phone" class="mt-8" />
+
     <p class="mt-8 text-center text-xs text-ink-500">
-        Simpan tautan halaman ini, atau buka Cek pesanan dengan kode {{ $r->reservation_code }} dan token {{ $r->token() }}. Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.
+        Simpan tautan halaman ini, atau buka Cek pesanan dengan kode {{ $r->reservation_code }} dan {{ $bukti ? 'kode bukti di atas' : ($kartuKode ? 'kode kamar di atas' : 'kode kamar '.$r->token()) }}. Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.
     </p>
 </div>
 </x-layouts.guest>

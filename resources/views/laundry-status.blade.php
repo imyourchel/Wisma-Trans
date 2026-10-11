@@ -126,6 +126,8 @@
         </div>
     @endunless
 
+    <x-ajakan-akun :hp="$order->customer?->phone" class="mt-8" />
+
     <p class="mt-8 text-center text-xs text-ink-500">Simpan tautan halaman ini untuk memantau cucian. Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.</p>
 </div>
 </x-layouts.guest>

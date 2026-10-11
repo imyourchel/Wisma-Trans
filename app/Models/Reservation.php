@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Contracts\BayarOnline;
 use App\Support\TokenAkses;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -80,11 +81,14 @@ class Reservation extends Model implements BayarOnline
         return $this->hasMany(Invoice::class);
     }
 
-    /** Nota menginap; reservasi menginap panjang bisa punya beberapa (per periode), yang terbaru dipakai. */
+    /**
+     * Nota menginap utama (dibayar saat check-out). Nota periode menginap panjang instansi (period_start terisi)
+     * adalah nota terpisah dan tidak termasuk di sini.
+     */
     public function stayInvoice(): HasOne
     {
         // Syarat jenis harus di dalam ofMany: bila di luar, nota layanan yang lebih baru membuat hasilnya kosong
-        return $this->hasOne(Invoice::class)->ofMany(['id' => 'max'], fn ($q) => $q->where('invoice_type', 'stay'));
+        return $this->hasOne(Invoice::class)->ofMany(['id' => 'max'], fn ($q) => $q->where('invoice_type', 'stay')->whereNull('period_start'));
     }
 
     public function createdBy(): BelongsTo
@@ -130,10 +134,44 @@ class Reservation extends Model implements BayarOnline
         return TokenAkses::tampil($this->access_token);
     }
 
+    /** Kode bukti pemesanan instansi = token akses utuh (LK7Q-2M9X), disebutkan atau ditunjukkan di resepsionis. */
+    public function kodeBukti(): string
+    {
+        return $this->token();
+    }
+
+    /** Kode kamar untuk memesan makanan dan laundry selama menginap = token akses (LK7Q-2M9X). */
+    public function kodeKamar(): string
+    {
+        return $this->token();
+    }
+
+    /** Tautan Resto yang langsung mencocokkan kode kamar. */
+    public function urlPesanMakanan(): string
+    {
+        return route('menu', ['t' => $this->access_token]);
+    }
+
+    /** Tautan Laundry yang langsung mencocokkan kode kamar. */
+    public function urlPesanLaundry(): string
+    {
+        return route('laundry', ['t' => $this->access_token]);
+    }
+
     /** Alamat cek pesanan yang dikirim lewat WhatsApp dan email (berisi token akses). */
     public function urlStatus(): string
     {
         return route('reservasi.status', ['kode' => $this->reservation_code, 't' => $this->access_token]);
+    }
+
+    /**
+     * Daftar Check-in: reservasi confirmed yang punya kamar booked dengan masa menginap mencakup hari ini
+     * (termasuk tamu yang dijadwalkan masuk hari sebelumnya dan belum datang). Dipakai juga kartu Dashboard.
+     */
+    public function scopeMenungguCheckIn(Builder $q): Builder
+    {
+        return $q->where('status', 'confirmed')->whereHas('rooms', fn ($b) => $b->where('status', 'booked')
+            ->where('check_in_date', '<=', today()->toDateString())->where('check_out_date', '>', today()->toDateString()));
     }
 
     public function instansi(): bool

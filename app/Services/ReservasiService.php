@@ -14,6 +14,7 @@ use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\SmartCleaning\TugasHousekeepingService;
 use App\Support\Nomor;
 use App\Support\TokenAkses;
 use Carbon\CarbonImmutable;
@@ -329,6 +330,13 @@ class ReservasiService
             };
             $this->akhiri($r, 'cancelled', $alasan.($keterangan ? '; '.$keterangan : ''), $oleh,
                 'Dibatalkan'.($keterangan ? '; '.$keterangan : ''));
+            // Uang muka yang kembali masuk antrean pengembalian dana (menu Keuangan > Pembayaran)
+            if ($kembali > 0 && $nota = $r->invoices()->where('invoice_type', 'stay')->orderByDesc('id')->first()) {
+                $asal = Payment::where('invoice_id', $nota->id)->where('payment_purpose', 'down_payment')
+                    ->where('transaction_type', 'payment')->where('status', 'success')->orderBy('id')->first();
+                app(PembayaranService::class)->ajukanRefund($nota, $kembali,
+                    "Reservasi {$r->reservation_code} dibatalkan, uang muka kembali ".self::persenPengembalian().'%', $asal);
+            }
         });
 
         return $kembali;
@@ -389,13 +397,20 @@ class ReservasiService
      * Check-in pada hari kedatangan mulai check_in_time. Nomor kamar ditetapkan untuk baris yang belum punya,
      * kamar harus berstatus Siap; status kamar menjadi Terisi lewat RoomStatusService.
      *
+     * Reservasi instansi hanya bisa check-in dengan bukti pemesanan yang cocok ($bukti = access_token hasil verifikasi
+     * kode bukti), supaya jatah instansi tidak dipakai orang yang tidak ditugaskan.
+     *
      * @param  array<int, int>  $penempatan  id baris reservasi => id kamar
      */
-    public function checkIn(Reservation $r, array $penempatan, bool $ktpDitahan, ?string $namaKtp, User $oleh): void
+    public function checkIn(Reservation $r, array $penempatan, bool $ktpDitahan, ?string $namaKtp, User $oleh, ?string $bukti = null): void
     {
         $r->loadMissing('rooms');
         if ($r->status !== 'confirmed') {
             throw ValidationException::withMessages(['status' => 'Hanya reservasi terkonfirmasi yang bisa check-in.']);
+        }
+        $instansi = $r->instansi();
+        if ($instansi && ! ($bukti && $r->access_token && hash_equals((string) $r->access_token, $bukti))) {
+            throw ValidationException::withMessages(['status' => 'Reservasi instansi hanya bisa check-in setelah bukti pemesanan diverifikasi.']);
         }
         $masuk = $r->masuk();
         $sekarang = now();
@@ -409,7 +424,7 @@ class ReservasiService
             throw ValidationException::withMessages(['nama_ktp' => 'Isi nama sesuai KTP yang ditahan.']);
         }
 
-        DB::transaction(function () use ($r, $penempatan, $ktpDitahan, $namaKtp, $oleh) {
+        DB::transaction(function () use ($r, $penempatan, $ktpDitahan, $namaKtp, $oleh, $instansi) {
             $baris = ReservationRoom::where('reservation_id', $r->id)->where('status', 'booked')->lockForUpdate()->get();
             if ($baris->isEmpty()) {
                 throw ValidationException::withMessages(['status' => 'Tidak ada kamar yang menunggu check-in.']);
@@ -437,7 +452,8 @@ class ReservasiService
                 $dipakai[] = $room->id;
 
                 $k->update(['room_id' => $room->id, 'status' => 'checked_in', 'actual_check_in_at' => now()]);
-                $this->statusKamar->change($room, RoomStatus::OccupiedClean, 'Check-in '.$r->reservation_code, $oleh);
+                $this->statusKamar->change($room, RoomStatus::OccupiedClean, $instansi
+                    ? "Check-in instansi, bukti diverifikasi oleh {$oleh->name}" : 'Check-in '.$r->reservation_code, $oleh);
             }
 
             $r->update(['status' => 'checked_in', 'id_card_held' => $ktpDitahan, 'id_card_holder_name' => $ktpDitahan ? trim((string) $namaKtp) : null]);
@@ -526,6 +542,7 @@ class ReservasiService
             $lama = $k->room;
             if ($lama && $lama->status->canTransitionTo(RoomStatus::VacantDirty)) {
                 $this->statusKamar->change($lama, RoomStatus::VacantDirty, "Tamu {$r->reservation_code} pindah ke kamar {$baru->room_number}", $oleh);
+                app(TugasHousekeepingService::class)->sinkron($lama, $lama->fresh()->status, $oleh);
             }
             $this->statusKamar->change($baru, RoomStatus::OccupiedClean, "Pindahan dari kamar {$lama?->room_number}, {$r->reservation_code}", $oleh);
 
@@ -592,7 +609,7 @@ class ReservasiService
         $r->unsetRelation('rooms');
         $nota = $r->stayInvoice()->where('status', '!=', 'cancelled')->first();
         if ($nota) {
-            $this->nota->susunKamar($nota, $r);
+            $this->nota->susunKamar($nota, $r, app(FolioService::class)->awalBelumDitagih($r));
         }
     }
 

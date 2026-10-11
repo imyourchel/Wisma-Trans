@@ -81,7 +81,7 @@ class ServiceOrder extends Model implements BayarOnline
      */
     public function batalkanBilaKedaluwarsa(): self
     {
-        if ($this->order_type === 'outside_guest' && $this->payment_mode === 'pay_now' && $this->jenisLayanan() !== 'laundry'
+        if ($this->created_by === null && $this->payment_mode === 'pay_now' && $this->jenisLayanan() !== 'laundry'
             && $this->status === 'pending' && ! $this->sudahDibayar() && $this->batasBayar()->addMinutes(5)->isPast()) {
             $this->update(['status' => 'cancelled']);
             $this->invoice?->update(['status' => 'cancelled']);

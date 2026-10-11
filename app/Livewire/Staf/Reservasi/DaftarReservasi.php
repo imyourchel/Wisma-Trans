@@ -6,10 +6,13 @@ use App\Models\Reservation;
 use App\Models\ReservationRoom;
 use App\Models\Room;
 use App\Models\RoomType;
+use App\Services\BuktiInstansi;
+use App\Services\FolioService;
 use App\Services\KetersediaanKamar;
 use App\Services\NotaPdf;
 use App\Services\NotifikasiReservasi;
 use App\Services\PembayaranMidtrans;
+use App\Services\ProfilPelanggan;
 use App\Services\ReservasiService;
 use App\Services\WhatsAppService;
 use Carbon\CarbonImmutable;
@@ -59,9 +62,19 @@ class DaftarReservasi extends Component
 
     public const STATUS_AKTIF = ['pending_payment', 'waiting_approval', 'confirmed', 'checked_in'];
 
+    /** Dari Kalender Ketersediaan: ?buka={id reservasi} langsung membuka detailnya; dihapus dari URL saat detail ditutup. */
+    #[Url(except: '')]
+    public string $buka = '';
+
     public function mount(): void
     {
         Gate::authorize('view-reservations');
+        $id = ctype_digit($this->buka) ? (int) $this->buka : 0;
+        if ($id && Reservation::whereKey($id)->exists()) {
+            $this->open($id);
+        } else {
+            $this->buka = '';
+        }
     }
 
     public function updated(string $nama): void
@@ -81,6 +94,7 @@ class DaftarReservasi extends Component
     public function close(): void
     {
         $this->selectedId = null;
+        $this->buka = '';
         $this->tutupAksi();
     }
 
@@ -102,6 +116,20 @@ class DaftarReservasi extends Component
         }
         $this->masuk = $r->masuk()?->toDateString() ?? '';
         $this->keluar = $this->barisId ? $r->rooms->firstWhere('id', $this->barisId)->check_out_date->addDay()->toDateString() : ($r->keluar()?->toDateString() ?? '');
+    }
+
+    /** Bukti pemesanan instansi dikirim ulang ke PIC (bukti hilang atau data diubah); PDF dibuat dari data terbaru. */
+    public function kirimUlangBukti(NotifikasiReservasi $notifikasi): void
+    {
+        Gate::authorize('manage-reservations');
+        $r = $this->terpilih();
+        if (! BuktiInstansi::berlaku($r)) {
+            $this->dispatch('toast', teks: 'Bukti hanya untuk reservasi instansi yang sudah disetujui.', galat: true);
+
+            return;
+        }
+        $notifikasi->kirimBukti($r);
+        $this->dispatch('toast', teks: "Bukti {$r->reservation_code} dikirim ulang ke {$r->customer?->full_name}.");
     }
 
     public function simpanUbah(ReservasiService $layanan): void
@@ -194,11 +222,22 @@ class DaftarReservasi extends Component
             'bolehBatal' => $r && in_array($r->status, ['pending_payment', 'waiting_approval', 'confirmed'], true) && ! $r->rooms->contains('status', 'checked_in'),
             'pengembalian' => $r ? $layanan->pengembalian($r) : 0,
             'kamarPindah' => $kamarPindah,
+            // Kartu profil CRM: segmen, kunjungan ke-berapa, dan rekomendasi (bila minimal 2 kunjungan)
+            'profilPemesan' => $r && $r->customer && ProfilPelanggan::pribadi($r) ? [
+                'profil' => $p = app(ProfilPelanggan::class)->untuk($r->customer),
+                'label' => ProfilPelanggan::labelKunjungan(app(ProfilPelanggan::class)->kunjunganKe($r), $p['kunjungan']['rombongan'] > 0),
+                'tautan' => Gate::allows('view-customers') ? route('staf.pelanggan', ['lihat' => $r->customer_id]) : null,
+            ] : null,
+            'polaRombongan' => $r && $r->institution && ! ProfilPelanggan::pribadi($r)
+                ? ['pola' => app(ProfilPelanggan::class)->untukInstansi($r->institution), 'nama' => $r->institution->name] : null,
             'namaTipe' => RoomType::pluck('name', 'id'),
             // Kirim ulang manual: setelah uang muka diterima, pesannya berisi tautan nota
             'waUlang' => $r ? WhatsAppService::tautan($r->customer?->phone, $r->dpDibayar() > 0
                 ? app(NotifikasiReservasi::class)->teksUangMukaDiterima($r)
                 : app(NotifikasiReservasi::class)->teksDibuat($r)) : null,
+            'buktiBerlaku' => $r && BuktiInstansi::berlaku($r),
+            // Biaya tambahan sudah terlihat selama menginap, tidak baru diketahui saat check-out
+            'folio' => $r && $r->status === 'checked_in' ? app(FolioService::class)->rincian($r) : null,
             'urlNota' => $r?->stayInvoice && $r->stayInvoice->status !== 'cancelled' ? app(NotaPdf::class)->tautan($r->stayInvoice) : null,
         ])->layout('components.layouts.staf', ['title' => 'Daftar Reservasi']);
     }

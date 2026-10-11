@@ -58,4 +58,17 @@ document.addEventListener('livewire:init', () => {
         respond(akhiri);
         fail(akhiri);
     });
+
+    // Sesi habis (419): ganti dialog confirm() bawaan Livewire yang berbahasa Inggris dengan toast, lalu muat ulang
+    let sesiHabis = false;
+    window.Livewire.hook('request', ({ fail }) => {
+        fail(({ status, preventDefault }) => {
+            if (status !== 419) return;
+            preventDefault();
+            if (sesiHabis) return;
+            sesiHabis = true;
+            window.Alpine?.store('toasts')?.tampil('Sesi Anda berakhir. Halaman dimuat ulang…', '#E8AC45');
+            setTimeout(() => window.location.reload(), 2000);
+        });
+    });
 });

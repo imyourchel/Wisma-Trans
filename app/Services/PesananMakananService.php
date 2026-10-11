@@ -28,7 +28,10 @@ class PesananMakananService
     /** Metode pembayaran yang bisa dicatat kasir. */
     public const METODE_KASIR = ['cash' => 'Tunai', 'qris' => 'QRIS', 'debit_card' => 'Kartu debit', 'bank_transfer' => 'Transfer bank'];
 
-    public function __construct(private NotaService $nota) {}
+    /** Label tahap pesanan makanan di sisi staf. */
+    public const STATUS = ['pending' => 'Antre', 'in_progress' => 'Dimasak', 'ready' => 'Siap', 'delivered' => 'Diserahkan', 'cancelled' => 'Dibatalkan'];
+
+    public function __construct(private NotaService $nota, private PembayaranMidtrans $midtrans) {}
 
     /** Pesanan makanan saja (tanpa laundry). */
     public static function query(): Builder
@@ -73,6 +76,57 @@ class PesananMakananService
         return in_array($o->status, ['pending', 'in_progress'], true) && self::menitTunggu($o) > self::batasTunggu();
     }
 
+    /** "12 menit", "1 jam 5 menit". */
+    public static function durasi(int $menit): string
+    {
+        return $menit < 60 ? "{$menit} menit" : intdiv($menit, 60).' jam'.($menit % 60 ? ' '.($menit % 60).' menit' : '');
+    }
+
+    /** "Kamar 205 · Antar ke kamar", "Tamu luar · Ambil di tempat". */
+    public static function jenis(ServiceOrder $o): string
+    {
+        $siapa = $o->reservation_room_id ? 'Kamar '.($o->reservationRoom?->room?->room_number ?? '—') : 'Tamu luar';
+
+        return $siapa.' · '.(ServiceOrder::SERVING[$o->serving_type] ?? $o->serving_type);
+    }
+
+    /** lunas | tagihan-kamar | belum-dibayar | dibatalkan, beserta labelnya. */
+    public static function pembayaran(ServiceOrder $o): array
+    {
+        return match (true) {
+            $o->status === 'cancelled' => ['dibatalkan', 'Dibatalkan'],
+            $o->payment_mode === 'charge_to_room' => ['tagihan-kamar', 'Tagihan kamar'],
+            $o->sudahDibayar() => ['lunas', 'Lunas'],
+            default => ['belum-dibayar', 'Belum dibayar'],
+        };
+    }
+
+    /** "Nasi Goreng ×2, +1 menu lain". */
+    public static function ringkasMenu(ServiceOrder $o): string
+    {
+        $pertama = $o->items->first();
+        if (! $pertama) {
+            return '—';
+        }
+        $sisa = $o->items->count() - 1;
+
+        return ($pertama->service?->name ?? 'Menu').' ×'.(int) $pertama->quantity.($sisa > 0 ? ", +{$sisa} menu lain" : '');
+    }
+
+    public static function total(ServiceOrder $o): float
+    {
+        return (float) $o->items->sum('subtotal');
+    }
+
+    /** Tandai menu F&B aktif habis atau tersedia lagi. Hanya is_sold_out yang berubah; pesanan yang sudah masuk tidak terpengaruh. */
+    public function aturKetersediaan(Service $menu, bool $habis): void
+    {
+        if ($menu->category !== 'fnb' || ! $menu->is_active) {
+            throw ValidationException::withMessages(['menu' => 'Hanya menu F&B aktif yang bisa diubah ketersediaannya.']);
+        }
+        Service::whereKey($menu->id)->update(['is_sold_out' => $habis, 'updated_at' => now()]);
+    }
+
     /**
      * Pesanan dari kasir. $baris: [['id' => service_id, 'qty' => int, 'harga' => ?float (menu harga pasar), 'catatan' => ?string]].
      * Tamu menginap memakai $kamar (baris reservasi yang sedang check-in); tamu luar memakai $pemesan dan selalu bayar sekarang.
@@ -111,6 +165,8 @@ class PesananMakananService
         }
 
         return DB::transaction(function () use ($rinci, $kamar, $pemesan, $penyajian, $bayarSekarang, $metode, $catatan, $oleh) {
+            // Periksa ulang dengan kunci: check-out yang berjalan bersamaan tidak boleh melewatkan pesanan ini
+            $kamar = $kamar ? ReservationRoom::kunciMenginap($kamar->id) : null;
             $customer = $kamar ? $kamar->reservation->customer : $pemesan;
             $total = collect($rinci)->sum(fn ($r) => $r['harga'] * $r['qty']);
 
@@ -172,6 +228,8 @@ class PesananMakananService
             throw ValidationException::withMessages(['status' => 'Tidak ada tagihan yang perlu dibayar.']);
         }
         DB::transaction(fn () => $this->catatBayar($order, $metode, $oleh));
+        // VA/QRIS yang sempat dibuat tidak boleh dibayar lagi
+        $this->midtrans->akhiriTagihan($order);
     }
 
     private function catatBayar(ServiceOrder $order, string $metode, User $oleh): void
@@ -215,16 +273,28 @@ class PesananMakananService
     /** Hanya pesanan yang belum dimasak dan belum dibayar; pesanan lunas dikembalikan lewat refund di Keuangan. */
     public function batalkan(ServiceOrder $order, string $alasan): void
     {
+        // Pesanan tagihan kamar yang sudah digabung saat check-out: membatalkannya di sini akan ikut membatalkan nota menginap
+        if ($order->payment_mode === 'charge_to_room' && $order->invoice_id) {
+            throw ValidationException::withMessages(['status' => self::sudahBernota($order)]);
+        }
         if ($order->status !== 'pending') {
             throw ValidationException::withMessages(['status' => 'Pesanan yang sudah dimasak tidak bisa dibatalkan.']);
-        }
-        if ($order->sudahDibayar()) {
-            throw ValidationException::withMessages(['status' => 'Pesanan ini sudah dibayar. Pembatalan perlu pengembalian dana lewat menu Keuangan.']);
         }
         DB::transaction(function () use ($order, $alasan) {
             $order->update(['status' => 'cancelled', 'note' => mb_substr(trim(($order->note ? $order->note."\n" : '').'Dibatalkan: '.$alasan), 0, 255)]);
             $order->invoice?->update(['status' => 'cancelled']);
+            // Pesanan yang sudah dibayar: seluruh yang terbayar masuk antrean pengembalian dana
+            if ($order->invoice && (float) $order->invoice->paid_amount > 0) {
+                app(PembayaranService::class)->ajukanKelebihan($order->invoice, "Pesanan {$order->order_code} dibatalkan: {$alasan}");
+            }
         });
+        $this->midtrans->akhiriTagihan($order);
+    }
+
+    /** "Sudah masuk nota INV/2026/10/0012, koreksi lewat menu Nota." */
+    public static function sudahBernota(ServiceOrder $order): string
+    {
+        return 'Sudah masuk nota '.$order->invoice?->invoice_number.', koreksi lewat menu Nota.';
     }
 
     private function pastikanDiDapur(ServiceOrder $order, string $status, string $pesan): void

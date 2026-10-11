@@ -11,6 +11,13 @@
         'delivered' => ['Diserahkan', 'bg-[rgba(155,139,120,.20)] text-[#6E604F]'],
         'cancelled' => ['Dibatalkan', 'bg-[rgba(212,81,74,.12)] text-status-dirty'],
     ];
+    // Tahap: label, keterangan kartu ringkasan, warna aksen
+    $ringkasan = collect([
+        'pending' => ['Menunggu ditimbang', 'Timbang untuk menetapkan tagihan', '#D69A2E'],
+        'in_progress' => ['Dicuci', 'Sedang dalam proses cuci', '#5B86B8'],
+        'ready' => ['Siap diserahkan', 'Antar ke kamar atau serahkan', '#5C9E67'],
+        'delivered' => ['Diserahkan hari ini', 'Selesai hari ini', '#9B8B78'],
+    ]);
     $siapa = fn ($x) => $x->reservationRoom ? 'Kamar '.$x->reservationRoom->room?->room_number : 'Tamu luar';
     $bayarLabel = fn ($x) => match (true) {
         $x->payment_mode === 'charge_to_room' => 'Tagihan kamar',
@@ -21,11 +28,21 @@
 @endphp
 
 <div>
-    <div class="mb-4 grid grid-cols-3 gap-3 sm:max-w-[560px]">
-        @foreach (['pending' => 'Menunggu ditimbang', 'in_progress' => 'Sedang dicuci', 'ready' => 'Siap diserahkan'] as $s => $l)
-            <div class="wt-card px-4 py-3">
-                <div class="font-display text-2xl font-extrabold tabular-nums">{{ $jumlah[$s] ?? 0 }}</div>
-                <div class="text-[12px] text-ink-500">{{ $l }}</div>
+    {{-- Ringkasan per tahap --}}
+    <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        @foreach ($ringkasan as $s => [$l, $ket, $warna])
+            <div class="wt-card relative overflow-hidden px-5 py-4 shadow-wt-xs">
+                <span class="absolute inset-y-0 left-0 w-1" style="background-color: {{ $warna }}"></span>
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="text-[11px] font-semibold uppercase tracking-widest text-ink-500">{{ $l }}</div>
+                        <div class="mt-1.5 font-display text-[30px] font-extrabold leading-none tabular-nums">{{ $jumlah[$s] ?? 0 }}</div>
+                    </div>
+                    <span class="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full" style="background-color: {{ $warna }}22; color: {{ $warna }}">
+                        <span class="h-2.5 w-2.5 rounded-full" style="background-color: {{ $warna }}"></span>
+                    </span>
+                </div>
+                <div class="mt-2 truncate text-[12px] text-ink-500">{{ $ket }}</div>
             </div>
         @endforeach
     </div>
@@ -43,6 +60,17 @@
             <x-staf.ikon nama="cari" ukuran="16" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
             <input type="search" wire:model.live.debounce.400ms="cari" placeholder="Kode, nama, atau nomor kamar" class="wt-input pl-9">
         </label>
+        @if ($tab !== 'aktif')
+            <div class="flex items-center gap-2">
+                <label class="block">
+                    <span class="sr-only">Tanggal masuk</span>
+                    <input type="date" wire:model.live="tanggal" max="{{ today()->toDateString() }}" class="wt-input w-[170px]" aria-label="Tanggal masuk cucian" title="Tanggal cucian diterima">
+                </label>
+                @if ($tanggalDipilih)
+                    <button type="button" wire:click="$set('tanggal', '')" class="h-10 whitespace-nowrap rounded border border-cream-300 bg-cream-50 px-3 text-[12px] font-semibold text-brown-800 hover:bg-cream-200">Semua tanggal</button>
+                @endif
+            </div>
+        @endif
         <span wire:poll.60s class="text-[12px] text-ink-500">Diperbarui {{ now()->format('H.i') }} WITA</span>
         @if ($bolehKelola)
             <button type="button" wire:click="bukaTerima" class="ml-auto inline-flex h-10 items-center gap-2 whitespace-nowrap rounded border-0 bg-clay-500 px-4 font-display text-[13px] font-semibold text-cream-50 hover:bg-clay-600">
@@ -51,7 +79,51 @@
         @endif
     </div>
 
-    <div class="wt-card overflow-x-auto">
+    @if ($tab === 'aktif')
+        {{-- Papan per tahap: cucian bergerak dari kiri ke kanan --}}
+        <div class="grid gap-4 lg:grid-cols-3">
+            @foreach ($ringkasan->except('delivered') as $s => [$l, $ket, $warna])
+                @php $kolom = $daftar->where('status', $s); @endphp
+                <section wire:key="kolom-{{ $s }}" class="flex min-h-[220px] flex-col rounded-md border border-cream-300 bg-cream-150/60 lg:min-h-[calc(100vh-400px)]" aria-label="{{ $l }}">
+                    <header class="flex items-center gap-2.5 border-b border-cream-300 px-4 py-3">
+                        <span class="h-2.5 w-2.5 rounded-full" style="background-color: {{ $warna }}"></span>
+                        <h2 class="m-0 flex-1 font-display text-[12px] font-bold uppercase tracking-[.08em]">{{ $l }}</h2>
+                        <span class="rounded-full bg-cream-50 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-ink-500">{{ $kolom->count() }}</span>
+                    </header>
+                    <div class="flex flex-1 flex-col gap-2.5 p-3">
+                        @forelse ($kolom as $x)
+                            @php $item = $x->items->first(); $lama = $x->order_date->diffInHours(now()) >= 24; @endphp
+                            <button type="button" wire:key="ldr-{{ $x->id }}" wire:click="open({{ $x->id }})"
+                                    class="group w-full rounded-md border border-cream-300 bg-cream-50 p-4 text-left shadow-wt-xs transition hover:-translate-y-px hover:border-cream-400 hover:shadow-wt-md focus-visible:outline-2 focus-visible:outline-clay-500">
+                                <div class="flex items-center justify-between gap-2 text-[11px]">
+                                    <span class="font-semibold tabular-nums tracking-[.02em] text-ink-500">{{ $x->order_code }}</span>
+                                    <span @class(['tabular-nums', 'font-semibold text-status-dirty' => $lama, 'text-ink-500' => ! $lama])>{{ $x->order_date->translatedFormat('j M, H.i') }}</span>
+                                </div>
+                                <div class="mt-2 flex items-baseline gap-2">
+                                    <span class="font-display text-[17px] font-extrabold">{{ $siapa($x) }}</span>
+                                </div>
+                                <div class="truncate text-[13px] text-ink-500">{{ $x->customer?->full_name }}</div>
+                                <div class="mt-3 flex items-center justify-between gap-2 border-t border-dashed border-cream-300 pt-3 text-[12px]">
+                                    <span class="text-ink-500">{{ $x->status === 'pending' ? 'Belum ditimbang' : $item?->note }}</span>
+                                    <span class="font-display text-[14px] font-extrabold tabular-nums">{{ $x->status === 'pending' ? '—' : $rp($item?->subtotal) }}</span>
+                                </div>
+                                <div class="mt-2">
+                                    <span @class(['wt-lencana', 'bg-[rgba(92,158,103,.16)] text-status-available' => $bayarLabel($x) === 'Lunas',
+                                        'bg-[rgba(212,81,74,.12)] text-status-dirty' => $bayarLabel($x) === 'Belum dibayar',
+                                        'wt-lencana-netral' => ! in_array($bayarLabel($x), ['Lunas', 'Belum dibayar'], true)])>{{ $bayarLabel($x) }}</span>
+                                </div>
+                            </button>
+                        @empty
+                            <div class="flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-cream-400 px-4 py-8 text-center text-[13px] text-ink-500">
+                                {{ trim($cari) !== '' ? 'Tidak ada yang cocok.' : 'Tidak ada cucian di tahap ini.' }}
+                            </div>
+                        @endforelse
+                    </div>
+                </section>
+            @endforeach
+        </div>
+    @else
+    <div class="wt-card overflow-x-auto shadow-wt-xs">
         <table class="w-full min-w-[860px] border-collapse">
             <thead><tr><th class="wt-th">Kode</th><th class="wt-th">Tamu</th><th class="wt-th">Masuk</th><th class="wt-th">Berat</th><th class="wt-th">Tahap</th><th class="wt-th">Pembayaran</th><th class="wt-th text-right">Tagihan</th></tr></thead>
             <tbody>
@@ -67,11 +139,16 @@
                         <td class="wt-td text-right tabular-nums">{{ $x->status === 'pending' ? '—' : $rp($item?->subtotal) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="wt-td py-10 text-center text-sm text-ink-500">Tidak ada pesanan laundry di sini.</td></tr>
+                    <tr><td colspan="7" class="wt-td py-16 text-center text-sm text-ink-500">@if ($tanggalDipilih)
+                            Tidak ada cucian {{ $tab === 'selesai' ? 'diserahkan' : 'dibatalkan' }} yang masuk {{ $tanggalDipilih->translatedFormat('j F Y') }}.
+                        @else
+                            {{ $tab === 'selesai' ? 'Belum ada cucian yang diserahkan.' : 'Tidak ada pesanan yang dibatalkan.' }}
+                        @endif</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
+    @endif
 
     {{-- Detail pesanan --}}
     @if ($o)

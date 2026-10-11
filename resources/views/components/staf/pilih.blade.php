@@ -6,6 +6,7 @@
     'kirim' => false,     // kirim formulir induk setiap pilihan berubah (saringan)
     'label' => null,      // label aksesibilitas
     'galat' => null,      // ekspresi Alpine: benar bila isian bergalat
+    'sumber' => null,     // ekspresi Alpine berisi [{v, l}] bila pilihan berubah-ubah (misalnya unit mengikuti kamar terpilih)
 ])
 @php
     $daftar = collect($pilihan)->map(fn ($isi, $v) => [
@@ -17,6 +18,7 @@
 {{-- Dropdown panel staf: pengganti <select> dengan daftar pilihan yang bisa dihias dan dipakai dengan keyboard --}}
 <div x-data="pilihan(@js(['pilihan' => $daftar, 'nilai' => (string) $nilai, 'kirim' => $kirim]))"
      @if ($model) x-modelable="nilai" x-model="{{ $model }}" @endif
+     @if ($sumber) x-effect="pilihan = ({{ $sumber }})" @endif
      @click.outside="tutup()" @keydown.escape="buka && (tutup(), $event.stopPropagation())"
      {{ $attributes->merge(['class' => 'relative']) }}>
     @if ($name)

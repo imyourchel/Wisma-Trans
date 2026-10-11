@@ -48,10 +48,13 @@
                         </div>
                         <div class="font-display text-lg font-extrabold">Pengajuan {{ $terkirim }} terkirim</div>
                         <p class="m-0 text-sm text-ink-500">Konfirmasi dikirim ke WhatsApp {{ $hp }}. Staf kami menghubungi Anda pada jam kerja untuk membicarakan harga sewa.@auth Statusnya juga tampil di <a href="{{ route('pesanan') }}" class="font-semibold">Pesanan saya</a>.@endauth</p>
+                        <x-ajakan-akun :hp="$hp" class="w-full" />
                         <button type="button" wire:click="$set('terkirim', null)" class="wt-btn-outline mt-1 h-10 px-5 text-xs !normal-case">Ajukan jadwal lain</button>
                     </div>
                 @else
                     <form wire:submit="kirim" class="grid gap-4 p-5 sm:grid-cols-2 sm:p-6" novalidate>
+                        {{-- Ditawarkan paling atas, sebelum jadwal diisi: isian belum tersimpan bila halaman dimuat ulang --}}
+                        <x-tawaran-masuk class="sm:col-span-2" manfaat="status pengajuan tampil di Pesanan saya" />
                         @if ($daftarAula->count() > 1)
                             <label class="block sm:col-span-2"><span class="wt-field-label mb-1.5 block">Aula</span>
                                 <select wire:model.live="aula" class="wt-input h-11">
@@ -85,13 +88,13 @@
                             <input type="text" wire:model="keperluan" maxlength="150" placeholder="Contoh: rapat, syukuran, pelatihan" class="wt-input h-11 {{ $galat('keperluan') }}">
                             @error('keperluan')<span class="mt-1.5 flex text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror</label>
                         <label class="block"><span class="wt-field-label mb-1.5 block">Nama penanggung jawab</span>
-                            <input type="text" wire:model="nama" autocomplete="name" class="wt-input h-11 {{ $galat('nama') }}">
+                            <input type="text" wire:model="nama" autocomplete="name" placeholder="Orang yang dihubungi staf soal acara" class="wt-input h-11 {{ $galat('nama') }}">
                             @error('nama')<span class="mt-1.5 flex text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror</label>
                         <label class="block"><span class="wt-field-label mb-1.5 block">Nomor WhatsApp</span>
                             <input type="tel" wire:model="hp" autocomplete="tel" placeholder="Contoh: 081234567890" class="wt-input h-11 {{ $galat('hp') }}">
                             @error('hp')<span class="mt-1.5 flex text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror</label>
                         <label class="block"><span class="wt-field-label mb-1.5 block">Email (opsional)</span>
-                            <input type="email" wire:model="email" autocomplete="email" class="wt-input h-11 {{ $galat('email') }}">
+                            <input type="email" wire:model="email" autocomplete="email" placeholder="Bila staf perlu menghubungi lewat email" class="wt-input h-11 {{ $galat('email') }}">
                             @error('email')<span class="mt-1.5 flex text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror</label>
                         <label class="block"><span class="wt-field-label mb-1.5 block">Instansi (opsional)</span>
                             <input type="text" wire:model="instansi" maxlength="150" placeholder="Bila atas nama instansi" class="wt-input h-11"></label>

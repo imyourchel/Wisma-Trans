@@ -58,12 +58,7 @@ class SewaAula extends Component
     public function mount(): void
     {
         $this->aula = (string) Hall::where('is_active', true)->orderBy('id')->value('id');
-        if ($user = Auth::user()) {
-            $c = $user->customer;
-            $this->nama = $c?->full_name ?? $user->name;
-            $this->hp = $c?->phone ?? (string) $user->phone;
-            $this->email = $c?->email ?? $user->email;
-        }
+        // Penanggung jawab acara belum tentu pemilik akun: data kontaknya diisi sendiri, tidak diambil dari akun
     }
 
     /** Waktu mulai dan selesai dari isian; null bila belum lengkap atau tidak valid. */

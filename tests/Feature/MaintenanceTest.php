@@ -122,7 +122,7 @@ class MaintenanceTest extends TestCase
 
         $this->assertSame(1, MaintenanceRequest::count());
         $this->assertSame(RoomStatus::OccupiedClean, $kamar->fresh()->status);
-        $this->assertSame('Kamar sedang terisi. Status kamar tidak diubah; koordinasikan pindah kamar dengan Front Office.', session('peringatan'));
+        $this->assertSame('Kamar sedang terisi. Status kamar tidak diubah. Front Office sudah diberi tahu lewat WhatsApp dan email untuk memindahkan tamu.', session('peringatan'));
     }
 
     public function test_MNT03_lapor_tanpa_deskripsi_ditolak_dan_lainnya_di_kamar_mengisi_room_id(): void

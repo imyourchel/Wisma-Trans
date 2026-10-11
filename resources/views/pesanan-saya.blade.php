@@ -33,6 +33,28 @@
         <p class="mb-0 mt-1.5 text-sm text-ink-500">Pantau pesanan kamar, makanan, laundry, dan aula Anda di satu tempat.</p>
     </header>
 
+    {{-- Kode kamar untuk reservasi yang akan atau sedang menginap --}}
+    @if ($kodeKamar->isNotEmpty())
+        <section class="mt-7 grid gap-3 md:grid-cols-2" aria-label="Kode kamar">
+            @foreach ($kodeKamar as $r)
+                @php $nomor = $r->rooms->map(fn ($b) => $b->room?->room_number)->filter()->join(', '); @endphp
+                <div class="wt-card flex flex-col gap-3 p-5 shadow-wt-xs">
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-[13px]">
+                        <span class="font-semibold tabular-nums">{{ $r->reservation_code }}@if ($nomor) · Kamar {{ $nomor }}@endif</span>
+                        <span class="text-ink-500">{{ $r->status === 'checked_in' ? 'Sedang menginap' : 'Check-in '.$r->masuk()?->translatedFormat('j M') }}</span>
+                    </div>
+                    <x-kode-kamar :reservasi="$r" />
+                    @if ($r->status === 'checked_in')
+                        <div class="flex flex-wrap gap-2">
+                            <a href="{{ $r->urlPesanMakanan() }}" class="inline-flex h-9 items-center rounded-full bg-clay-500 px-4 text-[13px] font-semibold text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline">Pesan makanan</a>
+                            <a href="{{ $r->urlPesanLaundry() }}" class="inline-flex h-9 items-center rounded-full border border-clay-500 px-4 text-[13px] font-semibold text-clay-600 hover:bg-[rgba(181,113,74,.08)] hover:no-underline">Pesan laundry</a>
+                        </div>
+                    @endif
+                </div>
+            @endforeach
+        </section>
+    @endif
+
     {{-- Ringkasan: mengikuti jenis dan periode yang dipilih --}}
     <div class="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
         @foreach ([

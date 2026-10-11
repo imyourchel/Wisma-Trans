@@ -8,9 +8,12 @@ use App\Models\MaintenanceRequest;
 use App\Models\MaintenanceSchedule;
 use App\Models\Room;
 use App\Models\User;
+use App\Services\SmartCleaning\TugasHousekeepingService;
 use App\Support\Nomor;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -80,27 +83,30 @@ class MaintenanceService
         $kamar->refresh();
         if (in_array($kamar->status, [RoomStatus::Available, RoomStatus::VacantDirty], true)) {
             $this->statusKamar->change($kamar, RoomStatus::Maintenance, $laporan->request_code.': '.Str::limit($laporan->damage_description, 120), $oleh, 'maintenance');
+            // Tugas pembersihan kamar ini yang belum dimulai dibatalkan
+            app(TugasHousekeepingService::class)->sinkron($kamar, RoomStatus::Maintenance, $oleh);
 
             $tamu = $kamar->pemesananBerjalan(['booked'])
                 ->first(fn ($p) => $p->check_in_date->lte(today()->addDay()));
 
             return $tamu
                 ? "Kamar {$kamar->room_number} dijadwalkan untuk tamu {$tamu->reservation->reservation_code} "
-                    .($tamu->check_in_date->lte(today()) ? 'hari ini' : 'besok').'. Beri tahu Front Office untuk memindahkan kamar.'
+                    .($tamu->check_in_date->lte(today()) ? 'hari ini' : 'besok').'.'
                 : null;
         }
 
         return match ($kamar->status) {
             RoomStatus::Maintenance => null,
-            RoomStatus::OccupiedClean, RoomStatus::OccupiedDirty => 'Kamar sedang terisi. Status kamar tidak diubah; koordinasikan pindah kamar dengan Front Office.',
-            default => "Kamar {$kamar->room_number} sedang dibersihkan. Status kamar tidak diubah; tandai Perbaikan dari Papan Status Kamar setelah selesai dibersihkan.",
+            RoomStatus::OccupiedClean, RoomStatus::OccupiedDirty => 'Kamar sedang terisi. Status kamar tidak diubah.',
+            // Saat ditandai selesai dibersihkan, RoomStatusService menahannya menjadi Perbaikan (laporan ini blocks_room)
+            default => "Kamar {$kamar->room_number} sedang dibersihkan. Setelah selesai dibersihkan, kamar langsung ditandai Perbaikan.",
         };
     }
 
     /** reported → in_progress, dikerjakan staf internal ($staf) atau vendor luar ($vendor). */
     public function kerjakan(MaintenanceRequest $laporan, ?User $staf, ?string $vendor): void
     {
-        $this->pastikanStatus($laporan, ['reported'], 'Hanya laporan baru yang bisa mulai dikerjakan.');
+        $this->pastikanStatus($laporan, ['reported'], 'Hanya laporan yang belum dikerjakan yang bisa mulai dikerjakan.');
         $vendor = filled($vendor) ? trim($vendor) : null;
         if (($staf === null) === ($vendor === null)) {
             throw ValidationException::withMessages(['pengerja' => 'Pilih staf internal atau isi nama vendor.']);
@@ -216,6 +222,97 @@ class MaintenanceService
 
         return $log && preg_match_all('/MNT-\d+/', (string) $log->note, $kode)
             && $kamar->maintenanceRequests()->whereIn('request_code', $kode[0])->exists();
+    }
+
+    /**
+     * Persetujuan Manager untuk jalur cepat, seperti otorisasi pembatalan di kasir: email dan kata sandi Manager diketik
+     * di perangkat peminta. Sesi peminta tidak berganti; kredensial hanya dicocokkan. Batas 5 percobaan per menit per peminta.
+     */
+    public function verifikasiManager(string $email, string $sandi, User $peminta): User
+    {
+        $kunci = 'jalur-cepat:'.$peminta->id;
+        if (RateLimiter::tooManyAttempts($kunci, 5)) {
+            throw ValidationException::withMessages(['sandi_manager' => 'Terlalu banyak percobaan. Coba lagi dalam '.RateLimiter::availableIn($kunci).' detik.']);
+        }
+        RateLimiter::hit($kunci, 60);
+
+        $manager = User::where('email', Str::lower(trim($email)))->where('is_active', true)->first();
+        if (! $manager || ! $manager->password || ! Hash::check($sandi, $manager->password)) {
+            throw ValidationException::withMessages(['sandi_manager' => 'Email atau kata sandi Manager salah.']);
+        }
+        if (! $manager->hasRole('manager')) {
+            throw ValidationException::withMessages(['sandi_manager' => 'Akun ini bukan Manager.']);
+        }
+        RateLimiter::clear($kunci);
+
+        return $manager;
+    }
+
+    /**
+     * Jalur cepat: kamar Perbaikan dibuka (Siap) dengan menutup semua laporan penahannya (blocks_room) yang masih terbuka,
+     * atas persetujuan $manager (handled_by); vendor yang sedang mengerjakan tetap tercatat. Biaya dilengkapi Manager nanti (Lengkapi). Laporan yang tidak menahan kamar
+     * dibiarkan terbuka. Nama peminta hanya dicatat di log status kamar.
+     *
+     * @return string pesan sukses
+     */
+    public function selesaikanCepat(Room $room, User $manager, User $peminta): string
+    {
+        return DB::transaction(function () use ($room, $manager, $peminta) {
+            $kamar = Room::whereKey($room->getKey())->lockForUpdate()->firstOrFail();
+            if ($kamar->status !== RoomStatus::Maintenance) {
+                throw ValidationException::withMessages(['sandi_manager' => 'Jalur cepat hanya untuk kamar berstatus Perbaikan.']);
+            }
+
+            $laporan = $kamar->maintenanceRequests()->whereIn('status', ['reported', 'in_progress'])
+                ->when(MaintenanceRequest::adaKolomMenahan(), fn ($q) => $q->where('blocks_room', true))
+                ->orderBy('reported_at')->orderBy('id')->lockForUpdate()->get();
+            foreach ($laporan as $l) {
+                $l->update([
+                    'status' => 'completed',
+                    'handled_by' => $manager->id,
+                    // Vendor yang sedang mengerjakan tetap tercatat; Manager tercatat sebagai penanggung jawab
+                    'vendor_name' => $l->vendor_name,
+                    'started_at' => $l->started_at ?? now(),
+                    'completed_at' => now(),
+                    'cost' => null,
+                    'resolution_note' => MaintenanceRequest::catatanJalurCepat(),
+                ]);
+            }
+
+            $kode = $laporan->pluck('request_code')->implode(', ');
+            $this->statusKamar->change($kamar, RoomStatus::Available,
+                trim(MaintenanceRequest::CATATAN_JALUR_CEPAT.' '.$kode)." oleh {$manager->name}, diminta {$peminta->name}", $manager, 'maintenance');
+            $room->refresh();
+            $namaManager = Str::before($manager->name, ' ');
+
+            return "Kamar {$kamar->room_number} dibuka lewat jalur cepat."
+                .($kode !== '' ? " {$kode} ditutup atas persetujuan {$namaManager}." : " Disetujui {$namaManager}.");
+        });
+    }
+
+    /**
+     * Manager melengkapi laporan jalur cepat: pengerja, biaya, dan catatan tambahan. Status dan tanggal tidak berubah;
+     * awalan "Jalur cepat" pada catatan selalu dipertahankan.
+     */
+    public function lengkapiJalurCepat(MaintenanceRequest $laporan, ?User $staf, ?string $vendor, float $biaya, ?string $catatan): void
+    {
+        if (! $laporan->fresh()->isJalurCepat()) {
+            throw ValidationException::withMessages(['status' => 'Hanya laporan jalur cepat yang bisa dilengkapi.']);
+        }
+        $vendor = filled($vendor) ? trim($vendor) : null;
+        if (($staf === null) === ($vendor === null)) {
+            throw ValidationException::withMessages(['pengerja' => 'Pilih staf internal atau isi nama vendor.']);
+        }
+        if ($biaya < 0) {
+            throw ValidationException::withMessages(['cost' => 'Biaya tidak boleh negatif.']);
+        }
+
+        $laporan->update([
+            'handled_by' => $staf?->id,
+            'vendor_name' => $vendor,
+            'cost' => $biaya,
+            'resolution_note' => MaintenanceRequest::catatanJalurCepat($catatan),
+        ]);
     }
 
     /**

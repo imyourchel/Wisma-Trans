@@ -2,44 +2,27 @@
 
 namespace App\Livewire\Staf\Layanan;
 
-use App\Models\ServiceOrder;
+use App\Livewire\Staf\Layanan\Concerns\DetailPesanan;
+use App\Models\Service;
 use App\Services\NotifikasiLayanan;
+use App\Services\PembayaranMidtrans;
 use App\Services\PesananMakananService;
-use App\Services\WhatsAppService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
-use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
  * Papan pesanan dapur untuk F&B (Manager memantau). Kolom: antre → dimasak → siap. Diperbarui otomatis;
- * pesanan yang menunggu lebih dari fnb_max_wait_minutes diberi tanda terlambat.
+ * pesanan yang menunggu lebih dari fnb_max_wait_minutes sejak masuk dapur diberi tanda terlambat.
  */
 class PapanPesanan extends Component
 {
-    #[Locked]
-    public ?int $selectedId = null;
-
-    public bool $formBatal = false;
-
-    public string $alasan = '';
+    use DetailPesanan;
 
     public function mount(): void
     {
         Gate::authorize('view-fnb');
-    }
-
-    public function open(int $id): void
-    {
-        $this->selectedId = PesananMakananService::query()->findOrFail($id)->id;
-        $this->reset('formBatal', 'alasan');
-        $this->resetValidation();
-    }
-
-    public function close(): void
-    {
-        $this->selectedId = null;
-        $this->reset('formBatal', 'alasan');
     }
 
     public function mulai(int $id, PesananMakananService $layanan): void
@@ -70,31 +53,22 @@ class PapanPesanan extends Component
         $this->dispatch('toast', teks: "{$o->order_code} sudah diserahkan.");
     }
 
-    public function batalkan(PesananMakananService $layanan): void
+    public function tersediaLagi(int $id, PesananMakananService $layanan): void
     {
         Gate::authorize('manage-fnb');
-        $this->validate(['alasan' => 'required|string|max:150'], ['alasan.required' => 'Isi alasan pembatalan.']);
-        $o = $this->ambil((int) $this->selectedId);
-        $layanan->batalkan($o, trim($this->alasan));
-        $this->close();
-        $this->dispatch('toast', teks: "{$o->order_code} dibatalkan.");
-    }
-
-    private function ambil(int $id): ServiceOrder
-    {
-        return PesananMakananService::query()->with('invoice.payments', 'items.service')->findOrFail($id);
+        $menu = Service::findOrFail($id);
+        $layanan->aturKetersediaan($menu, false);
+        $this->dispatch('toast', teks: "{$menu->name} tersedia lagi.");
     }
 
     public function render(): View
     {
-        $relasi = ['items.service', 'customer', 'reservationRoom.room', 'invoice.payments'];
-        $dapur = PesananMakananService::diDapur()->with($relasi)->orderBy('order_date')->get()
+        $dapur = PesananMakananService::diDapur()->with(self::RELASI)->orderBy('order_date')->get()
             ->sortBy(fn ($o) => PesananMakananService::mulaiAntre($o)->timestamp)->values();
-        $menungguBayar = PesananMakananService::query()->with($relasi)->where('status', 'pending')->where('payment_mode', 'pay_now')
+        $menungguBayar = PesananMakananService::query()->with(self::RELASI)->where('status', 'pending')->where('payment_mode', 'pay_now')
             ->whereHas('invoice', fn ($q) => $q->whereNotIn('status', ['paid', 'cancelled']))
             ->where('order_date', '>=', now()->subDay())->orderByDesc('order_date')->get()
             ->reject(fn ($o) => $o->batalkanBilaKedaluwarsa()->status === 'cancelled')->values();
-        $o = $this->selectedId ? PesananMakananService::query()->with($relasi)->find($this->selectedId) : null;
 
         return view('livewire.staf.layanan.papan-pesanan', [
             'kolom' => [
@@ -106,10 +80,10 @@ class PapanPesanan extends Component
             'terlambat' => $dapur->filter(fn ($x) => PesananMakananService::terlambat($x))->count(),
             'batas' => PesananMakananService::batasTunggu(),
             'selesaiHariIni' => PesananMakananService::query()->where('status', 'delivered')->whereDate('updated_at', today())->count(),
-            'o' => $o,
-            'waSiap' => $o && $o->order_type === 'outside_guest' && $o->status === 'ready'
-                ? WhatsAppService::tautan($o->customer?->phone, app(NotifikasiLayanan::class)->teksMakanan($o)) : null,
+            'menuHabis' => Service::where('category', 'fnb')->where('is_active', true)->where('is_sold_out', true)->orderBy('name')->get(),
+            'perluRefund' => PembayaranMidtrans::jumlahPerluRefund(Auth::user()),
             'bolehKelola' => Gate::allows('manage-fnb'),
+            ...$this->dataDetail(),
         ])->layout('components.layouts.staf', ['title' => 'Papan Pesanan']);
     }
 }

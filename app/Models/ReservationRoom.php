@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Satu kamar dalam reservasi. room_id kosong sampai nomor kamar ditetapkan (reservasi online saat check-in).
@@ -90,6 +91,22 @@ class ReservationRoom extends Model
             'amount' => min($kotor, (float) $this->discount_value),
             default => 0.0,
         };
+    }
+
+    /**
+     * Kunci reservasi dan baris kamar (panggil di dalam transaksi), lalu pastikan tamu masih menginap.
+     * Check-out mengunci reservasi yang sama, jadi pesanan baru tidak bisa lolos setelah nota digabung.
+     */
+    public static function kunciMenginap(int $id): self
+    {
+        $baris = self::find($id);
+        $r = $baris ? Reservation::whereKey($baris->reservation_id)->lockForUpdate()->first() : null;
+        $baris = $baris ? self::whereKey($id)->lockForUpdate()->first() : null;
+        if (! $baris || $baris->status !== 'checked_in' || $r?->status !== 'checked_in') {
+            throw ValidationException::withMessages(['kamar' => 'Kamar ini tidak sedang ditempati.']);
+        }
+
+        return $baris->setRelation('reservation', $r);
     }
 
     /** Biaya baris ini setelah potongan. */

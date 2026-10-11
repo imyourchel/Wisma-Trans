@@ -38,6 +38,12 @@ class Nomor
         return self::berikut('maintenance_requests', 'request_code', 'MNT-');
     }
 
+    /** BS/2026/10/0001 */
+    public static function tagihanBulanan(): string
+    {
+        return self::berikut('billing_statements', 'statement_number', 'BS/'.now()->format('Y/m').'/');
+    }
+
     public static function pembayaran(): string
     {
         return self::berikut('payments', 'payment_code', 'PAY-');

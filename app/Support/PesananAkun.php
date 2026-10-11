@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Customer;
+use App\Models\Reservation;
 use App\Models\ServiceOrder;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -34,10 +35,7 @@ final class PesananAkun
      */
     public static function untuk(User $user): Collection
     {
-        $pelanggan = Customer::withTrashed()
-            ->where('user_id', $user->id)
-            ->when(filled($user->phone), fn ($q) => $q->orWhere(fn ($q) => $q->whereNull('user_id')->where('phone', $user->phone)))
-            ->pluck('id');
+        $pelanggan = self::pelanggan($user);
 
         if ($pelanggan->isEmpty()) {
             return collect();
@@ -55,6 +53,23 @@ final class PesananAkun
                 return $p + ['tanggal' => $waktu->toDateString(), 'bulan' => $waktu->translatedFormat('F Y')];
             })
             ->values();
+    }
+
+    /** Id pelanggan milik akun: yang tertaut, atau yang belum tertaut tetapi bernomor HP sama. */
+    public static function pelanggan(User $user): Collection
+    {
+        return Customer::withTrashed()
+            ->where('user_id', $user->id)
+            ->when(filled($user->phone), fn ($q) => $q->orWhere(fn ($q) => $q->whereNull('user_id')->where('phone', $user->phone)))
+            ->pluck('id');
+    }
+
+    /** Reservasi yang akan atau sedang menginap, untuk kartu kode kamar (salin dan bagikan). */
+    public static function kodeKamar(User $user): Collection
+    {
+        return Reservation::with(['rooms' => fn ($q) => $q->where('status', '!=', 'moved')->with('room')])
+            ->whereIn('customer_id', self::pelanggan($user))->whereIn('status', ['confirmed', 'checked_in'])
+            ->whereNotNull('access_token')->orderByRaw("FIELD(status, 'checked_in', 'confirmed')")->orderBy('id')->get();
     }
 
     private static function kamar(Collection $pelanggan): Collection
@@ -139,8 +154,8 @@ final class PesananAkun
             ->map(function (ServiceOrder $o) {
                 [$keadaan, $label] = $o->keadaanTamu();
                 $laundry = $o->jenisLayanan() === 'laundry';
-                // Halaman status ada untuk pesanan makanan online dan laundry yang dipesan lewat situs atau resepsionis
-                $online = $o->access_token && ($laundry || $o->order_type === 'outside_guest');
+                // Halaman status ada untuk pesanan makanan dan laundry yang punya tautan (situs, kasir, atau resepsionis)
+                $online = (bool) $o->access_token;
 
                 // Bayar sekarang dan Lihat detail membuka halaman yang sama, jadi hanya satu yang ditampilkan
                 $aksi = match (true) {

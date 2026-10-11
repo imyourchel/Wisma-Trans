@@ -45,6 +45,10 @@
         <form id="pesan-laundry" wire:submit="kirim" class="wt-card mt-8 scroll-mt-24 overflow-hidden" novalidate>
             <div class="border-b border-cream-300 bg-cream-100 px-5 py-4 sm:px-6">
                 <h2 class="m-0 font-display text-[15px] font-extrabold uppercase tracking-[.06em]">Pesan laundry</h2>
+                {{-- Saran masuk paling atas, sebelum isian pertama --}}
+                <x-tawaran-masuk class="mt-3" :manfaat="$menginap
+                    ? 'kamar Anda langsung tampil tanpa kode kamar dan pesanan tersimpan di Pesanan saya'
+                    : 'data pemesan terisi otomatis dan status laundry tampil di Pesanan saya'" />
                 <div class="mt-3 inline-flex rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Jenis tamu">
                     @foreach (['menginap' => 'Saya sedang menginap', 'luar' => 'Saya tamu luar'] as $v => $l)
                         <button type="button" wire:click="$set('jenis', '{{ $v }}')" role="tab" aria-selected="{{ $jenis === $v ? 'true' : 'false' }}"
@@ -58,27 +62,26 @@
                 <div class="flex min-w-0 flex-col gap-4">
                     @if ($menginap)
                         @if ($kamarTersedia->isEmpty())
-                            <p class="m-0 text-sm text-ink-500">Masukkan kode reservasi dan token dari pesan konfirmasi untuk memilih kamar Anda.@guest Atau <a href="{{ route('login') }}" class="font-semibold">masuk</a> dengan akun pemesan.@endguest</p>
-                            <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
-                                <label class="block"><span class="wt-field-label mb-1.5 block">Kode reservasi</span>
-                                    <input type="text" wire:model="kode" placeholder="RSV-0016" autocapitalize="characters" class="wt-input h-11 uppercase placeholder:normal-case {{ $galat('kode') }}"></label>
-                                <label class="block"><span class="wt-field-label mb-1.5 block">Token</span>
-                                    <input type="text" wire:model="token" placeholder="LK7Q-2M9X" autocapitalize="characters" class="wt-input h-11 uppercase placeholder:normal-case {{ $galat('kode') }}"></label>
-                                <button type="button" wire:click="cocokkan" class="h-11 self-end rounded border border-brown-800 bg-transparent px-4 text-[13px] font-semibold text-brown-800 hover:bg-cream-200">Cari kamar</button>
+                            <p class="m-0 text-sm text-ink-500">Masukkan kode kamar dari pesan WhatsApp saat check-in untuk memilih kamar Anda.</p>
+                            <div class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                                <label class="block"><span class="wt-field-label mb-1.5 block">Kode kamar</span>
+                                    <input type="text" wire:model="kodeKamar" wire:keydown.enter.prevent="cariKamar" placeholder="Contoh: LK7Q-2M9X" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                                           class="wt-input h-11 uppercase tracking-[.08em] placeholder:normal-case placeholder:tracking-normal {{ $galat('kodeKamar') }}"></label>
+                                <button type="button" wire:click="cariKamar" class="h-11 rounded border border-brown-800 bg-transparent px-4 text-[13px] font-semibold text-brown-800 hover:bg-cream-200">Cari kamar</button>
                             </div>
-                            @error('kode')<span class="-mt-1 flex text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror
+                            @error('kodeKamar')<span class="-mt-1 flex text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror
                         @else
                             <fieldset class="m-0 min-w-0 border-0 p-0">
                                 <legend class="mb-2 flex w-full items-baseline justify-between gap-3 p-0">
                                     <span class="wt-field-label">Kamar</span>
-                                    @if ($reservasiId)<button type="button" wire:click="lepas" class="border-0 bg-transparent p-0 text-xs font-semibold text-clay-600 hover:underline">Ganti reservasi</button>@endif
+                                    @if ($dariKode)<button type="button" wire:click="lepas" class="border-0 bg-transparent p-0 text-xs font-semibold text-clay-600 hover:underline">Ganti</button>@endif
                                 </legend>
                                 <div class="flex flex-wrap gap-2">
                                     @foreach ($kamarTersedia as $k)
                                         <label wire:key="km-{{ $k['id'] }}" class="flex cursor-pointer flex-col rounded-lg border border-cream-300 bg-cream-50 px-4 py-2.5 hover:border-brown-800 has-[:checked]:border-brown-800 has-[:checked]:bg-cream-200">
                                             <input type="radio" wire:model="kamar" value="{{ $k['id'] }}" class="sr-only">
                                             <span class="font-display text-lg font-extrabold tabular-nums">Kamar {{ $k['nomor'] }}</span>
-                                            <span class="text-[11px] text-ink-500">{{ $k['kode'] }} · keluar {{ $k['keluar'] }}</span>
+                                            <span class="text-[11px] text-ink-500">menginap sampai {{ $k['keluar'] }}</span>
                                         </label>
                                     @endforeach
                                 </div>

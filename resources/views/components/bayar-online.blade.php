@@ -178,6 +178,7 @@
             tagihan: cfg.tagihan,
             memuat: '',     // metode yang sedang dibuatkan tagihan
             mengecek: false,
+            sedangCek: false,   // pengecekan otomatis yang sedang berjalan, supaya tidak tumpang tindih
             galat: '',
             sisa: '',
             init() {
@@ -193,8 +194,12 @@
                 };
                 tik();
                 setInterval(tik, 1000);
-                // Selama tagihan tampil, tanyakan status berkala; muat ulang begitu pembayaran diterima
-                setInterval(() => { if (this.tagihan && document.visibilityState === 'visible') this.cekStatus(false); }, 7000);
+                // Selama tagihan tampil, tanyakan status berkala; muat ulang begitu pembayaran diterima.
+                // Begitu tamu kembali ke halaman ini (setelah membayar di aplikasi bank/e-wallet atau tab lain), langsung dicek.
+                const cekOtomatis = () => { if (this.tagihan && document.visibilityState === 'visible') this.cekStatus(false); };
+                setInterval(cekOtomatis, 5000);
+                document.addEventListener('visibilitychange', cekOtomatis);
+                window.addEventListener('focus', cekOtomatis);
             },
             info(k) { return this.daftarMetode.find(m => m.kunci === k) || { nama: k, ket: '' }; },
             logo(k) { return cfg.logo + '/' + k + '.svg'; },
@@ -214,6 +219,8 @@
                         this.$nextTick(() => this.$root.querySelector('#judul-bayar')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
                     } else if (res.status === 429) {
                         this.galat = 'Terlalu sering berganti metode. Tunggu satu menit, lalu coba lagi.';
+                    } else if (res.status === 419) {
+                        this.galat = 'Sesi Anda sudah berakhir. Muat ulang halaman, lalu coba lagi.';
                     } else if (res.status === 409) {
                         Alpine.store('toasts').tampil(data.pesan, '#E8AC45');
                         setTimeout(() => location.reload(), 1200);
@@ -227,16 +234,22 @@
             },
             gantiMetode() { this.tagihan = null; this.galat = ''; },
             async cekStatus(manual) {
-                if (this.mengecek) return;
+                if (this.mengecek || this.sedangCek) return;
                 this.mengecek = manual;
+                this.sedangCek = true;
                 try {
                     const { res, data } = await this.kirimJson(cfg.urlCek);
-                    if (res.ok && (data.dibayar || data.batal)) { location.reload(); return; }
+                    if (res.ok && (data.dibayar || data.batal)) {
+                        if (data.dibayar) Alpine.store('toasts').tampil('Pembayaran diterima. Memuat ulang halaman…');
+                        setTimeout(() => location.reload(), data.dibayar ? 800 : 0);
+                        return;
+                    }
                     if (manual) Alpine.store('toasts').tampil('Pembayaran belum diterima. Coba lagi beberapa saat setelah membayar.', '#E8AC45');
                 } catch {
                     if (manual) Alpine.store('toasts').tampil('Tidak dapat terhubung ke server.', '#E8AC45');
                 }
                 this.mengecek = false;
+                this.sedangCek = false;
             },
             salinTeks(teks, nama) {
                 navigator.clipboard?.writeText(String(teks))
