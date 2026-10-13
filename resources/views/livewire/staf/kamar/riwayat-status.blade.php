@@ -9,31 +9,30 @@
 @endphp
 
 <div>
-    <div class="mb-4 flex flex-wrap items-end gap-3">
-        <label class="relative block min-w-0 flex-[1_1_220px] sm:max-w-[260px]">
+    {{-- Penyaring dalam satu baris di layar lebar: kotak cari menyusut mengikuti sisa ruang, yang lain lebar tetap --}}
+    <div class="mb-4 flex flex-wrap items-center gap-2.5 xl:flex-nowrap">
+        <label class="relative block min-w-[180px] flex-1">
             <span class="sr-only">Cari di catatan</span>
             <x-staf.ikon nama="cari" ukuran="16" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
-            <input type="search" wire:model.live.debounce.400ms="cari" placeholder="Cari catatan: RSV-0012, MNT-0006, Jalur cepat" class="wt-input pl-9">
+            <input type="search" wire:model.live.debounce.400ms="cari" placeholder="Cari catatan: RSV-0012, MNT-0006" class="wt-input pl-9">
         </label>
-        <select wire:model.live="kamar" class="wt-input w-[130px]" aria-label="Kamar">
-            <option value="">Semua kamar</option>
-            @foreach ($kamarPilihan as $id => $no)<option value="{{ $id }}">Kamar {{ $no }}</option>@endforeach
-        </select>
-        <select wire:model.live="status" class="wt-input w-[190px]" aria-label="Status baru">
-            <option value="">Semua status</option>
-            @foreach (RoomStatus::cases() as $s)<option value="{{ $s->value }}">{{ $s->label() }}</option>@endforeach
-        </select>
-        <select wire:model.live="staf" class="wt-input w-[170px]" aria-label="Diubah oleh">
-            <option value="">Semua staf</option>
-            <option value="sistem">Sistem</option>
-            @foreach ($stafPilihan as $id => $nama)<option value="{{ $id }}">{{ $nama }}</option>@endforeach
-        </select>
-        <div class="flex items-center gap-1.5">
-            <input type="date" wire:model.live="dari" max="{{ today()->toDateString() }}" class="wt-input w-[150px]" aria-label="Dari tanggal">
+        {{-- Dropdown panel staf: pilihan disorot saat diarahkan kursor; daftar panjang (kamar) punya kotak cari --}}
+        <x-staf.pilih model="$wire.kamar" x-on:change="$wire.$commit()" :nilai="$kamar" label="Kamar" class="w-[148px] flex-none"
+                      :pilihan="['' => 'Semua kamar'] + collect($kamarPilihan)->mapWithKeys(fn ($no, $id) => [$id => 'Kamar '.$no])->all()" />
+        <x-staf.pilih model="$wire.status" x-on:change="$wire.$commit()" :nilai="$status" label="Status baru" class="w-[190px] flex-none"
+                      :pilihan="['' => 'Semua status'] + collect(RoomStatus::cases())->mapWithKeys(fn ($s) => [$s->value => ['label' => $s->label(), 'warna' => $s->color()]])->all()" />
+        <x-staf.pilih model="$wire.staf" x-on:change="$wire.$commit()" :nilai="$staf" label="Diubah oleh" class="w-[170px] flex-none"
+                      :pilihan="['' => 'Semua staf', 'sistem' => 'Sistem'] + collect($stafPilihan)->all()" />
+        <div class="flex flex-none items-center gap-1.5">
+            <x-staf.tanggal wire:model.live="dari" :nilai="$dari" :max="today()->toDateString()" label="Dari tanggal" class="w-[176px]" />
             <span class="text-ink-500">–</span>
-            <input type="date" wire:model.live="sampai" max="{{ today()->toDateString() }}" class="wt-input w-[150px]" aria-label="Sampai tanggal">
+            <x-staf.tanggal wire:model.live="sampai" :nilai="$sampai" :max="today()->toDateString()" label="Sampai tanggal" class="w-[176px]" />
         </div>
-        <button type="button" wire:click="resetSaringan" class="wt-btn-sm h-10">Atur ulang</button>
+        <button type="button" wire:click="resetSaringan" title="Kembalikan semua penyaring"
+                class="wt-btn-sm inline-flex h-10 flex-none items-center gap-1.5 whitespace-nowrap">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            Atur ulang
+        </button>
     </div>
 
     <div class="wt-card overflow-x-auto shadow-wt-xs">
@@ -49,7 +48,7 @@
                         $statusLalu = $lalu?->status_lalu ? RoomStatus::tryFrom($lalu->status_lalu) : null;
                         $lama = $lalu?->waktu_lalu ? RiwayatStatus::lama((int) Carbon::parse($lalu->waktu_lalu)->diffInSeconds($l->changed_at)) : '—';
                     @endphp
-                    <tr wire:key="log-{{ $l->id }}" data-log="{{ $l->id }}">
+                    <tr wire:key="log-{{ $l->id }}" data-log="{{ $l->id }}" class="transition-colors hover:bg-row-hover">
                         <td class="wt-td whitespace-nowrap text-[13px] tabular-nums">{{ $l->changed_at->translatedFormat('j M Y, H.i') }}</td>
                         <td class="wt-td"><button type="button" wire:click="lini({{ $l->room_id }})" class="border-0 bg-transparent p-0 font-display text-[15px] font-extrabold tabular-nums text-clay-600 hover:underline" title="Lini masa kamar {{ $l->room?->room_number }}">{{ $l->room?->room_number }}</button></td>
                         <td class="wt-td">{!! $lencana($l->status) !!}</td>

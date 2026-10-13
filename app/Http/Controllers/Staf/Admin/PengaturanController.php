@@ -38,10 +38,22 @@ class PengaturanController extends MasterController
             'bank_account_number' => ['Nomor rekening', 'teks', 0, 40],
             'bank_account_name' => ['Atas nama rekening', 'teks', 0, 100],
         ],
+        // Batas beban otomatis Smart Cleaning (baris dari database/sql/2026-10-13-batas-beban-hk.sql)
+        'Housekeeping' => [
+            'hk_max_workload' => ['Batas beban staf HK murni', 'poin', 0.5, 20],
+            'hk_max_workload_multirole' => ['Batas beban staf multi-role', 'poin', 0.5, 20],
+        ],
         'Restoran' => [
             'fnb_max_wait_minutes' => ['Batas tunggu pesanan makanan', 'menit', 1, 240],
         ],
     ];
+
+    public const PERINGATAN_MULTIROLE = 'Perhatian: batas multi-role lebih besar dari batas HK murni, padahal staf multi-role juga bertugas di bagian lain.';
+
+    private static function multiRoleMelebihiMurni(mixed $multirole, mixed $murni): bool
+    {
+        return is_numeric($multirole) && is_numeric($murni) && (float) $multirole > (float) $murni;
+    }
 
     public function edit(): View
     {
@@ -53,6 +65,7 @@ class PengaturanController extends MasterController
             'settings' => $settings,
             'terakhir' => $terakhir,
             'pengubah' => $terakhir?->updated_by ? User::find($terakhir->updated_by)?->name : null,
+            'peringatanMultirole' => self::multiRoleMelebihiMurni($settings['hk_max_workload_multirole']->value ?? null, $settings['hk_max_workload']->value ?? null),
         ]);
     }
 
@@ -89,6 +102,12 @@ class PengaturanController extends MasterController
         });
         Cache::forget('settings.all');
 
-        return $this->selesai($request, $diubah ? "Pengaturan disimpan ({$diubah} diubah)." : 'Tidak ada pengaturan yang berubah.');
+        $pesan = $diubah ? "Pengaturan disimpan ({$diubah} diubah)." : 'Tidak ada pengaturan yang berubah.';
+        // Hanya peringatan, tidak memblokir: owner boleh sengaja memberi staf multi-role batas lebih besar
+        if (self::multiRoleMelebihiMurni(Setting::get('hk_max_workload_multirole'), Setting::get('hk_max_workload'))) {
+            $pesan .= ' '.self::PERINGATAN_MULTIROLE;
+        }
+
+        return $this->selesai($request, $pesan);
     }
 }

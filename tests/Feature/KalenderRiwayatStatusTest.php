@@ -200,4 +200,21 @@ class KalenderRiwayatStatusTest extends TestCase
         }
         $this->assertSame($sedikit, $hitung());
     }
+
+    public function test_paginasi_riwayat_status_tidak_mengarah_ke_staf_ganda_dan_membawa_penyaring(): void
+    {
+        // 30 log tambahan supaya ada halaman 2 (25 baris per halaman)
+        for ($i = 0; $i < 30; $i++) {
+            DB::table('room_status_logs')->insert(['room_id' => 1, 'status' => $i % 2 ? 'available' : 'vacant_dirty', 'changed_by' => 3,
+                'changed_at' => Carbon::parse('2026-10-05 08:00')->addMinutes($i * 10)->toDateTimeString(), 'note' => 'Uji paginasi '.$i]);
+        }
+        $l = Livewire::actingAs($this->akun('manager'))->withQueryParams(['dari' => '2026-09-30', 'sampai' => '2026-10-06'])
+            ->test(RiwayatStatus::class);
+        $html = $l->html();
+        $this->assertStringNotContainsString('staf/staf', $html);
+        $this->assertStringContainsString("gotoPage(2, 'page')", $html);
+
+        $l->call('gotoPage', 2, 'page')->assertSet('dari', '2026-09-30')->assertSet('sampai', '2026-10-06')
+            ->assertSee('Menampilkan 26–');
+    }
 }

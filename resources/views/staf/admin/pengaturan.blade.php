@@ -31,10 +31,16 @@
                                     @if ($satuan === 'Rp')
                                         <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-500">Rp</span>
                                     @endif
-                                    <input type="{{ $s->type === 'time' ? 'time' : 'number' }}" name="{{ $kunci }}" x-model="isi.{{ $kunci }}" @input="hapus('{{ $kunci }}')"
-                                           @if ($s->type !== 'time') step="{{ $s->type === 'integer' ? 1 : 'any' }}" min="0" @endif
+                                    @if ($s->type === 'time')
+                                        {{-- Pemilih jam 24 jam, ditulis 14.00 seperti di seluruh panel --}}
+                                        <x-staf.jam :name="$kunci" :nilai="$s->value" :model="'isi.'.$kunci" :label="$label" :langkah="15"
+                                                    :galat="'pesan(\''.$kunci.'\')'" @change="hapus('{{ $kunci }}')" />
+                                    @else
+                                    <input type="number" name="{{ $kunci }}" x-model="isi.{{ $kunci }}" @input="hapus('{{ $kunci }}')"
+                                           step="{{ $s->type === 'integer' ? 1 : 'any' }}" min="0"
                                            @class(['wt-input tabular-nums', 'pl-10' => $satuan === 'Rp'])
                                            :class="pesan('{{ $kunci }}') && 'is-invalid'">
+                                    @endif
                                 </span>
                                 @if ($satuan !== 'Rp')
                                     <span class="text-[13px] leading-tight text-ink-500">{{ $satuan }}</span>
@@ -44,6 +50,12 @@
                         </x-staf.field>
                     @endforeach
                 </div>
+                @if ($judul === 'Housekeeping')
+                    {{-- Hanya peringatan, tidak memblokir penyimpanan --}}
+                    <p class="mb-0 mt-4 rounded-md border border-[rgba(232,172,69,.45)] bg-[rgba(232,172,69,.12)] px-4 py-2.5 text-[13px] text-[#7A520C]" role="status" data-peringatan-multirole
+                       x-show="Number(String(isi.hk_max_workload_multirole ?? '').replace(',', '.')) > Number(String(isi.hk_max_workload ?? '').replace(',', '.'))"
+                       @style(['display: none' => ! $peringatanMultirole])>{{ \App\Http\Controllers\Staf\Admin\PengaturanController::PERINGATAN_MULTIROLE }}</p>
+                @endif
             </section>
         @endforeach
 

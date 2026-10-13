@@ -64,9 +64,12 @@ class SawGreedyTest extends TestCase
         $this->assertSame(['Z', 'X', 'Y'], array_column($hasil, 'kunci'));
     }
 
-    private function staf(int $id, string $nama, float $beban = 0, int $jumlah = 0, float $batas = 4, bool $hadir = true): array
+    /** Urutan staf (PembagianTugasService::urutkanStaf) di sini sama dengan id, kecuali diberikan. */
+    private function staf(int $id, string $nama, float $beban = 0, int $jumlah = 0, float $batas = 4, bool $hadir = true, ?int $urutan = null): array
     {
-        return compact('id', 'nama', 'beban', 'jumlah', 'batas', 'hadir');
+        $urutan ??= $id;
+
+        return compact('id', 'nama', 'urutan', 'beban', 'jumlah', 'batas', 'hadir');
     }
 
     private function tugas(string ...$kamar): array
@@ -82,7 +85,7 @@ class SawGreedyTest extends TestCase
         ]);
 
         $this->assertSame(['101', '102'], array_column($hasil['penugasan'][2], 'kunci'));
-        // Setelah dua kamar, beban Rina 2 = Anto 2, jumlah tugas sama (2), maka urut nama: Anto
+        // Setelah dua kamar, beban Rina 2 = Anto 2, jumlah tugas sama (2), maka urutan staf: Anto (1)
         $this->assertSame(['103'], array_column($hasil['penugasan'][1], 'kunci'));
         $this->assertSame([1 => 3.0, 2 => 2.0], $hasil['beban']);
         $this->assertSame([], $hasil['belum']);
@@ -104,16 +107,17 @@ class SawGreedyTest extends TestCase
         }
     }
 
-    public function test_greedy_seri_deterministik_jumlah_tugas_lalu_nama(): void
+    public function test_greedy_seri_deterministik_jumlah_tugas_lalu_urutan_staf(): void
     {
-        $staf = [$this->staf(3, 'Rina', beban: 1, jumlah: 1), $this->staf(1, 'Dewi', beban: 1, jumlah: 2), $this->staf(2, 'Anto', beban: 1, jumlah: 1)];
+        // Urutan staf, bukan nama: Rina (HK murni) di depan Anto (multi-role) walau nama Anto lebih dulu
+        $staf = [$this->staf(3, 'Rina', beban: 1, jumlah: 1, urutan: 0), $this->staf(1, 'Dewi', beban: 1, jumlah: 2, urutan: 2), $this->staf(2, 'Anto', beban: 1, jumlah: 1, urutan: 1)];
         $pertama = (new GreedyService)->bagi($this->tugas('101'), $staf);
         $kedua = (new GreedyService)->bagi($this->tugas('101'), array_reverse($staf));
 
-        // Beban sama (1): jumlah tugas paling sedikit (Rina, Anto), lalu nama: Anto
-        $this->assertSame(['101'], array_column($pertama['penugasan'][2], 'kunci'));
+        // Beban sama (1): jumlah tugas paling sedikit (Rina, Anto), lalu urutan staf: Rina
+        $this->assertSame(['101'], array_column($pertama['penugasan'][3], 'kunci'));
         // Urutan masukan staf tidak memengaruhi hasil
-        foreach (['penugasan', 'beban', 'jumlah'] as $kunci) {
+        foreach (['penugasan', 'beban', 'jumlah', 'rasio'] as $kunci) {
             ksort($pertama[$kunci]);
             ksort($kedua[$kunci]);
         }

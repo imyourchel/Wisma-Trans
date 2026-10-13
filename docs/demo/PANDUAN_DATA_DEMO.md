@@ -29,7 +29,7 @@ Akun yang dipakai tetap akun dari data master. Contohnya Manager `manager@wismat
 | Penghalang check-out | **Rizky** (105): laundry belum ditimbang | Contoh penghalang di layar check-out |
 | Menginap | Rombongan **PT Vale** 6 kamar (H-2 s.d. H+3), Budi (203), Agus (210) | Kode kamar, pesanan antar ke kamar, tagihan sementara |
 | Tamu login | **Budi** (`budi@contoh.id`) sedang menginap | Pesanan Saya: kode kamar, salin/bagikan, pesan makanan dari Resto |
-| Papan Status | 101 dan 102 terisi-kotor; 109, 114, 207 kosong-kotor; 214 sedang dibersihkan; 103 dan 208 perbaikan | Smart Cleaning: hitung prioritas lalu bagi tugas (Rina izin hari ini, Dewi merangkap F&B) |
+| Papan Status | 101 dan 102 terisi-kotor; 109, 114, 207 kosong-kotor; 214 sedang dibersihkan; 103 dan 208 perbaikan | Smart Cleaning: hitung prioritas lalu bagi tugas (Rina izin hari ini; Anto dan Dewi multi-role HK + F&B, batas otomatis 2 poin) |
 | Dapur | Pesanan Vale (101) dimasak lebih dari 20 menit; pesanan Budi siap diantar; pesanan kasir baru | Papan Pesanan, termasuk penanda terlambat |
 | Laundry | Laundry tamu luar sudah ditimbang dan belum dibayar; laundry Hasan siap diantar | Bayar tunai, serahkan |
 | Maintenance | AC 103 (baru, menahan kamar); kloset 208 dikerjakan vendor; kran dapur (area umum); AC 116 jalur cepat belum dilengkapi biayanya | Penanganan, jalur cepat, kartu dashboard |

@@ -771,7 +771,6 @@ CREATE TABLE `staff_availabilities` (
   `user_id` bigint(20) unsigned NOT NULL,
   `work_date` date NOT NULL,
   `is_available` tinyint(1) NOT NULL DEFAULT 1 COMMENT '0 bila berhalangan: sakit, izin, atau cuti',
-  `secondary_duty` varchar(50) DEFAULT NULL COMMENT 'tugas rangkap di bagian lain pada hari itu',
   `max_workload` decimal(6,2) DEFAULT NULL COMMENT 'batas beban kerja bila berbeda dari biasanya',
   `note` varchar(255) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),

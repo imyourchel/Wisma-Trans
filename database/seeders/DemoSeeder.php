@@ -8,12 +8,11 @@ use App\Models\BillingStatement;
 use App\Models\Customer;
 use App\Models\FacilityUnit;
 use App\Models\Hall;
-use App\Models\HallBooking;
 use App\Models\HousekeepingTask;
 use App\Models\Institution;
 use App\Models\Invoice;
-use App\Models\MaintenanceRequest;
 use App\Models\MaintenanceSchedule;
+use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\ReservationRoom;
 use App\Models\Room;
@@ -409,7 +408,7 @@ class DemoSeeder extends Seeder
                     ->each(fn ($s) => app(TagihanBulananService::class)->terbitkan($s, $this->u['manager']));
             });
             // 10.00 instansi membayar tagihan bulanan 18 hari setelah terbit (kecuali yang terbit dalam 20 hari terakhir)
-            $this->pada($this->h($d, '10:00'), 'instansi membayar tagihan bulanan', function () use ($hari) {
+            $this->pada($this->h($d, '10:00'), 'instansi membayar tagihan bulanan', function () {
                 BillingStatement::whereIn('status', ['issued', 'overdue', 'partially_paid'])
                     ->whereDate('issue_date', '<=', today()->subDays(18))
                     ->whereDate('issue_date', '<', $this->h(-20)->toDateString())
@@ -743,7 +742,7 @@ class DemoSeeder extends Seeder
         $this->stay($s, -38, 'tidak_datang');
         $this->pada($this->h(-45, '09:30'), 'tamu membatalkan reservasi', fn () => $s->r && app(ReservasiService::class)->batalkan($s->r->fresh(), 'Jadwal dinas berubah', $this->u['fo']));
         $this->pada($this->h(-44, '11:00'), 'dana dikembalikan', function () use ($s) {
-            $p = \App\Models\Payment::where('transaction_type', 'refund')->where('status', 'pending')
+            $p = Payment::where('transaction_type', 'refund')->where('status', 'pending')
                 ->whereIn('invoice_id', $s->r->invoices()->select('id'))->first();
             $p && app(PembayaranService::class)->selesaikanRefund($p, 'bank_transfer', $this->u['manager'], 'Transfer ke rekening tamu');
         });
@@ -920,7 +919,7 @@ class DemoSeeder extends Seeder
             foreach ($this->u['hk'] as $i => $staf) {
                 StaffAvailability::updateOrCreate(['user_id' => $staf->id, 'work_date' => today()->toDateString()], match (true) {
                     $i === 1 => ['is_available' => false, 'note' => 'Izin keperluan keluarga'],
-                    $staf->roles->pluck('code')->contains('fnb') && $i === 2 => ['is_available' => true, 'secondary_duty' => 'Bantu F&B sarapan', 'max_workload' => 2.0],
+                    $staf->roles->pluck('code')->contains('fnb') && $i === 2 => ['is_available' => true, 'note' => 'Bantu F&B sarapan'],
                     default => ['is_available' => true],
                 });
             }

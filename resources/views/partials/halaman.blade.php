@@ -1,4 +1,13 @@
-{{-- Paginasi tabel panel staf: $kamar->links('partials.halaman') --}}
+{{--
+    Paginasi tabel panel staf: $kamar->links('partials.halaman'). Dipakai halaman biasa dan komponen Livewire.
+    Di Livewire, alamat dari paginator tidak diawali "/" (misalnya "staf/riwayat-status-kamar?page=2"), sehingga browser
+    menempelkannya ke alamat sekarang (/staf/staf/...). Karena itu alamat dijadikan absolut, dan di Livewire klik ditangani
+    gotoPage() supaya penyaring di alamat (#[Url]) tetap terbawa. Di halaman biasa wire:click diabaikan dan tautan dipakai.
+--}}
+@php
+    $alamat = fn (?string $u) => $u !== null && ! preg_match('#^(https?:)?//|^/#', $u) ? url($u) : $u;
+    $namaHalaman = $paginator->getPageName();
+@endphp
 @if ($paginator->hasPages())
     <nav class="mt-4 flex flex-wrap items-center justify-between gap-3" aria-label="Halaman">
         <span class="text-[13px] text-ink-500">
@@ -8,7 +17,7 @@
             @if ($paginator->onFirstPage())
                 <span class="wt-btn-sm opacity-40" aria-hidden="true">‹</span>
             @else
-                <a href="{{ $paginator->previousPageUrl() }}" rel="prev" class="wt-btn-sm hover:no-underline" aria-label="Halaman sebelumnya">‹</a>
+                <a href="{{ $alamat($paginator->previousPageUrl()) }}" wire:click.prevent="previousPage('{{ $namaHalaman }}')" rel="prev" class="wt-btn-sm hover:no-underline" aria-label="Halaman sebelumnya">‹</a>
             @endif
             @foreach ($elements as $element)
                 @if (is_string($element))
@@ -18,13 +27,13 @@
                         @if ($page === $paginator->currentPage())
                             <span aria-current="page" class="wt-btn-sm min-w-8 !border-brown-800 !bg-brown-800 tabular-nums !text-cream-150">{{ $page }}</span>
                         @else
-                            <a href="{{ $url }}" class="wt-btn-sm min-w-8 tabular-nums hover:no-underline">{{ $page }}</a>
+                            <a href="{{ $alamat($url) }}" wire:click.prevent="gotoPage({{ $page }}, '{{ $namaHalaman }}')" class="wt-btn-sm min-w-8 tabular-nums hover:no-underline">{{ $page }}</a>
                         @endif
                     @endforeach
                 @endif
             @endforeach
             @if ($paginator->hasMorePages())
-                <a href="{{ $paginator->nextPageUrl() }}" rel="next" class="wt-btn-sm hover:no-underline" aria-label="Halaman berikutnya">›</a>
+                <a href="{{ $alamat($paginator->nextPageUrl()) }}" wire:click.prevent="nextPage('{{ $namaHalaman }}')" rel="next" class="wt-btn-sm hover:no-underline" aria-label="Halaman berikutnya">›</a>
             @else
                 <span class="wt-btn-sm opacity-40" aria-hidden="true">›</span>
             @endif

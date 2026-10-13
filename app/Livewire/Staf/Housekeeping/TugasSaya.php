@@ -3,6 +3,7 @@
 namespace App\Livewire\Staf\Housekeeping;
 
 use App\Models\HousekeepingTask;
+use App\Services\SmartCleaning\BatasBebanStaf;
 use App\Services\SmartCleaning\NilaiKriteria;
 use App\Services\SmartCleaning\PembagianTugasService;
 use App\Services\SmartCleaning\TugasHousekeepingService;
@@ -88,7 +89,7 @@ class TugasSaya extends Component
             'keterangan' => $kotor->isNotEmpty() ? collect($nilai->hitung(now(), $kotor))->map(fn ($m) => $m['keterangan']) : collect(),
             'selesai' => $hariIni->whereIn('status', ['completed', 'verified'])->count(),
             'beban' => $hariIni->sum(fn ($t) => (float) ($t->assignees->firstWhere('user_id', $saya->id)?->workload_share ?? 0)),
-            'batas' => $s['batas'] ?? PembagianTugasService::batasDefault(),
+            'batas' => $s['batas'] ?? BatasBebanStaf::untuk($saya, today())[0],
         ])->layout('components.layouts.staf', ['title' => 'Tugas Saya']);
     }
 }

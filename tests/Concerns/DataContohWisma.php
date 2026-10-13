@@ -115,6 +115,17 @@ trait DataContohWisma
             ['room_id' => 19, 'status' => 'occupied_dirty', 'changed_by' => 10, 'changed_at' => '2026-10-06 09:30:00', 'note' => 'Tamu minta kamar dibersihkan'],
             ['room_id' => 12, 'status' => 'vacant_dirty', 'changed_by' => 3, 'changed_at' => '2026-10-06 09:40:00', 'note' => 'Check-out RSV-0010'],
         ]);
+        $this->siapkanSettingHousekeeping();
+    }
+
+    /** Batas beban otomatis Housekeeping, sama dengan database/sql/2026-10-13-batas-beban-hk.sql. */
+    protected function siapkanSettingHousekeeping(): void
+    {
+        DB::table('settings')->insert([
+            ['setting_key' => 'hk_max_workload', 'value' => '4', 'type' => 'decimal', 'description' => 'Batas beban staf HK murni'],
+            ['setting_key' => 'hk_max_workload_multirole', 'value' => '2', 'type' => 'decimal', 'description' => 'Batas beban staf multi-role'],
+        ]);
+        Cache::forget('settings.all');
     }
 
     /**
@@ -125,7 +136,7 @@ trait DataContohWisma
     {
         DB::table('cleaning_criteria')->insert([
             ['id' => 1, 'code' => 'C1', 'name' => 'Waktu menuju check-in tamu berikutnya', 'attribute_type' => 'cost',
-                'description' => 'Menit sampai jam check-in tamu berikutnya; tanpa kedatangan hari ini = 1440', 'is_active' => 1],
+                'description' => 'Berapa menit lagi tamu berikutnya check-in di kamar ini; makin sedikit, makin mendesak. Bila hari ini tidak ada tamu yang akan masuk, dihitung 1.440 menit (24 jam).', 'is_active' => 1],
             ['id' => 2, 'code' => 'C2', 'name' => 'Status kamar', 'attribute_type' => 'benefit',
                 'description' => 'Kosong kotor = 3, terisi kotor = 2', 'is_active' => 1],
             ['id' => 3, 'code' => 'C3', 'name' => 'Durasi kamar sudah kotor', 'attribute_type' => 'benefit',

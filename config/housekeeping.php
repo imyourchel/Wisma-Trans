@@ -11,7 +11,10 @@ return [
         'occupied_dirty' => 0.5,
     ],
 
-    // Batas beban per staf per hari, dipakai bila staf tidak punya baris staff_availabilities pada hari itu
-    // atau max_workload-nya kosong
-    'batas_default' => 4.0,
+    // Batas beban per staf per hari tidak ada di sini: dibaca dari settings hk_max_workload (HK murni) dan
+    // hk_max_workload_multirole (halaman Pengaturan) lewat App\Services\SmartCleaning\BatasBebanStaf.
+
+    // Greedy memilih staf dengan rasio (beban + poin) / batas terkecil, bukan beban terkecil.
+    // Masih menunggu konfirmasi dosen; ubah ke true bila disetujui.
+    'greedy_rasio' => false,
 ];

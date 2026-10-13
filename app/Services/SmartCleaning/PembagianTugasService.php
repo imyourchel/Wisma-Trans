@@ -30,21 +30,29 @@ class PembagianTugasService
         return (float) (config('housekeeping.poin')[$status->value] ?? 1.0);
     }
 
-    public static function batasDefault(): float
-    {
-        return (float) config('housekeeping.batas_default', 4.0);
-    }
-
     /** 4.0 → "4", 4.5 → "4,5". */
     public static function angka(float|string|null $n): string
     {
         return rtrim(rtrim(number_format((float) $n, 2, ',', '.'), '0'), ',');
     }
 
-    /** Akun aktif berperan Housekeeping, urut nama. */
+    /** Akun aktif berperan Housekeeping, dalam urutan urutkanStaf(). */
     public static function stafHousekeeping(): Collection
     {
-        return User::where('is_active', true)->whereHas('roles', fn ($q) => $q->where('code', 'housekeeping'))->orderBy('name')->get();
+        return self::urutkanStaf(User::with('roles:id,code')->where('is_active', true)->whereHas('roles', fn ($q) => $q->where('code', 'housekeeping'))->get());
+    }
+
+    /**
+     * Satu-satunya urutan staf Housekeeping: HK murni dulu, lalu multi-role (BatasBebanStaf::peranLain), di dalam tiap
+     * kelompok urut nama. Dipakai halaman Ketersediaan Staf, Pembagian Tugas, dan pemecah seri Greedy (kunci "urutan"),
+     * sehingga tampilan dan perhitungan tidak bisa berbeda. Staf tidak hadir tetap di posisinya.
+     *
+     * @param  Collection<int, User>  $staf
+     * @return Collection<int, User>
+     */
+    public static function urutkanStaf(Collection $staf): Collection
+    {
+        return $staf->sortBy(fn (User $u) => [BatasBebanStaf::peranLain($u) === [] ? 0 : 1, mb_strtolower($u->name), $u->id])->values();
     }
 
     /**
@@ -53,7 +61,7 @@ class PembagianTugasService
      * supaya pembagian adil sepanjang hari.
      *
      * @param  list<int>  $lepas  id tugas yang sedang dilepas (bagi ulang); tidak ikut dihitung sebagai beban
-     * @return Collection<int, array{id: int, nama: string, hadir: bool, batas: float, beban: float, jumlah: int, rangkap: ?string, catatan: ?string, ketersediaan: ?StaffAvailability}>
+     * @return Collection<int, array{id: int, nama: string, hadir: bool, batas: float, jenisBatas: string, sumberBatas: string, sumberSingkat: string, beban: float, jumlah: int, rangkap: ?string, catatan: ?string, ketersediaan: ?StaffAvailability}>
      */
     public function staf(Carbon $tanggal, array $lepas = []): Collection
     {
@@ -66,17 +74,27 @@ class PembagianTugasService
             ->selectRaw('housekeeping_task_assignees.user_id, SUM(workload_share) beban, COUNT(*) jumlah')
             ->get()->keyBy('user_id');
 
-        return self::stafHousekeeping()->map(function (User $u) use ($ketersediaan, $beban) {
+        $staf = self::stafHousekeeping();
+        // Batas efektif: isian manager, multi-role, atau HK murni (BatasBebanStaf)
+        $batas = BatasBebanStaf::untukBanyak($staf, $ketersediaan);
+
+        return $staf->map(function (User $u, int $urutan) use ($ketersediaan, $beban, $batas) {
             $k = $ketersediaan[$u->id] ?? null;
 
             return [
                 'id' => $u->id,
                 'nama' => $u->name,
+                // Posisi dalam urutkanStaf(); pemecah seri Greedy
+                'urutan' => $urutan,
                 'hadir' => $k ? (bool) $k->is_available : true,
-                'batas' => $k && $k->max_workload !== null ? (float) $k->max_workload : self::batasDefault(),
+                'batas' => $batas[$u->id]['batas'],
+                'jenisBatas' => $batas[$u->id]['jenis'],
+                'sumberBatas' => $batas[$u->id]['sumber'],
+                'sumberSingkat' => $batas[$u->id]['singkat'],
                 'beban' => (float) ($beban[$u->id]->beban ?? 0),
                 'jumlah' => (int) ($beban[$u->id]->jumlah ?? 0),
-                'rangkap' => $k?->secondary_duty,
+                // Tugas rangkap = peran operasional lain dari user_roles, misalnya "F&B"
+                'rangkap' => implode(', ', BatasBebanStaf::peranLain($u)) ?: null,
                 'catatan' => $k?->note,
                 'ketersediaan' => $k,
             ];
@@ -120,7 +138,8 @@ class PembagianTugasService
                 ->each(fn ($t) => $tugas->push($this->tugas($t->room, $t->item)));
         }
 
-        $hasil = $this->greedy->bagi($tugas->all(), $staf->all());
+        // Aturan B (rasio beban) menunggu konfirmasi dosen; saklarnya di config/housekeeping.php
+        $hasil = $this->greedy->bagi($tugas->all(), $staf->all(), (bool) config('housekeeping.greedy_rasio'));
 
         return $hasil + ['batch' => $batch, 'staf' => $staf];
     }

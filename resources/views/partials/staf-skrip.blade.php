@@ -171,6 +171,92 @@
             },
         }));
 
+        // Isian tanggal x-staf.tanggal. cfg: { nilai, min, max, hariIni } dalam Y-m-d; nilai '' = kosong (penyaring).
+        // Perubahan dikirim lewat isian tersembunyi (event input untuk wire:model, change untuk formulir biasa).
+        const fIsian = new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        const fBatas = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' });
+        Alpine.data('isianTanggal', (cfg) => ({
+            nilai: cfg.nilai || '',
+            hariIni: cfg.hariIni,
+            buka: false,
+            bulan: dariYmd(cfg.nilai || cfg.hariIni),
+            get judul() { return fBulan.format(this.bulan); },
+            get tampil() { return this.nilai ? fIsian.format(dariYmd(this.nilai)) : ''; },
+            // Keterangan rentang yang boleh dipilih, misalnya "13 Okt – 20 Okt"
+            get batas() {
+                if (cfg.min && cfg.max) return fBatas.format(dariYmd(cfg.min)) + ' – ' + fBatas.format(dariYmd(cfg.max));
+                return '';
+            },
+            tertutup(t) { return (cfg.min && t < cfg.min) || (cfg.max && t > cfg.max); },
+            get sel() {
+                const y = this.bulan.getFullYear(), m = this.bulan.getMonth();
+                const geserAwal = (new Date(y, m, 1).getDay() + 6) % 7;
+                const baris = Math.ceil((geserAwal + new Date(y, m + 1, 0).getDate()) / 7);
+                return Array.from({ length: baris * 7 }, (_, i) => {
+                    const d = new Date(y, m, 1 - geserAwal + i);
+                    const t = keYmd(d);
+                    return { t, n: d.getDate(), luar: d.getMonth() !== m, label: fPanjang.format(d), hariIni: t === this.hariIni, tutup: this.tertutup(t) };
+                });
+            },
+            bolehGeser(n) {
+                const awal = keYmd(new Date(this.bulan.getFullYear(), this.bulan.getMonth() + n, 1));
+                const akhir = keYmd(new Date(this.bulan.getFullYear(), this.bulan.getMonth() + n + 1, 0));
+                return !(cfg.max && awal > cfg.max) && !(cfg.min && akhir < cfg.min);
+            },
+            bukaPanel() {
+                this.bulan = dariYmd(this.nilai || this.hariIni);
+                this.buka = true;
+            },
+            geser(n) { if (this.bolehGeser(n)) this.bulan = new Date(this.bulan.getFullYear(), this.bulan.getMonth() + n, 1); },
+            pilih(t) {
+                if (t && this.tertutup(t)) return;
+                this.buka = false;
+                this.$refs.tombol.focus();
+                if (t === this.nilai) return;
+                this.nilai = t;
+                const isian = this.$refs.isian;
+                isian.value = t;
+                isian.dispatchEvent(new Event('input', { bubbles: true }));
+                isian.dispatchEvent(new Event('change', { bubbles: true }));
+                if (cfg.kirim) this.$nextTick(() => this.$el.closest('form')?.requestSubmit());
+            },
+        }));
+
+        // Pemilih jam x-staf.jam (24 jam). nilai: 'HH:MM'; memilih menit menutup panel. Event change dikirim ke induk.
+        Alpine.data('pilihJam', (cfg) => ({
+            nilai: String(cfg.nilai || '').slice(0, 5),
+            buka: false,
+            daftarJam: Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')),
+            daftarMenit: Array.from({ length: Math.ceil(60 / (cfg.langkah || 5)) }, (_, i) => String(i * (cfg.langkah || 5)).padStart(2, '0')),
+            init() {
+                // Nilai dari basis data bisa 14:00:00; yang dikirim selalu HH:MM
+                const rapikan = (v) => { if (v && String(v).length > 5) this.nilai = String(v).slice(0, 5); };
+                rapikan(this.nilai);
+                this.$watch('nilai', rapikan);
+            },
+            get jam() { return this.nilai ? this.nilai.slice(0, 2) : ''; },
+            get menit() { return this.nilai ? this.nilai.slice(3, 5) : ''; },
+            get tampil() { return this.nilai ? this.jam + '.' + this.menit : ''; },
+            bukaPanel() {
+                this.buka = true;
+                this.$nextTick(() => ['jam', 'menit'].forEach((r) => {
+                    const el = this.$refs[r].querySelector('[data-pilih="true"]');
+                    if (el) this.$refs[r].scrollTop = el.offsetTop - this.$refs[r].clientHeight / 2 + el.clientHeight / 2;
+                }));
+            },
+            ubah(baru) {
+                if (baru === this.nilai) return;
+                this.nilai = baru;
+                this.$nextTick(() => this.$el.dispatchEvent(new Event('change', { bubbles: true })));
+            },
+            pilihJamKe(j) { this.ubah(j + ':' + (this.menit || '00')); },
+            pilihMenit(m) {
+                this.ubah((this.jam || '00') + ':' + m);
+                this.buka = false;
+                this.$refs.tombol.focus();
+            },
+        }));
+
         // Dialog konfirmasi bersama. Tindakan dikirim lewat #form-aksi (PATCH/DELETE),
         // atau menjalankan opsi.aksi (misalnya method Livewire).
         Alpine.store('konfirmasi', {

@@ -7,6 +7,7 @@
     'label' => null,      // label aksesibilitas
     'galat' => null,      // ekspresi Alpine: benar bila isian bergalat
     'sumber' => null,     // ekspresi Alpine berisi [{v, l}] bila pilihan berubah-ubah (misalnya unit mengikuti kamar terpilih)
+    'nonaktif' => null,   // ekspresi Alpine: benar bila dropdown tidak bisa dipakai
 ])
 @php
     $daftar = collect($pilihan)->map(fn ($isi, $v) => [
@@ -24,11 +25,11 @@
     @if ($name)
         <input type="hidden" name="{{ $name }}" :value="nilai">
     @endif
-    <button type="button" x-ref="tombol" @click="buka ? tutup() : bukaDaftar()"
+    <button type="button" x-ref="tombol" @click="buka ? tutup() : bukaDaftar()" @if ($nonaktif) :disabled="{{ $nonaktif }}" @endif
             @keydown.arrow-down.prevent="gerak(1)" @keydown.arrow-up.prevent="gerak(-1)"
             @keydown.enter.prevent="buka && tampil[sorot] ? pilih(tampil[sorot].v) : bukaDaftar()"
             aria-haspopup="listbox" :aria-expanded="buka" @if ($label) aria-label="{{ $label }}" @endif
-            class="wt-input flex w-full items-center gap-2.5 pr-3 text-left"
+            class="wt-input flex w-full items-center gap-2.5 pr-3 text-left disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-500"
             :class="[buka && '!border-clay-500 shadow-[0_0_0_3px_rgba(181,113,74,.16)]', {{ $galat ?: 'false' }} && 'is-invalid']">
         <span x-show="terpilih?.w" class="h-2.5 w-2.5 flex-none rounded-full" :style="{ background: terpilih?.w }"></span>
         <span class="min-w-0 flex-1 truncate" x-text="terpilih?.l ?? ''"></span>

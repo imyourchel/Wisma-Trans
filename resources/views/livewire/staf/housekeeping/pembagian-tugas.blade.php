@@ -75,8 +75,13 @@
                                 @if ($s['rangkap']) · rangkap: {{ $s['rangkap'] }}@endif
                             </div>
                         </div>
-                        <div @class(['text-right font-display text-lg font-extrabold tabular-nums', 'text-status-dirty' => $bebanTampil > $s['batas']])>
-                            {{ $angka($bebanTampil) }}<span class="text-[13px] font-semibold text-ink-500"> / {{ $angka($s['batas']) }}</span>
+                        {{-- Beban / batas efektif (BatasBebanStaf) dan persentasenya, bukti keseimbangan beban --}}
+                        @php $persen = $s['batas'] > 0 ? $bebanTampil / $s['batas'] * 100 : 0; @endphp
+                        <div class="flex-none text-right" data-batas="{{ $s['id'] }}">
+                            <div @class(['font-display text-lg font-extrabold tabular-nums', 'text-status-dirty' => $bebanTampil > $s['batas']])>
+                                {{ $angka($bebanTampil) }}<span class="text-[13px] font-semibold text-ink-500"> / {{ $angka($s['batas']) }} poin</span>
+                            </div>
+                            <div class="text-[11px] text-ink-500"><span class="font-semibold tabular-nums text-ink-900" data-persen>{{ $angka(round($persen, 1)) }}%</span> · {{ $s['sumberSingkat'] }}</div>
                         </div>
                     </div>
 

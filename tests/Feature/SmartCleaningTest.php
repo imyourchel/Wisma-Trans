@@ -533,17 +533,18 @@ class SmartCleaningTest extends TestCase
 
     public function test_ketersediaan_staf_disimpan_per_tanggal(): void
     {
+        // Batas staf yang tidak hadir dikosongkan saat disimpan, jadi 0,3 pada Rina tidak lagi ditolak
         Livewire::actingAs($this->akun('manager'))->test(KetersediaanStaf::class)
             ->set('baris.'.self::RINA.'.hadir', false)
-            ->set('baris.'.self::RAHMAT.'.rangkap', 'Bantu dapur')
-            ->set('baris.'.self::RAHMAT.'.batas', '3,5')
             ->set('baris.'.self::RINA.'.batas', '0,3')
-            ->call('simpan')->assertHasErrors(['baris.'.self::RINA.'.batas'])
-            ->set('baris.'.self::RINA.'.batas', '')
+            ->set('baris.'.self::RAHMAT.'.batas', '0,3')
+            ->call('simpan')->assertHasErrors(['baris.'.self::RAHMAT.'.batas'])
+            ->set('baris.'.self::RAHMAT.'.batas', '3,5')
             ->call('simpan')->assertHasNoErrors();
 
         $staf = app(PembagianTugasService::class)->staf(today())->keyBy('id');
-        $this->assertSame([true, 3.5, 'Bantu dapur'], [$staf[self::RAHMAT]['hadir'], $staf[self::RAHMAT]['batas'], $staf[self::RAHMAT]['rangkap']]);
+        // Tugas rangkap dibaca dari peran: Rahmat HK murni
+        $this->assertSame([true, 3.5, null], [$staf[self::RAHMAT]['hadir'], $staf[self::RAHMAT]['batas'], $staf[self::RAHMAT]['rangkap']]);
         $this->assertSame([false, 4.0], [$staf[self::RINA]['hadir'], $staf[self::RINA]['batas']]);
         $this->assertSame(1, DB::table('staff_availabilities')->where('user_id', self::RINA)->count());
     }
