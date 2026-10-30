@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /** Parameter operasional wisma. Perubahan langsung dipakai seluruh halaman. */
@@ -23,6 +24,7 @@ class PengaturanController extends MasterController
         ],
         'Check-in dan check-out' => [
             'check_in_time' => ['Jam check-in', 'WITA', null, null],
+            'early_check_in_from' => ['Early check-in mulai pukul', 'WITA, bila kamar sudah Siap', null, null],
             'check_out_time' => ['Jam check-out', 'WITA', null, null],
             'late_checkout_fee' => ['Biaya terlambat check-out', 'Rp', 0, 10000000],
         ],
@@ -46,6 +48,19 @@ class PengaturanController extends MasterController
         'Restoran' => [
             'fnb_max_wait_minutes' => ['Batas tunggu pesanan makanan', 'menit', 1, 240],
         ],
+        // Kisaran harga yang tampil di beranda dan halaman /aula (baris dari database/sql/2026-10-22-harga-aula.sql)
+        'Sewa aula' => [
+            'hall_price_min' => ['Harga sewa per hari (full day), mulai dari', 'Rp', 0, 100000000],
+            'hall_price_max' => ['Harga sewa per hari (full day), paling tinggi', 'Rp', 0, 100000000],
+        ],
+    ];
+
+    /**
+     * Pengaturan yang tetap tampil walau barisnya belum ada di tabel settings: nilai bawaan, tipe, dan keterangan.
+     * Barisnya dibuat lewat Setting::set saat pertama disimpan (atau dari database/sql/2026-10-30-early-check-in.sql).
+     */
+    private const BARIS_BAWAAN = [
+        'early_check_in_from' => ['06:00', 'time', 'Jam mulai early check-in, hanya untuk kamar berstatus Siap'],
     ];
 
     public const PERINGATAN_MULTIROLE = 'Perhatian: batas multi-role lebih besar dari batas HK murni, padahal staf multi-role juga bertugas di bagian lain.';
@@ -57,8 +72,8 @@ class PengaturanController extends MasterController
 
     public function edit(): View
     {
-        $settings = Setting::all()->keyBy('setting_key');
-        $terakhir = $settings->sortByDesc('updated_at')->first();
+        $settings = self::denganBawaan(Setting::all()->keyBy('setting_key'));
+        $terakhir = $settings->filter->exists->sortByDesc('updated_at')->first();
 
         return view('staf.admin.pengaturan', [
             'kelompok' => self::KELOMPOK,
@@ -69,9 +84,21 @@ class PengaturanController extends MasterController
         ]);
     }
 
+    /** Tambahkan baris bawaan yang belum ada di basis data (belum disimpan) supaya isiannya tetap tampil. */
+    private static function denganBawaan($settings)
+    {
+        foreach (self::BARIS_BAWAAN as $kunci => [$nilai, $tipe, $ket]) {
+            if (! isset($settings[$kunci])) {
+                $settings[$kunci] = new Setting(['setting_key' => $kunci, 'value' => $nilai, 'type' => $tipe, 'description' => $ket]);
+            }
+        }
+
+        return $settings;
+    }
+
     public function update(Request $request): JsonResponse|RedirectResponse
     {
-        $settings = Setting::all()->keyBy('setting_key');
+        $settings = self::denganBawaan(Setting::all()->keyBy('setting_key'));
 
         $aturan = [];
         foreach (self::KELOMPOK as $isi) {
@@ -86,16 +113,24 @@ class PengaturanController extends MasterController
                     'integer' => ['required', 'integer', "min:$min", "max:$max"],
                     default => ['required', 'numeric', "min:$min", "max:$max"],
                 };
+                // Baris bawaan yang belum tersimpan hanya diperiksa (dan dibuat) bila isiannya dikirim
+                if (! $settings[$kunci]->exists) {
+                    array_unshift($aturan[$kunci], 'sometimes');
+                }
             }
         }
         $data = $request->validate($aturan, ['date_format' => 'Format jam tidak valid.']);
+        // Early check-in harus dimulai sebelum jam check-in normal
+        if (isset($data['early_check_in_from'], $data['check_in_time']) && $data['early_check_in_from'] >= $data['check_in_time']) {
+            throw ValidationException::withMessages(['early_check_in_from' => 'Harus lebih awal dari jam check-in.']);
+        }
 
         $diubah = 0;
         DB::transaction(function () use ($data, $settings, $request, &$diubah) {
             foreach ($data as $kunci => $nilai) {
                 $nilai = trim((string) $nilai);
-                if ($settings[$kunci]->value !== $nilai) {
-                    $settings[$kunci]->update(['value' => $nilai, 'updated_by' => $request->user()->id]);
+                if (! $settings[$kunci]->exists || $settings[$kunci]->value !== $nilai) {
+                    Setting::set($kunci, $nilai, $request->user()->id, $settings[$kunci]->type, $settings[$kunci]->description);
                     $diubah++;
                 }
             }

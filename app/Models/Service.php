@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,18 @@ class Service extends Model
     public const CATEGORIES = ['fnb' => 'Makanan & minuman', 'laundry' => 'Laundry', 'amenity' => 'Perlengkapan'];
 
     public const DEPARTMENTS = ['fnb' => 'F&B', 'housekeeping' => 'Housekeeping', 'front_office' => 'Front Office'];
+
+    /** Tambahan pemesanan kamar (App\Services\Reservasi\TambahanKamar): harga dan keterangan dibaca dari baris layanan ini. */
+    public const EXTRA_BED = 'EXB01';
+
+    public const SARAPAN_TAMBAHAN = 'SRP01';
+
+    /**
+     * Layanan F&B yang hanya dijual sebagai tambahan pemesanan kamar, bukan menu kafe: tidak tampil di Resto, Kasir,
+     * Ketersediaan Menu, dan Papan Pesanan, dan ditolak bila dipesan lewat Resto atau Kasir. Kategorinya tetap fnb,
+     * jadi pendapatannya tetap tercatat sebagai F&B. Admin tetap mengelolanya di Data Master.
+     */
+    public const KODE_TAMBAHAN_KAMAR = [self::SARAPAN_TAMBAHAN];
 
     protected $fillable = ['code', 'name', 'description', 'category', 'menu_group', 'department', 'unit', 'price', 'photo', 'is_active', 'is_sold_out'];
 
@@ -34,6 +47,12 @@ class Service extends Model
         static $ada = null;
 
         return $ada ??= Schema::hasColumn('services', 'is_sold_out');
+    }
+
+    /** Menu kafe: F&B aktif selain tambahan pemesanan kamar. */
+    public function scopeMenuKafe(Builder $q): void
+    {
+        $q->where('category', 'fnb')->where('is_active', true)->whereNotIn('code', self::KODE_TAMBAHAN_KAMAR);
     }
 
     /** Sedang ditandai habis oleh F&B. */
@@ -61,6 +80,8 @@ class Service extends Model
             ->join('services as s', 's.id', '=', 'i.service_id')
             ->where('s.category', 'fnb')
             ->where('s.is_active', true)
+            ->whereNotIn('s.code', self::KODE_TAMBAHAN_KAMAR)
+            ->whereNull('o.service_start_date')
             ->where('o.status', '!=', 'cancelled')
             ->groupBy('i.service_id')
             ->orderByRaw('SUM(i.quantity) DESC, COUNT(DISTINCT i.service_order_id) DESC, i.service_id')

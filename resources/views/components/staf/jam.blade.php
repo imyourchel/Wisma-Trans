@@ -10,7 +10,7 @@
 <div x-data="pilihJam(@js(['nilai' => (string) $nilai, 'langkah' => (int) $langkah]))"
      @if ($model) x-modelable="nilai" x-model="{{ $model }}" @endif
      @click.outside="buka = false" @keydown.escape="buka && (buka = false, $refs.tombol.focus(), $event.stopPropagation())"
-     {{ $attributes->merge(['class' => 'relative']) }}>
+     {{ $attributes->merge(['class' => 'wt-isian-lebar relative']) }}>
     @if ($name)
         <input type="hidden" name="{{ $name }}" :value="nilai">
     @endif

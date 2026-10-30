@@ -198,6 +198,25 @@ class TipeKamarTest extends TestCase
         Storage::disk('public')->assertMissing('room-types/a.jpg');
     }
 
+    public function test_TK14b_foto_standar_folder_kamar_hanya_dilepas_dari_galeri_tanpa_menghapus_berkas(): void
+    {
+        $bersama = ['kamar/ruangan/double.png', 'kamar/fasilitas/kulkas.png', RoomType::fotoCondiment(2)];
+        $this->fotoTersimpan([...$bersama, 'room-types/a.jpg']);
+        $std = $this->tipe('STD');
+        $std->update(['photos' => [...$bersama, 'room-types/a.jpg']]);
+        $this->tipe('DLX')->update(['photos' => ['kamar/fasilitas/kulkas.png']]);
+
+        $this->simpan($this->galeri($std, ['lama:kamar/ruangan/double.png']), $std)->assertOk();
+
+        $this->assertSame(['kamar/ruangan/double.png'], $std->refresh()->photos);
+        Storage::disk('public')->assertMissing('room-types/a.jpg');
+        Storage::disk('public')->assertExists('kamar/fasilitas/kulkas.png');
+        Storage::disk('public')->assertExists('kamar/condiment/condiment_2.png');
+        $this->assertSame(['condiment_2', 'condiment_3', 'condiment_4', 'condiment_4'],
+            array_map(fn ($n) => basename(RoomType::fotoCondiment($n), '.png'), [1, 3, 4, 6]));
+        $this->assertSame('kamar/condiment/condiment_3.png', RoomType::fotoCondiment($this->tipe('FAM')->kapasitasKasur('triple_single')['dewasa']));
+    }
+
     public function test_TK15_hapus_tipe_yang_masih_punya_kamar_ditolak(): void
     {
         $std = $this->tipe('STD');

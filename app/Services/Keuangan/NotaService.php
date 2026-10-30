@@ -7,6 +7,7 @@ use App\Models\BillingStatement;
 use App\Models\Invoice;
 use App\Models\Reservation;
 use App\Models\ReservationRoom;
+use App\Services\Reservasi\TambahanKamar;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
@@ -24,6 +25,7 @@ class NotaService
      * Susun ulang baris kamar nota menginap dari baris reservasi (satu baris per kamar), lalu hitung ulang total.
      * $mulai/$akhir membatasi malam yang ditagih (malam tanggal d = menginap dari d ke d+1, inklusif), dipakai untuk
      * nota periode menginap panjang instansi dan nota check-out setelah periode terakhir.
+     * Nota menginap utuh (tanpa batas) ikut menyusun ulang Extra bed dan Sarapan tambahan kamar (TambahanKamar).
      */
     public function susunKamar(Invoice $nota, Reservation $reservasi, ?CarbonInterface $mulai = null, ?CarbonInterface $akhir = null): Invoice
     {
@@ -38,7 +40,7 @@ class NotaService
             ->sortBy(fn (ReservationRoom $r) => [$r->check_in_date->toDateString(), $r->id])
             ->each(fn (ReservationRoom $r) => $nota->items()->create([
                 'item_type' => 'room',
-                'description' => ($r->room ? 'Kamar '.$r->room->room_number : $r->roomType->name).', '.$r->malam().' malam'
+                'description' => $r->labelKamar().', '.$r->malam().' malam'
                     .($terbatas ? ' ('.$r->rentang().')' : ''),
                 'service_date' => $r->check_in_date->toDateString(),
                 'quantity' => $r->malam(),
@@ -48,6 +50,9 @@ class NotaService
                 'discount_amount' => $r->potongan(),
                 'subtotal' => $r->biaya(),
             ]));
+        if (! $terbatas) {
+            app(TambahanKamar::class)->susunNota($nota, $reservasi);
+        }
 
         return $this->hitungUlang($nota);
     }

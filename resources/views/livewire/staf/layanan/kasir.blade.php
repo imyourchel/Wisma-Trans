@@ -1,31 +1,36 @@
 @php
-    use App\Models\ServiceOrder;
     use App\Services\Layanan\PesananMakananService as PM;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $galatKeranjang = collect($errors->getMessages())->filter(fn ($p, $k) => str_starts_with($k, 'keranjang'))->flatten()->unique();
-    $pilihanSaji = collect(ServiceOrder::SERVING)->only($jenis === 'kamar' ? ['dine_in', 'room_service', 'take_away'] : ['dine_in', 'take_away'])
-        ->map(fn ($l, $k) => $k === 'take_away' ? 'Dibawa' : $l);
+    // Bahasa kasir sehari-hari; nilai yang dikirim tetap kunci ServiceOrder::SERVING
+    $pilihanSaji = collect(['dine_in' => 'Makan di sini', 'take_away' => 'Dibungkus', 'room_service' => 'Antar ke kamar'])
+        ->only($jenis === 'kamar' ? ['dine_in', 'take_away', 'room_service'] : ['dine_in', 'take_away']);
     $bayarSekarang = $jenis === 'luar' || $tagih === 'sekarang';
 @endphp
 
-<div>
-    <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+{{-- --kepala: tinggi header panel staf (diukur, ikut berubah saat ukuran layar berubah); dipakai pencarian dan panel Pesanan yang menempel --}}
+<div x-data="{ kepala: 80 }" :style="{ '--kepala': kepala + 'px' }" class="max-lg:pb-40"
+     x-init="const h = document.querySelector('.wt-konten > header'); const ukur = () => kepala = h?.offsetHeight || 80; ukur(); h && new ResizeObserver(ukur).observe(h)">
+    <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]" x-data="{ lembar: false }">
         {{-- Menu --}}
         <div class="min-w-0">
-            <label class="relative mb-4 block max-w-[360px]">
-                <span class="sr-only">Cari menu</span>
-                <x-staf.ikon nama="cari" ukuran="16" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
-                <input type="search" wire:model.live.debounce.300ms="cari" placeholder="Cari menu" class="wt-input pl-9">
-            </label>
+            {{-- Menempel di bawah header saat menu digulir; latar sama dengan halaman supaya kartu tidak terlihat di belakangnya --}}
+            <div class="sticky top-[var(--kepala,80px)] z-20 -mt-3 mb-1 bg-cream-100 pb-3 pt-3" data-cari-kasir>
+                <label class="relative block w-full">
+                    <span class="sr-only">Cari menu</span>
+                    <x-staf.ikon nama="cari" ukuran="16" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
+                    <input type="search" wire:model.live.debounce.300ms="cari" placeholder="Cari menu" class="wt-input w-full pl-9">
+                </label>
+            </div>
 
             @forelse ($grup as $nama => $isi)
                 <section wire:key="grup-{{ \Illuminate\Support\Str::slug($nama) }}" class="mb-5">
                     <h2 class="mb-2.5 mt-0 font-display text-[12px] font-bold uppercase tracking-[.08em] text-ink-500">{{ $nama }}</h2>
-                    <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
+                    <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]">
                         @foreach ($isi as $m)
                             @php $jumlah = (int) ($keranjang[$m->id]['qty'] ?? 0); @endphp
-                            <button type="button" wire:key="menu-{{ $m->id }}" wire:click="tambah({{ $m->id }})" @disabled($m->habis())
+                            <button type="button" wire:key="menu-{{ $m->id }}" wire:click="tambah({{ $m->id }})" @click="$dispatch('kasir-tambah', { id: {{ $m->id }} })" @disabled($m->habis())
                                     @class(['relative flex min-h-[86px] flex-col rounded-md border bg-cream-50 p-3 text-left shadow-wt-xs transition',
                                         'cursor-not-allowed border-cream-300 opacity-50' => $m->habis(),
                                         'border-clay-500 ring-1 ring-clay-500' => $jumlah > 0,
@@ -52,14 +57,26 @@
             @endforelse
         </div>
 
-        {{-- Keranjang dan pemesan --}}
-        <form wire:submit="simpan" novalidate class="wt-card flex flex-col shadow-wt-xs lg:sticky lg:top-4">
-            <div class="flex items-center gap-2 border-b border-cream-300 px-5 py-3.5">
+        {{-- Keranjang dan pemesan, seperti panel pesanan Resto tamu. Layar lebar: menempel di bawah header dengan tinggi tetap,
+             isi bergulir sendiri, Total dan tombol simpan selalu terlihat. Di bawah lg: lembar bawah (bottom sheet); saat tertutup
+             hanya ringkasan (jumlah menu + total) dan tombol simpan yang menempel di bawah layar. --}}
+        <div x-show="lembar" x-cloak @click="lembar = false" x-transition.opacity class="fixed inset-0 z-[45] bg-[rgba(62,42,28,.40)] lg:hidden"></div>
+        <form wire:submit="simpan" novalidate data-panel-kasir x-data="{ incar: null }"
+              @kasir-tambah.window="incar = $event.detail.id" @keydown.escape.window="lembar = false"
+              :class="lembar && 'max-lg:max-h-[88dvh]'"
+              class="wt-card flex flex-col shadow-wt-xs max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-50 max-lg:rounded-b-none max-lg:border-x-0 max-lg:border-b-0 max-lg:pb-[env(safe-area-inset-bottom)] max-lg:shadow-[0_-12px_32px_-12px_rgba(62,42,28,.35)] lg:sticky lg:top-[calc(var(--kepala,80px)_+_1.5rem)] lg:h-[calc(100dvh_-_var(--kepala,80px)_-_3rem)] lg:overflow-hidden">
+            <div class="flex flex-none items-center gap-2 border-b border-cream-300 px-5 py-3.5" :class="!lembar && 'max-lg:hidden'">
                 <h2 class="m-0 flex-1 font-display text-[13px] font-bold uppercase tracking-[.06em]">Pesanan</h2>
                 <span class="text-[12px] text-ink-500">{{ count($keranjang) }} menu</span>
+                <button type="button" @click="lembar = false" class="-mr-2 flex h-11 w-11 flex-none items-center justify-center rounded border-0 bg-transparent text-brown-800 lg:hidden" aria-label="Tutup pesanan"><x-staf.ikon nama="tutup" ukuran="18" /></button>
             </div>
 
-            <div class="flex flex-col gap-4 px-5 py-4">
+            <div class="flex flex-col gap-4 px-5 py-4 max-lg:min-h-0 max-lg:flex-1 max-lg:overflow-y-auto max-lg:overscroll-contain lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain" :class="!lembar && 'max-lg:hidden'" data-isi-panel>
+                {{-- Galat validasi baru: gulir ke isian pertama yang bermasalah --}}
+                @if ($errors->hasAny(['kamar', 'nama', 'hp', 'penyajian', 'tagih', 'metode', 'catatan']) || $galatKeranjang->isNotEmpty())
+                    <span hidden wire:key="galat-{{ md5(json_encode($errors->getMessages())) }}"
+                          x-init="lembar = true; $nextTick(() => $el.parentElement.querySelector('.is-invalid, [data-galat], [role=alert]')?.scrollIntoView({ block: 'center', behavior: 'smooth' }))"></span>
+                @endif
                 {{-- Isi keranjang --}}
                 @if (! $keranjang)
                     <p class="m-0 rounded-md border border-dashed border-cream-400 px-4 py-6 text-center text-[13px] text-ink-500">Klik menu di kiri untuk menambahkan.</p>
@@ -68,7 +85,9 @@
                         @foreach ($keranjang as $id => $b)
                             @php $m = $dipilih[$id] ?? null; @endphp
                             @continue(! $m)
-                            <li wire:key="krj-{{ $id }}" class="rounded-md border border-cream-300 bg-cream-100/60 p-3">
+                            <li wire:key="krj-{{ $id }}" class="scroll-my-3 rounded-md border border-cream-300 bg-cream-100/60 p-3">
+                                <span hidden wire:key="krj-{{ $id }}-{{ (int) $b['qty'] }}"
+                                      x-init="if (incar === {{ $id }}) { incar = null; const isi = $el.closest('[data-isi-panel]'); if (getComputedStyle(isi).overflowY === 'auto') $el.parentElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }"></span>
                                 <div class="flex items-start gap-2">
                                     <div class="min-w-0 flex-1">
                                         <div class="text-[13px] font-semibold">{{ $m->name }}</div>
@@ -76,7 +95,7 @@
                                     </div>
                                     <input type="number" min="1" max="20" wire:model.live.debounce.400ms="keranjang.{{ $id }}.qty" aria-label="Jumlah {{ $m->name }}"
                                            @class(['wt-input h-9 w-16 text-center tabular-nums', 'is-invalid' => $errors->has("keranjang.$id.qty")])>
-                                    <button type="button" wire:click="hapus({{ $id }})" class="flex h-9 w-9 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-ink-500 hover:text-status-dirty" aria-label="Hapus {{ $m->name }}"><x-staf.ikon nama="tutup" ukuran="14" /></button>
+                                    <button type="button" wire:click="hapus({{ $id }})" class="flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-ink-500 hover:text-status-dirty" aria-label="Hapus {{ $m->name }}"><x-staf.ikon nama="tutup" ukuran="14" /></button>
                                 </div>
                                 @if ($m->price === null)
                                     <input type="text" inputmode="numeric" wire:model.live.debounce.400ms="keranjang.{{ $id }}.harga" placeholder="Harga per porsi, misalnya 85000" aria-label="Harga {{ $m->name }}"
@@ -94,7 +113,7 @@
 
                 {{-- Pemesan --}}
                 <div class="flex flex-col gap-3 border-t border-cream-300 pt-4">
-                    <div class="inline-flex self-start rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Pemesan">
+                    <div class="wt-geser inline-flex max-w-full self-start rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Pemesan">
                         @foreach (['kamar' => 'Tamu menginap', 'luar' => 'Tamu luar'] as $v => $l)
                             <button type="button" wire:click="$set('jenis', '{{ $v }}')" role="tab" aria-selected="{{ $jenis === $v ? 'true' : 'false' }}"
                                     @class(['h-8 rounded-md border-0 px-3.5 text-[13px] font-semibold', 'bg-brown-800 text-cream-50' => $jenis === $v, 'bg-transparent text-ink-500' => $jenis !== $v])>{{ $l }}</button>
@@ -110,9 +129,9 @@
                     @endif
 
                     <x-staf.isian nama="penyajian" label="Penyajian" tag="div">
-                        <div class="flex flex-wrap gap-1.5">
+                        <div @class(['grid gap-1.5', 'grid-cols-3' => count($pilihanSaji) === 3, 'grid-cols-2' => count($pilihanSaji) === 2])>
                             @foreach ($pilihanSaji as $v => $l)
-                                <label @class(['flex h-9 cursor-pointer items-center rounded-full border px-3.5 text-[13px] font-semibold',
+                                <label @class(['flex h-9 cursor-pointer items-center justify-center whitespace-nowrap rounded-full border px-2 text-[13px] font-semibold',
                                     'border-brown-800 bg-brown-800 text-cream-50' => $penyajian === $v, 'border-cream-300 bg-cream-50 text-ink-500 hover:text-ink-900' => $penyajian !== $v])>
                                     <input type="radio" wire:model.live="penyajian" value="{{ $v }}" class="sr-only">{{ $l }}
                                 </label>
@@ -144,11 +163,19 @@
                 </div>
             </div>
 
-            <div class="mt-auto border-t border-cream-300 bg-cream-100/60 px-5 py-4">
-                <div class="flex justify-between text-[13px] text-ink-500"><span>Subtotal</span><span class="tabular-nums">{{ $rp($subtotal) }}</span></div>
-                <div class="mt-1 flex items-baseline justify-between"><span class="font-semibold">Total</span><span class="font-display text-[22px] font-extrabold tabular-nums">{{ $rp($subtotal) }}</span></div>
+            {{-- Kaki seperti drawer Resto: Total dan tombol penuh --}}
+            <div class="sticky bottom-0 z-10 flex-none rounded-b-[inherit] border-t border-cream-300 bg-cream-50 px-5 py-4 shadow-[0_-8px_18px_-12px_rgba(62,42,28,.28)] max-lg:border-t-0 max-lg:py-3 max-lg:shadow-none lg:static" :class="lembar && 'max-lg:!border-t'">
+                <div class="mb-3 flex items-baseline justify-between gap-3">
+                    {{-- Di bawah lg: ketuk untuk membuka atau menutup lembar pesanan --}}
+                    <button type="button" @click="lembar = !lembar" :aria-expanded="lembar" class="-ml-1 flex min-h-11 items-center gap-1.5 rounded border-0 bg-transparent px-1 text-left text-sm font-semibold text-olive-600 lg:hidden" data-buka-pesanan>
+                        <span x-text="lembar ? 'Sembunyikan' : 'Lihat pesanan'">Lihat pesanan</span> · {{ count($keranjang) }} menu
+                        <x-staf.ikon nama="panah" ukuran="14" class="transition-transform" ::class="!lembar && 'rotate-180'" />
+                    </button>
+                    <span class="text-sm text-ink-500 max-lg:hidden">Total</span>
+                    <span class="font-display text-xl font-extrabold tabular-nums">{{ $rp($subtotal) }}</span>
+                </div>
                 <button type="submit" wire:loading.attr="disabled" wire:target="simpan" @disabled(! $keranjang)
-                        class="mt-3 h-12 w-full rounded border-0 bg-clay-500 font-display text-[14px] font-bold text-cream-50 hover:bg-clay-600 disabled:opacity-50">
+                        class="h-12 w-full rounded border-0 bg-clay-500 font-display text-[13px] font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 disabled:opacity-50">
                     Simpan pesanan{{ $bayarSekarang ? ' · '.$metodeKasir[$metode] : '' }}
                 </button>
             </div>

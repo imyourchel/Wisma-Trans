@@ -650,7 +650,7 @@ CREATE TABLE `rooms` (
   `room_number` varchar(10) NOT NULL,
   `room_type_id` bigint(20) unsigned NOT NULL,
   `floor` tinyint(3) unsigned NOT NULL,
-  `bed_type` enum('single','twin','double','king') NOT NULL,
+  `bed_type` enum('twin_single','double','queen','twin_double','king','twin_queen','triple_single') NOT NULL DEFAULT 'double',
   `status` enum('available','occupied_clean','occupied_dirty','vacant_dirty','cleaning','maintenance') NOT NULL DEFAULT 'available',
   `dirty_since` datetime DEFAULT NULL COMMENT 'kapan kamar terakhir masuk antrean bersih (vacant_dirty / occupied_dirty); sumber kriteria C3',
   `is_active` tinyint(1) NOT NULL DEFAULT 1,

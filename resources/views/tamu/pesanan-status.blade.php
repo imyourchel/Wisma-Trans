@@ -4,6 +4,8 @@
     use App\Services\Keuangan\PembayaranMidtrans;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
+    // Dari Cek Pesanan: lihat saja, token tidak boleh muncul di halaman ini
+    $hanyaLihat ??= false;
     $dibayar = $order->sudahDibayar();
     $batal = $order->status === 'cancelled';
     $ambil = $order->serving_type === 'take_away';
@@ -75,16 +77,23 @@
                 {{ $order->order_date->translatedFormat('l, j F Y · H.i') }} WITA · {{ ServiceOrder::SERVING[$order->serving_type] ?? $order->serving_type }}@if ($nomorKamar) · Kamar {{ $nomorKamar }}@endif
             </div>
         </div>
+        @unless ($hanyaLihat)
         <button type="button" @click="salin()" class="inline-flex h-9 items-center gap-2 rounded-full border border-cream-300 bg-cream-50 px-4 text-[13px] text-brown-800 hover:bg-cream-200">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Salin tautan pesanan
         </button>
+        @endunless
     </div>
+
+    @if ($hanyaLihat)
+        <x-tamu.mode-lihat jenis="makanan" :kode="$order->kodeUrl()" :hp="$order->customer?->phone" :telepon="$wisma['telepon'] ?? '0822-9222-4111'" />
+    @endif
 
     {{-- Pembayaran: pilih metode, lalu nomor VA atau QRIS tampil di kartu ini --}}
     @if ($siapBayar)
-        <x-bayar-online :url-bayar="route('pesanan.bayar', ['kode' => $order->kodeUrl(), 't' => $order->access_token])"
-                        :url-cek="route('pesanan.cek', ['kode' => $order->kodeUrl(), 't' => $order->access_token])"
+        {{-- Lihat saja: tanpa token, endpoint bayar dan cek memeriksa izin di session --}}
+        <x-bayar-online :url-bayar="route('pesanan.bayar', array_filter(['kode' => $order->kodeUrl(), 't' => $hanyaLihat ? null : $order->access_token]))"
+                        :url-cek="route('pesanan.cek', array_filter(['kode' => $order->kodeUrl(), 't' => $hanyaLihat ? null : $order->access_token]))"
                         :jumlah="$total" :batas="$batasBayar" :tagihan="$tagihan ?? null"
                         keterangan="Pesanan diproses dapur setelah pembayaran berhasil.">
             <div class="mt-5 border-t border-cream-300 pt-4 font-display text-[11px] font-bold uppercase tracking-[.12em] text-ink-500">Rincian pesanan</div>
@@ -105,7 +114,7 @@
 
             <dl class="m-0 mt-5 flex flex-col gap-1.5 border-t border-cream-300 pt-4 text-xs">
                 <div class="flex justify-between gap-3"><dt class="text-ink-500">Pemesan</dt><dd class="m-0 truncate font-semibold">{{ $order->customer?->full_name }}</dd></div>
-                <div class="flex justify-between gap-3"><dt class="text-ink-500">Cara menikmati</dt><dd class="m-0 font-semibold">{{ ServiceOrder::SERVING[$order->serving_type] ?? $order->serving_type }}</dd></div>
+                <div class="flex justify-between gap-3"><dt class="text-ink-500">Penyajian</dt><dd class="m-0 font-semibold">{{ ServiceOrder::SERVING[$order->serving_type] ?? $order->serving_type }}</dd></div>
                 <div class="flex justify-between gap-3"><dt class="text-ink-500">Nomor nota</dt><dd class="m-0 font-semibold tabular-nums">{{ $order->invoice?->invoice_number }}</dd></div>
             </dl>
         </x-bayar-online>
@@ -208,7 +217,7 @@
     <x-ajakan-akun :hp="$order->customer?->phone" class="mt-8" />
 
     <p class="mt-8 text-center text-xs text-ink-500">
-        Simpan tautan halaman ini untuk memantau pesanan. Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.
+        {{ $hanyaLihat ? 'Halaman ini dibuka dari Cek pesanan dan berlaku sementara.' : 'Simpan tautan halaman ini untuk memantau pesanan.' }} Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.
     </p>
 </div>
 

@@ -3,21 +3,19 @@
     use Illuminate\Support\Js;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
-    // Latar kotak: warna status yang dipudarkan, supaya teks tetap mudah dibaca
-    $latar = fn (RoomStatus $s) => "border-color: {$s->color()}; background: color-mix(in srgb, {$s->color()} 11%, #FFFDF6)";
 @endphp
 
 {{-- cari: saring kartu kamar menurut nomor di browser, tanpa memuat ulang halaman --}}
 <div x-data="{ cari: '', cocok(n) { const k = this.cari.trim().toLowerCase(); return !k || String(n).toLowerCase().includes(k); } }">
-    {{-- Ringkasan per status (kamar aktif). Klik kartu untuk menyaring papan. --}}
+    {{-- Ringkasan per status (kamar aktif), warna dari RoomStatus::warna(). Klik kartu untuk menyaring papan, klik lagi untuk semua. --}}
     <div class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         @foreach (RoomStatus::cases() as $s)
             <button type="button" wire:click="filterBy('{{ $s->value }}')" aria-pressed="{{ $filter === $s->value ? 'true' : 'false' }}"
-                    @class(['wt-card flex items-center gap-3 border-l-4 px-4 py-3 text-left hover:bg-row-hover',
-                        'ring-2 ring-brown-800 ring-offset-1' => $filter === $s->value])
-                    style="border-left-color: {{ $s->color() }}">
-                <span class="font-display text-2xl font-extrabold tabular-nums" style="color: {{ $s->color() }}">{{ $counts[$s->value] ?? 0 }}</span>
-                <span class="text-[12px] font-medium leading-tight text-ink-900">{{ $s->label() }}</span>
+                    @class(['wt-st-ringkasan flex items-center gap-3 rounded-lg px-4 py-3 text-left shadow-wt-xs transition-shadow hover:shadow-wt-md',
+                        'is-aktif' => $filter === $s->value])
+                    style="{{ $s->gaya() }}" data-ringkasan-status="{{ $s->value }}">
+                <span class="wt-st-utama font-display text-[28px] font-extrabold leading-none tabular-nums">{{ $counts[$s->value] ?? 0 }}</span>
+                <span class="wt-st-teks text-[12px] font-semibold leading-tight">{{ $s->label() }}</span>
             </button>
         @endforeach
     </div>
@@ -35,7 +33,7 @@
             <span>{{ $total }} kamar aktif</span>
         @endif
         {{-- Tautan biasa (bukan wire:click) supaya sidebar dan judul halaman ikut berganti --}}
-        <nav class="inline-flex rounded-lg border border-cream-300 bg-cream-50 p-0.5" aria-label="Tampilan papan">
+        <nav class="wt-geser inline-flex max-w-full rounded-lg border border-cream-300 bg-cream-50 p-0.5" aria-label="Tampilan papan">
             @foreach (['papan' => 'Papan', 'kalender' => 'Kalender'] as $v => $l)
                 <a href="{{ route('staf.papan-status', array_filter(['tampilan' => $v === 'kalender' ? 'kalender' : null, 'status' => $filter ?: null])) }}"
                    @if ($view === $v) aria-current="page" @endif
@@ -61,7 +59,8 @@
         ];
         $namaJenis = ['menginap' => 'Sedang menginap', 'akan' => 'Akan datang', 'selesai' => 'Sudah check-out'];
         $hariIni = today();
-        $arsir = 'background: repeating-linear-gradient(135deg, rgba(201,121,58,.24) 0 6px, rgba(201,121,58,.07) 6px 12px)';
+        $perbaikanW = RoomStatus::Maintenance->warna();
+        $arsir = "background: repeating-linear-gradient(45deg, color-mix(in srgb, {$perbaikanW['utama']} 30%, transparent) 0 6px, color-mix(in srgb, {$perbaikanW['utama']} 10%, transparent) 6px 12px)";
         // Sel sisa: merah bila habis, kuning bila tinggal satu
         $warnaSisa = fn (int $n) => match (true) { $n <= 0 => 'bg-[rgba(212,81,74,.14)] text-status-dirty', $n === 1 => 'bg-[rgba(232,172,69,.24)] text-[#8A5E10]', default => 'text-ink-900' };
         $teksBalok = fn ($b) => $b->nama ? $b->nama.($b->instansi ? ' ('.$b->instansi.')' : '').' · '.$b->kode : $b->kode;
@@ -187,7 +186,7 @@
                                 @if ($perbaikan && $hariIniKah)
                                     {{-- Kamar yang sekarang Perbaikan: arsir dan label di kolom hari ini --}}
                                     <div style="grid-row: 1; grid-column: {{ $loop->iteration }}; {{ $arsir }}" data-perbaikan="{{ $room->room_number }}"
-                                         class="flex items-center justify-center border-l border-cream-300/70 text-[10px] font-bold uppercase tracking-[.06em] text-[#9A5A26]">Perbaikan</div>
+                                         class="flex items-center justify-center border-l border-cream-300/70 text-[10px] font-bold uppercase tracking-[.06em]" style="color: {{ $perbaikanW['teks'] }}">Perbaikan</div>
                                 @elseif ($bolehPesan && ! $h->lt($hariIni))
                                     <a href="{{ route('staf.reservasi-langsung', ['kamar' => $room->id, 'masuk' => $h->toDateString()]) }}" style="grid-row: 1; grid-column: {{ $loop->iteration }}"
                                        title="Reservasi langsung kamar {{ $room->room_number }} mulai {{ $h->translatedFormat('j M') }}" data-sel-kosong
@@ -267,17 +266,20 @@
             <h2 class="mb-3 font-display text-sm font-bold uppercase tracking-[.06em] text-ink-500">Lantai {{ $lantai }}</h2>
             <div class="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-3">
                 @foreach ($rooms as $room)
+                    {{-- Latar, garis kiri 6px, dan bingkai dari warna status (.wt-st-kartu); Perbaikan diberi arsir --}}
                     <button type="button" wire:key="kotak-{{ $room->id }}" x-show="cocok('{{ $room->room_number }}')" wire:click="open({{ $room->id }})"
                             aria-label="Kamar {{ $room->room_number }}, {{ $room->status->label() }}"
-                            class="flex min-h-[112px] flex-col rounded-md border border-l-[5px] p-3 text-left shadow-wt-xs transition hover:-translate-y-0.5 hover:shadow-wt-lg"
-                            style="{{ $latar($room->status) }}">
-                        <span class="flex items-baseline justify-between gap-2">
+                            @class(['wt-st-kartu flex min-h-[118px] flex-col rounded-md p-3 text-left shadow-wt-xs hover:-translate-y-0.5 hover:shadow-wt-lg',
+                                'wt-st-arsir' => $room->status === RoomStatus::Maintenance])
+                            style="{{ $room->status->gaya() }}" data-status-kamar="{{ $room->status->value }}">
+                        <span class="flex items-start justify-between gap-2">
                             <span class="font-display text-[26px] font-extrabold leading-none tabular-nums text-ink-900">{{ $room->room_number }}</span>
-                            <span class="text-[11px] font-semibold text-ink-500">{{ $room->roomType?->code }}</span>
+                            <span class="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold tracking-[.06em] text-ink-900 shadow-wt-xs">{{ $room->roomType?->code }}</span>
                         </span>
-                        <span class="mt-auto pt-3 text-[12px] font-semibold leading-tight" style="color: {{ $room->status->color() }}">{{ $room->status->label() }}</span>
+                        <span class="wt-st-teks mt-1 text-[11px]" data-kasur-kamar>{{ $room->bedTypeLabel() }}</span>
+                        <span class="mt-auto flex pt-2"><span class="wt-st-badge text-[11px] leading-tight">{{ $room->status->label() }}</span></span>
                         @if ($lama = $room->dirtyDuration())
-                            <span class="mt-0.5 text-[11px] leading-tight text-ink-500">{{ $lama }}</span>
+                            <span class="wt-st-teks mt-1 text-[11px] font-medium leading-tight">{{ $lama }}</span>
                         @endif
                         @if (isset($rusak[$room->id]) && $room->status !== RoomStatus::Maintenance)
                             <span class="mt-1.5 inline-flex self-start rounded bg-[rgba(212,81,74,.12)] px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-status-dirty"
@@ -294,20 +296,19 @@
 
     {{-- Detail kamar: ganti status (FO, HK, Admin) dan riwayat 10 perubahan terakhir --}}
     @if ($selected)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.jalurCepat ? $wire.tutupJalurCepat() : $wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.jalurCepat ? $wire.tutupJalurCepat() : $wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
             <div role="dialog" aria-modal="true" aria-labelledby="detail-kamar-judul"
-                 class="relative flex max-h-[92vh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+                 class="wt-dialog relative flex max-h-[92dvh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="detail-kamar-judul" class="font-display text-[17px] font-extrabold uppercase leading-tight tracking-[.04em]">Kamar {{ $selected->room_number }}</div>
-                        <div class="mt-1 inline-flex items-center gap-2 text-[13px]">
-                            <span class="h-2.5 w-2.5 rounded-full" style="background-color: {{ $selected->status->color() }}"></span>
-                            {{ $selected->status->label() }}
-                            @if ($lama = $selected->dirtyDuration())<span class="text-ink-500">· {{ $lama }}</span>@endif
+                        <div class="mt-1.5 inline-flex flex-wrap items-center gap-2 text-[13px]" style="{{ $selected->status->gaya() }}">
+                            <span class="wt-st-badge text-[12px] leading-tight">{{ $selected->status->label() }}</span>
+                            @if ($lama = $selected->dirtyDuration())<span class="wt-st-teks font-medium">{{ $lama }}</span>@endif
                         </div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
                         <x-staf.ikon nama="tutup" ukuran="16" />
                     </button>
                 </div>

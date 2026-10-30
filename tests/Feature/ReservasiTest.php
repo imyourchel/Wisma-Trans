@@ -75,7 +75,8 @@ class ReservasiTest extends TestCase
         $this->assertTrue($r->dp_due_at->equalTo(now()->addHours(24)));
         $this->assertSame(2760000.0, (float) $r->stayInvoice->total_amount);
         $this->assertSame(['booked', 'booked'], $r->rooms->pluck('status')->all());
-        $this->assertNull($r->rooms->first()->room_id);
+        // Nomor kamar langsung ditetapkan (Deluxe bernomor terkecil yang bebas), jadi jenis kasurnya terjamin
+        $this->assertSame(['111', '112'], $r->rooms->map(fn ($b) => $b->room->room_number)->all());
         $this->assertDatabaseHas('reservation_logs', ['reservation_id' => $r->id, 'status' => 'pending_payment', 'changed_by' => null]);
 
         // Harga master berubah: harga reservasi tetap
@@ -202,13 +203,16 @@ class ReservasiTest extends TestCase
         $fo = $this->akun('fo');
         $r = $this->reservasi->buatLangsung($this->tamu('Agus Salim', '081277003344'), $this->tgl('2026-10-06'), $this->tgl('2026-10-07'), [$this->kamar('104')->id], $fo);
         $this->assertSame(['confirmed', 'walk_in', $fo->id], [$r->status, $r->booking_channel, $r->created_by]);
-        $this->assertSame('Kamar 104, 1 malam', $r->stayInvoice->items()->sole()->description);
+        $this->assertSame('Kamar 104 · Twin Single, 1 malam', $r->stayInvoice->items()->sole()->description);
 
         // Kamar yang sudah dipesan tidak bisa dipilih lagi
         $this->galat(fn () => $this->reservasi->buatLangsung($this->tamu('Hasan Basri', '081322006677'), $this->tgl('2026-10-06'), $this->tgl('2026-10-08'), [$this->kamar('104')->id], $fo),
             'Kamar 104 sudah dipesan pada tanggal itu.');
 
-        $this->galat(fn () => $this->reservasi->checkIn($r, [], true, 'Salim Agus Wijaya', $fo), 'Check-in mulai pukul 14.00 WITA.');
+        // Sebelum jam early check-in dihitung menginap malam sebelumnya (early check-in: lihat EarlyCheckInTest)
+        Carbon::setTestNow('2026-10-06 05:30:00');
+        $this->galat(fn () => $this->reservasi->checkIn($r, [], true, 'Salim Agus Wijaya', $fo),
+            'Kedatangan sebelum pukul 06.00 dihitung menginap malam sebelumnya. Ubah tanggal masuk reservasi terlebih dahulu.');
 
         Carbon::setTestNow('2026-10-06 15:05:00');
         $this->galat(fn () => $this->reservasi->checkIn($r, [], true, '', $fo), 'Isi nama sesuai KTP yang ditahan.');
@@ -228,13 +232,13 @@ class ReservasiTest extends TestCase
         $fo = $this->akun('fo');
         Carbon::setTestNow('2026-10-06 14:00:00');
 
-        $this->galat(fn () => $this->reservasi->checkIn($r, [], false, null, $fo), 'Pilih nomor kamar.');
+        $this->assertSame($this->kamar('111')->id, $baris->room_id);
         $this->galat(fn () => $this->reservasi->checkIn($r, [$baris->id => $this->kamar('101')->id], false, null, $fo), 'Kamar 101 bukan tipe yang dipesan.');
         $this->galat(fn () => $this->reservasi->checkIn($r, [$baris->id => $this->kamar('201')->id], false, null, $fo), 'Kamar 201 belum siap (Kosong, kotor).');
 
         $this->reservasi->checkIn($r, [$baris->id => $this->kamar('113')->id], false, null, $fo);
         $this->assertSame([$this->kamar('113')->id, 'checked_in'], [$baris->fresh()->room_id, $baris->fresh()->status]);
-        $this->assertSame('Kamar 113, 2 malam', $r->stayInvoice->items()->sole()->description);
+        $this->assertSame('Kamar 113 · Twin Double, 2 malam', $r->stayInvoice->items()->sole()->description);
     }
 
     public function test_R10_pengajuan_instansi_disetujui_dengan_kamar_dan_potongan_atau_ditolak(): void
@@ -284,7 +288,7 @@ class ReservasiTest extends TestCase
         $this->assertSame(RoomStatus::VacantDirty, $this->kamar('209')->status);
         $this->assertSame(RoomStatus::OccupiedClean, $this->kamar('115')->status);
         // Total malam tetap 4: 1 malam di 209 + 3 malam di 115
-        $this->assertSame(['Kamar 209, 1 malam', 'Kamar 115, 3 malam'], $r->stayInvoice->items()->orderBy('id')->pluck('description')->all());
+        $this->assertSame(['Kamar 209 · Twin Double, 1 malam', 'Kamar 115 · Twin Double, 3 malam'], $r->stayInvoice->items()->orderBy('id')->pluck('description')->all());
         $this->assertSame(1840000.0, (float) $r->stayInvoice->fresh()->total_amount);
         $this->assertSame('Pindah dari kamar 209 ke 115: AC rusak', $r->logs()->latest('id')->first()->note);
     }

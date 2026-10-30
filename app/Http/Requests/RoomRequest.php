@@ -56,7 +56,7 @@ class RoomRequest extends FormRequest
             'room_number.alpha_num' => 'Nomor kamar hanya boleh huruf dan angka.',
             'room_number.unique' => 'Nomor kamar sudah dipakai.',
             'room_type_id.exists' => 'Tipe kamar tidak ditemukan.',
-            'bed_type.in' => 'Pilih jenis kasur Single, Twin, Double, atau King.',
+            'bed_type.in' => 'Pilih salah satu jenis kasur: '.implode(', ', Room::BED_TYPES).'.',
         ];
     }
 

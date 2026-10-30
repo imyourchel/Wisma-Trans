@@ -9,10 +9,13 @@ use App\Rules\NomorHp;
 use App\Services\Keuangan\PiutangService;
 use App\Services\Laporan\PeringkatPelanggan;
 use App\Services\Laporan\Periode;
+use App\Services\Pelanggan\GabungInstansi;
 use App\Services\Pelanggan\ProfilPelanggan;
+use App\Support\NamaInstansi;
 use App\Support\PersonName;
 use App\Support\Phone;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -25,7 +28,7 @@ use Livewire\Component;
 /**
  * Instansi (Manager): daftar dengan jumlah reservasi, malam kamar, dan pendapatan dalam periode (PeringkatPelanggan,
  * bawaan 12 bulan terakhir) serta piutang berjalan (PiutangService); tambah/ubah data dan skema penagihan;
- * narahubung (jadikan utama, nonaktifkan, aktifkan lagi, tambah atau tautkan lewat HP).
+ * narahubung (jadikan utama, nonaktifkan, aktifkan lagi, tambah atau tautkan lewat HP); gabungkan instansi duplikat.
  */
 class Instansi extends Component
 {
@@ -74,6 +77,15 @@ class Instansi extends Component
 
     public string $emailNarahubung = '';
 
+    /** Panel "Gabungkan ke…" terbuka */
+    #[Locked]
+    public bool $gabung = false;
+
+    public string $cariGabung = '';
+
+    #[Locked]
+    public ?int $tujuanGabung = null;
+
     public function mount(): void
     {
         Gate::authorize('manage-institutions');
@@ -86,6 +98,7 @@ class Instansi extends Component
         $this->instansiId = Institution::findOrFail($id)->id;
         $this->tutupFormulir();
         $this->tutupNarahubung();
+        $this->tutupGabung();
     }
 
     public function close(): void
@@ -93,6 +106,7 @@ class Instansi extends Component
         $this->instansiId = null;
         $this->tutupFormulir();
         $this->tutupNarahubung();
+        $this->tutupGabung();
     }
 
     /* ---------- Tambah / ubah ---------- */
@@ -161,6 +175,11 @@ class Instansi extends Component
             'jatuhTempo.required' => 'Isi jumlah hari jatuh tempo.',
             'jatuhTempo.*' => 'Jatuh tempo 1–365 hari.',
         ]);
+        if ($ada = NamaInstansi::sama($this->nama, $ubah?->id)) {
+            $this->addError('nama', "Sudah terdaftar sebagai {$ada->name}.");
+
+            return;
+        }
 
         // Mengubah skema hanya berlaku untuk reservasi dan tagihan berikutnya; data yang sudah ada tidak disentuh
         $data = [
@@ -298,6 +317,52 @@ class Instansi extends Component
         $this->dispatch('toast', teks: "{$c->full_name} ditambahkan sebagai narahubung {$i->name}.");
     }
 
+    /* ---------- Gabungkan instansi duplikat ---------- */
+
+    public function mulaiGabung(): void
+    {
+        Gate::authorize('manage-institutions');
+        $this->tutupFormulir();
+        $this->tutupNarahubung();
+        $this->gabung = true;
+    }
+
+    public function tutupGabung(): void
+    {
+        $this->gabung = false;
+        $this->cariGabung = '';
+        $this->tujuanGabung = null;
+        $this->resetValidation('tujuan');
+    }
+
+    public function pilihTujuan(?int $id): void
+    {
+        Gate::authorize('manage-institutions');
+        $this->resetValidation('tujuan');
+        if ($id !== null && $id === $this->instansiId) {
+            $this->addError('tujuan', 'Instansi tidak bisa digabung ke dirinya sendiri.');
+
+            return;
+        }
+        $this->tujuanGabung = $id === null ? null : Institution::findOrFail($id)->id;
+    }
+
+    public function gabungkan(GabungInstansi $layanan): void
+    {
+        Gate::authorize('manage-institutions');
+        $sumber = Institution::findOrFail($this->instansiId);
+        $tujuan = $this->tujuanGabung ? Institution::find($this->tujuanGabung) : null;
+        if (! $tujuan) {
+            $this->addError('tujuan', 'Pilih instansi tujuan.');
+
+            return;
+        }
+        $layanan->gabung($sumber, $tujuan, Auth::user());
+        $this->tutupGabung();
+        $this->open($tujuan->id);
+        $this->dispatch('toast', teks: "{$sumber->name} digabung ke {$tujuan->name}.");
+    }
+
     /* ---------- Tampilan ---------- */
 
     public function periodeTerpilih(): Periode
@@ -338,6 +403,7 @@ class Instansi extends Component
             ]);
 
         $i = $this->instansiId ? Institution::find($this->instansiId) : null;
+        $gabung = $i && $this->gabung;
 
         return view('livewire.staf.pelanggan.instansi', [
             'daftar' => $daftar,
@@ -345,7 +411,13 @@ class Instansi extends Component
             'labelPeriode' => $this->labelPeriode($p),
             'i' => $i,
             'pola' => $i ? app(ProfilPelanggan::class)->untukInstansi($i) : null,
-            'narahubung' => $i ? Customer::where('institution_id', $i->id)->orderByDesc('is_active')->orderBy('full_name')->get() : collect(),
+            // Jumlah pengajuan instansi yang diajukan tiap narahubung
+            'narahubung' => $i ? Customer::where('institution_id', $i->id)->withCount(['reservations as pengajuan' => fn ($q) => $q->whereHas('request')])
+                ->orderByDesc('is_active')->orderBy('full_name')->get() : collect(),
+            'saranGabung' => $gabung ? NamaInstansi::saran($i->name, 3, $i->id) : collect(),
+            'hasilGabung' => $gabung && ! $this->tujuanGabung ? NamaInstansi::cari($this->cariGabung, 8, $i->id) : collect(),
+            'tujuan' => $gabung && $this->tujuanGabung ? Institution::find($this->tujuanGabung) : null,
+            'ringkasanGabung' => $gabung ? app(GabungInstansi::class)->ringkasan($i) : null,
             'calon' => $this->tambahNarahubung ? $this->calon() : null,
         ])->layout('components.layouts.staf', ['title' => 'Instansi']);
     }

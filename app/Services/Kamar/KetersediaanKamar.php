@@ -3,6 +3,7 @@
 namespace App\Services\Kamar;
 
 use App\Enums\RoomStatus;
+use App\Models\Room;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,9 @@ use Illuminate\Support\Facades\DB;
  *  - sisa(): per tipe. Tamu online memesan tipe, bukan nomor kamar, jadi yang dihitung jumlah kamar siap jual
  *    tipe itu dikurangi pemakaian tertinggi di salah satu malamnya (termasuk pesanan yang belum punya nomor kamar).
  *  - kamarBebas(): per nomor kamar, untuk reservasi langsung, persetujuan instansi, check-in, dan pindah kamar.
+ *  - sisaKasur(): per tipe per jenis kasur, untuk pilihan kasur tamu: kamar bebas berjenis kasur itu, dibatasi sisa tipe
+ *    (pesanan tipe yang sama yang belum punya nomor kamar tetap mengurangi semua jenis kasur tipe itu).
+ *  - ambilKamar(): satu kamar bebas berjenis kasur tertentu (nomor terkecil), dikunci untuk disimpan ke reservasi.
  * Kamar nonaktif dan kamar berstatus perbaikan (maintenance) tidak dihitung tersedia.
  */
 class KetersediaanKamar
@@ -58,16 +62,49 @@ class KetersediaanKamar
      *
      * @param  list<int>|null  $tipe
      * @param  int|null  $kecuali  id reservasi yang barisnya diabaikan
-     * @return Collection<int, object{id: int, room_number: string, room_type_id: int, status: string, floor: int}>
+     * @param  string|null  $kasur  batasi ke satu jenis kasur (Room::BED_TYPES)
+     * @return Collection<int, object{id: int, room_number: string, room_type_id: int, status: string, floor: int, bed_type: string}>
      */
-    public function kamarBebas(CarbonInterface $masuk, CarbonInterface $keluar, ?array $tipe = null, ?int $kecuali = null): Collection
+    public function kamarBebas(CarbonInterface $masuk, CarbonInterface $keluar, ?array $tipe = null, ?int $kecuali = null, ?string $kasur = null): Collection
     {
         $terpakai = $this->pemakaian($masuk, $keluar, $kecuali)->whereNotNull('rr.room_id')->pluck('rr.room_id');
 
         return $this->kamarSiapJual($tipe)
             ->whereNotIn('id', $terpakai)
+            ->when($kasur !== null, fn ($q) => $q->where('bed_type', $kasur))
             ->orderBy('floor')->orderByRaw('CHAR_LENGTH(room_number)')->orderBy('room_number')
-            ->get(['id', 'room_number', 'room_type_id', 'status', 'floor']);
+            ->get(['id', 'room_number', 'room_type_id', 'status', 'floor', 'bed_type']);
+    }
+
+    /**
+     * Sisa kamar per jenis kasur: min(kamar bebas berjenis kasur itu, sisa tipe). Jenis kasur tanpa kamar bebas tidak ada di hasil.
+     *
+     * @param  list<int>|null  $tipe
+     * @return array<int, array<string, int>> id tipe => [jenis kasur => sisa]
+     */
+    public function sisaKasur(CarbonInterface $masuk, CarbonInterface $keluar, ?array $tipe = null, ?int $kecuali = null): array
+    {
+        $sisaTipe = $this->sisa($masuk, $keluar, $tipe, $kecuali);
+
+        return $this->kamarBebas($masuk, $keluar, $tipe, $kecuali)->groupBy('room_type_id')
+            ->map(fn (Collection $kamar, $id) => $kamar->countBy('bed_type')->map(fn ($n) => min($n, $sisaTipe[$id] ?? 0))->all())
+            ->all();
+    }
+
+    /**
+     * Satu kamar bebas tipe itu (dan jenis kasur itu bila diisi), nomor terkecil, dikunci lockForUpdate.
+     * Panggil di dalam transaksi setelah tipe kamar dikunci, supaya dua pemesanan bersamaan tidak mendapat kamar yang sama.
+     *
+     * @param  list<int>  $kecualiKamar  kamar yang sudah diambil baris lain di transaksi yang sama
+     */
+    public function ambilKamar(int $tipe, ?string $kasur, CarbonInterface $masuk, CarbonInterface $keluar, ?int $kecuali = null, array $kecualiKamar = []): ?Room
+    {
+        $id = $this->kamarBebas($masuk, $keluar, [$tipe], $kecuali, $kasur)
+            ->reject(fn ($k) => in_array($k->id, $kecualiKamar, true))
+            ->sortBy(fn ($k) => [strlen($k->room_number), $k->room_number])
+            ->first()?->id;
+
+        return $id ? Room::with('roomType')->whereKey($id)->lockForUpdate()->first() : null;
     }
 
     /** Apakah satu kamar bebas pada rentang itu (baris reservasi $kecuali tidak dihitung). */

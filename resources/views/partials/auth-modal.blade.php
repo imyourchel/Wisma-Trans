@@ -1,5 +1,5 @@
 @php
-    // Buka modal otomatis bila ada galat validasi, atau saat diakses lewat /masuk dan /daftar
+    // Buka modal otomatis bila ada galat validasi, atau saat diakses lewat /login dan /register
     $authMode = $errors->register->any() ? 'daftar'
         : ($errors->login->any() ? 'masuk' : request()->route()?->parameter('authModal'));
 
@@ -37,7 +37,7 @@
         },
         tutup() {
             this.open = false;
-            if (['/masuk', '/daftar'].includes(location.pathname)) history.replaceState(null, '', @js(route('home')));
+            if (['/login', '/register'].includes(location.pathname)) history.replaceState(null, '', @js(route('home')));
         },
         fokus() {
             const el = document.getElementById(this.up ? 'daftar-name' : 'masuk-login');
@@ -62,7 +62,7 @@
             <div role="dialog" aria-modal="true" :aria-label="up ? 'Buat akun' : (lupa ? 'Lupa kata sandi' : 'Masuk')"
                  :class="up ? 'min-[760px]:h-[650px]' : 'min-[760px]:h-[560px]'"
                  style="transition:height 650ms var(--ease-slide)"
-                 class="fixed inset-0 z-[375] m-auto h-[min(740px,calc(100vh-24px))] min-[760px]:max-h-[calc(100vh-24px)] w-[900px] max-w-[calc(100vw-24px)] animate-wt-fade overflow-hidden rounded-2xl bg-cream-50 shadow-wt-lg">
+                 class="fixed inset-0 z-[375] m-auto h-[min(740px,calc(100dvh-24px))] min-[760px]:max-h-[calc(100dvh-24px)] w-[900px] max-w-[calc(100vw-24px)] animate-wt-fade overflow-hidden rounded-2xl bg-cream-50 shadow-wt-lg">
                 <div class="absolute inset-0 overflow-y-auto overflow-x-hidden">
                     <div class="relative h-full min-h-[500px]">
 
@@ -79,7 +79,7 @@
                                 <div class="font-display text-[22px] font-bold uppercase tracking-[.05em] text-ink-900">Selamat datang kembali</div>
                                 <div class="text-[13px] text-ink-500">Silakan masuk untuk melihat pesanan kamar, restoran, dan aula Anda.</div>
                             </div>
-
+                            
                             {{-- Dikirim lewat fetch: kata sandi salah tidak memuat ulang halaman --}}
                             <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-2.5" novalidate
                                   x-data="formMasuk(@js(['login' => $errors->login->any() ? (string) old('login') : '', 'galat' => (string) $errors->login->first()]))" @isi-akun.window="isi.login = $event.detail.hp"
@@ -190,7 +190,7 @@
                                 <div class="flex flex-none flex-col gap-2.5">
                                     @foreach ([
                                         ['name', 'Nama lengkap', 'text', 'user-muted', 'Nama lengkap Anda', 'name', null],
-                                        ['phone', 'Nomor telepon', 'tel', 'phone-muted', 'Contoh: 081234567890', 'tel', null],
+                                        ['phone', 'Nomor telepon', 'tel', 'phone-muted', '08xxxxxxxxxx', 'tel', null],
                                         ['email', 'Email', 'email', 'mail-muted', 'Contoh: nama@email.com', 'email', null],
                                         ['password', 'Kata sandi', 'password', 'lock-muted', 'Minimal 8 karakter', 'new-password', 'lihat1'],
                                         ['password_confirmation', 'Konfirmasi kata sandi', 'password', 'lock-muted', 'Ulangi kata sandi', 'new-password', 'lihat2'],

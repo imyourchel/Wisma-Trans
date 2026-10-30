@@ -12,7 +12,7 @@
 @endphp
 
 <div>
-    <div class="mb-4 inline-flex rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Pengingat penagihan">
+    <div class="mb-4 wt-geser inline-flex max-w-full rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Pengingat penagihan">
         @foreach (['periksa' => 'Perlu diperiksa', 'tertunda' => 'Ditunda', 'riwayat' => 'Riwayat'] as $v => $l)
             <button type="button" wire:click="$set('tab', '{{ $v }}')" role="tab" aria-selected="{{ $tab === $v ? 'true' : 'false' }}"
                     @class(['inline-flex h-8 items-center gap-2 rounded-md border-0 px-3.5 text-[13px] font-semibold', 'bg-brown-800 text-cream-50' => $tab === $v, 'bg-transparent text-ink-500 hover:text-ink-900' => $tab !== $v])>
@@ -75,15 +75,15 @@
     @endif
 
     @if ($p && $t)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="pg-judul" class="relative flex max-h-[94vh] w-[640px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="pg-judul" class="wt-dialog relative flex max-h-[94dvh] w-[640px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="pg-judul" class="font-display text-[17px] font-extrabold">Pengingat {{ PengingatPenagihan::nomor($t) }}</div>
                         <div class="mt-0.5 truncate text-[13px] text-ink-500">{{ $t->institution->name }} · sisa {{ $rp(PengingatPenagihan::sisa($t)) }} · jatuh tempo {{ $t->due_date->translatedFormat('j M Y') }}</div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
                 <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
                     <div>
@@ -94,7 +94,7 @@
                         <div class="grid gap-3 sm:grid-cols-2">
                             <div>
                                 <label class="mb-1.5 flex items-center gap-2 text-[13px] font-semibold"><input type="checkbox" wire:model.live="kirimWa" class="h-4 w-4 accent-brown-800">WhatsApp</label>
-                                <input type="tel" wire:model="hp" @disabled(! $kirimWa) placeholder="Nomor WhatsApp narahubung" @class(['wt-input', 'is-invalid' => $errors->has('hp')])>
+                                <input type="tel" wire:model="hp" @disabled(! $kirimWa) placeholder="08xxxxxxxxxx" @class(['wt-input', 'is-invalid' => $errors->has('hp')])>
                                 @error('hp')<p class="m-0 mt-1 text-xs text-status-dirty">{{ $message }}</p>@enderror
                             </div>
                             <div>

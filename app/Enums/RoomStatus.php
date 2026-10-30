@@ -24,16 +24,36 @@ enum RoomStatus: string
         };
     }
 
-    public function color(): string
+    /**
+     * Satu sumber warna status, nada kalem agar serasi dengan tema krem: utama (garis, titik, angka; ≥ 3:1 di atas latar),
+     * latar (kartu), badge (latar label, sedikit lebih tua dari latar), teks (keterangan dan label; ≥ 4.5:1 di atas latar dan badge).
+     *
+     * @return array{utama: string, latar: string, teks: string, badge: string}
+     */
+    public function warna(): array
     {
         return match ($this) {
-            self::Available => '#4C8055',
-            self::OccupiedClean => '#7A8699',
-            self::OccupiedDirty => '#C9793A',
-            self::VacantDirty => '#B8433A',
-            self::Cleaning => '#5B7FA6',
-            self::Maintenance => '#6C6B50',
+            self::Available => ['utama' => '#2E9E55', 'latar' => '#E6F5EB', 'teks' => '#1F6B3A', 'badge' => '#C8EBD3'],
+            self::OccupiedClean => ['utama' => '#3D7BD9', 'latar' => '#E8F0FC', 'teks' => '#24508F', 'badge' => '#CFE0F8'],
+            self::OccupiedDirty => ['utama' => '#D2711C', 'latar' => '#FCEEE0', 'teks' => '#8A4510', 'badge' => '#F8DBBF'],
+            self::VacantDirty => ['utama' => '#D9534A', 'latar' => '#FCEAE8', 'teks' => '#93271F', 'badge' => '#F7D1CD'],
+            self::Cleaning => ['utama' => '#8360D1', 'latar' => '#F0EBFB', 'teks' => '#55349A', 'badge' => '#DFD4F6'],
+            self::Maintenance => ['utama' => '#6A7587', 'latar' => '#EDEFF2', 'teks' => '#353D4A', 'badge' => '#D9DDE4'],
         };
+    }
+
+    /** Warna utama (titik dan garis status). */
+    public function color(): string
+    {
+        return $this->warna()['utama'];
+    }
+
+    /** Variabel CSS untuk kelas .wt-st-* di app.css: style="{{ $status->gaya() }}". */
+    public function gaya(): string
+    {
+        $w = $this->warna();
+
+        return "--st: {$w['utama']}; --st-bg: {$w['latar']}; --st-tx: {$w['teks']}; --st-badge: {$w['badge']};";
     }
 
     /** Kamar masuk antrean bersih (kriteria C3 Smart Cleaning memakai dirty_since). */

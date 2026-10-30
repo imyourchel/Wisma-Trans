@@ -38,9 +38,9 @@
         </div>
     </form>
 
-    <div class="mb-4 grid grid-cols-2 gap-3 sm:max-w-[460px]">
-        <div class="wt-card px-4 py-3"><div class="font-display text-2xl font-extrabold tabular-nums">{{ $jumlah }}</div><div class="text-[12px] text-ink-500">Perawatan selesai</div></div>
-        <div class="wt-card px-4 py-3"><div class="font-display text-2xl font-extrabold tabular-nums">{{ $rp($totalBiaya) }}</div><div class="text-[12px] text-ink-500">Total biaya{{ $adaSaringan ? ' sesuai saringan' : '' }}</div></div>
+    <div class="mb-4 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:max-w-[460px]">
+        <div class="wt-card min-w-0 px-4 py-3"><div class="break-words font-display text-2xl font-extrabold tabular-nums">{{ $jumlah }}</div><div class="text-[12px] text-ink-500">Perawatan selesai</div></div>
+        <div class="wt-card min-w-0 px-4 py-3"><div class="break-words font-display text-2xl font-extrabold tabular-nums">{{ $rp($totalBiaya) }}</div><div class="text-[12px] text-ink-500">Total biaya{{ $adaSaringan ? ' sesuai saringan' : '' }}</div></div>
     </div>
 
     <div class="wt-card overflow-x-auto">

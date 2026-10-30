@@ -24,4 +24,17 @@ class Setting extends Model
 
         return $all[$key] ?? $default;
     }
+
+    /**
+     * Simpan nilai pengaturan sebagai baris di tabel settings; baris yang belum ada dibuat dengan $type dan $description.
+     * Cache pengaturan langsung dibuang supaya nilai baru terbaca di semua halaman.
+     */
+    public static function set(string $key, string $value, ?int $oleh = null, string $type = 'string', ?string $description = null): void
+    {
+        $s = static::find($key) ?? new static(['setting_key' => $key, 'type' => $type, 'description' => $description]);
+        if (! $s->exists || $s->value !== $value) {
+            $s->fill(['value' => $value, 'updated_by' => $oleh])->save();
+        }
+        Cache::forget('settings.all');
+    }
 }

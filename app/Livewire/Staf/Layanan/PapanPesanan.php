@@ -80,7 +80,7 @@ class PapanPesanan extends Component
             'terlambat' => $dapur->filter(fn ($x) => PesananMakananService::terlambat($x))->count(),
             'batas' => PesananMakananService::batasTunggu(),
             'selesaiHariIni' => PesananMakananService::query()->where('status', 'delivered')->whereDate('updated_at', today())->count(),
-            'menuHabis' => Service::where('category', 'fnb')->where('is_active', true)->where('is_sold_out', true)->orderBy('name')->get(),
+            'menuHabis' => Service::menuKafe()->where('is_sold_out', true)->orderBy('name')->get(),
             'perluRefund' => PembayaranMidtrans::jumlahPerluRefund(Auth::user()),
             'bolehKelola' => Gate::allows('manage-fnb'),
             ...$this->dataDetail(),

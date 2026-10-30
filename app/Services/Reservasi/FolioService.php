@@ -149,7 +149,7 @@ class FolioService
             ->filter(fn (?ReservationRoom $b) => $b && $b->malam() > 0)
             ->sortBy(fn (ReservationRoom $b) => [$b->check_in_date->toDateString(), $b->id])
             ->map(fn (ReservationRoom $b) => [
-                'deskripsi' => ($b->room ? 'Kamar '.$b->room->room_number : $b->roomType->name).', '.$b->malam().' malam',
+                'deskripsi' => $b->labelKamar().', '.$b->malam().' malam',
                 'tanggal' => $b->check_in_date,
                 'jumlah' => $b->malam(),
                 'harga' => (float) $b->price_per_night,

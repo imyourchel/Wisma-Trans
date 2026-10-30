@@ -55,7 +55,7 @@
         </div>
     @else
         <div class="wt-card overflow-x-auto">
-            <table class="w-full min-w-[1000px] border-collapse">
+            <table class="wt-tabel-kartu w-full min-w-[1000px] border-collapse">
                 <thead>
                     <tr>
                         <th class="wt-th">No</th>
@@ -75,22 +75,22 @@
                             [$teksTugas, $warnaTugas] = $statusTugas($tugas[$item->room_id] ?? null);
                         @endphp
                         <tr wire:key="prioritas-{{ $item->id }}" class="hover:bg-row-hover">
-                            <td class="wt-td font-semibold tabular-nums">{{ $item->priority_rank }}</td>
-                            <td class="wt-td whitespace-nowrap">
+                            <td class="wt-td font-semibold tabular-nums" data-label="Prioritas">#{{ $item->priority_rank }}</td>
+                            <td class="wt-td wt-kartu-judul whitespace-nowrap">
                                 <div class="font-display text-[15px] font-extrabold tabular-nums">{{ $item->room->room_number }}</div>
                                 <div class="text-[11px] text-ink-500">{{ $item->room->roomType?->name }}</div>
                             </td>
-                            <td class="wt-td">
+                            <td class="wt-td" data-label="{{ $c1?->name }}">
                                 <div>{{ $ket['C1'] ?? '—' }}</div>
                                 <div class="text-[11px] tabular-nums text-ink-500">{{ $mentah($s[$c1?->id]?->raw_value ?? 0) }} menit</div>
                             </td>
-                            <td class="wt-td">
+                            <td class="wt-td" data-label="{{ $c2?->name }}">
                                 <div>{{ $ket['C2'] ?? $item->room->status->label() }}</div>
                                 <div class="text-[11px] tabular-nums text-ink-500">nilai {{ $mentah($s[$c2?->id]?->raw_value ?? 0) }}</div>
                             </td>
-                            <td class="wt-td whitespace-nowrap">{{ NilaiKriteria::durasi((int) ($s[$c3?->id]?->raw_value ?? 0)) }}</td>
-                            <td class="wt-td text-right font-semibold tabular-nums">{{ $d($item->preference_score, 4) }}</td>
-                            <td class="wt-td whitespace-nowrap text-[13px] font-semibold {{ $warnaTugas }}">{{ $teksTugas }}</td>
+                            <td class="wt-td whitespace-nowrap" data-label="{{ $c3?->name }}">{{ NilaiKriteria::durasi((int) ($s[$c3?->id]?->raw_value ?? 0)) }}</td>
+                            <td class="wt-td text-right font-semibold tabular-nums" data-label="Nilai V">{{ $d($item->preference_score, 4) }}</td>
+                            <td class="wt-td whitespace-nowrap text-[13px] font-semibold {{ $warnaTugas }}" data-label="Tugas hari ini">{{ $teksTugas }}</td>
                         </tr>
                     @endforeach
                 </tbody>

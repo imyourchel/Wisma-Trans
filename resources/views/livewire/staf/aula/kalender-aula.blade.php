@@ -14,14 +14,39 @@
         <button type="button" wire:click="geser(1)" class="wt-btn-sm" aria-label="Bulan berikutnya">›</button>
         <h2 class="m-0 ml-2 font-display text-lg font-extrabold uppercase tracking-[.06em]">{{ $awal->translatedFormat('F Y') }}</h2>
         <div class="ml-auto flex flex-wrap items-center gap-3 text-xs text-ink-500">
-            @foreach ($nama as $s => $l)
+            @foreach ($lihatSaja ? array_diff_key($nama, ['pending' => 1]) : $nama as $s => $l)
                 <span class="inline-flex items-center gap-1.5"><span class="h-3 w-5 rounded-sm {{ $gaya[$s] }}"></span>{{ $l }} ({{ $jumlah[$s] ?? 0 }})</span>
             @endforeach
             <a href="{{ route('staf.aula-pemesanan') }}" class="wt-btn-sm hover:no-underline">Daftar pemesanan</a>
         </div>
     </div>
 
-    <div class="wt-card overflow-x-auto">
+    {{-- Layar sempit (< 768 px): daftar per hari yang ada pemesanannya, pengganti kisi bulan --}}
+    @php $adaAcara = collect($hari)->filter(fn ($h) => count($h['pemesanan']) && $h['tanggal']->isSameMonth($awal)); @endphp
+    <div class="wt-card divide-y divide-cream-300 md:hidden" data-kalender-daftar>
+        @forelse ($adaAcara as $h)
+            @php $d = $h['tanggal']; @endphp
+            <div wire:key="d-{{ $d->toDateString() }}" class="flex gap-3 px-4 py-3">
+                <div @class(['flex h-11 w-11 flex-none flex-col items-center justify-center rounded-md leading-none', 'bg-clay-500 text-cream-50' => $d->isToday(), 'bg-cream-200 text-ink-900' => ! $d->isToday()])>
+                    <span class="font-display text-[15px] font-extrabold tabular-nums">{{ $d->day }}</span>
+                    <span class="mt-0.5 text-[10px] font-semibold uppercase">{{ $d->translatedFormat('D') }}</span>
+                </div>
+                <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+                    @foreach ($h['pemesanan'] as $b)
+                        <a href="{{ route('staf.aula-pemesanan', ['tab' => $b->status === 'pending' ? 'menunggu' : ($b->status === 'confirmed' ? 'terkonfirmasi' : 'riwayat'), 'buka' => $b->id]) }}"
+                           class="flex min-h-11 flex-col justify-center rounded px-3 py-2 text-[13px] leading-snug hover:no-underline {{ $gaya[$b->status] }}">
+                            <span class="font-semibold">{{ $b->start_at->isSameDay($d) ? $b->start_at->format('H.i') : 'Lanjutan' }} · {{ $b->purpose ?: $b->booking_code }}</span>
+                            <span class="truncate text-[12px] opacity-80">{{ $b->booking_code }} · {{ $b->customer?->full_name }}</span>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @empty
+            <p class="m-0 px-4 py-10 text-center text-sm text-ink-500">Belum ada pemesanan aula bulan ini.</p>
+        @endforelse
+    </div>
+
+    <div class="wt-card overflow-x-auto max-md:hidden">
         <div class="grid min-w-[840px] grid-cols-7">
             @foreach (['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'] as $h)
                 <div @class(['border-b border-cream-300 bg-cream-200 px-3 py-2 font-display text-[11px] font-bold uppercase tracking-[.1em]', 'text-clay-600' => $h === 'Min', 'text-ink-500' => $h !== 'Min'])>{{ $h }}</div>

@@ -41,8 +41,8 @@ class TawaranMasukTest extends TestCase
         return [
             'kamar' => $this->urlKamar,
             'resto' => route('menu'),
-            'laundry' => route('laundry', ['jenis' => 'luar']),
-            'aula' => route('aula'),
+            'laundry' => route('laundry.pesan', ['jenis' => 'luar']),
+            'aula' => route('aula.ajukan'),
             'instansi' => route('instansi'),
         ];
     }
@@ -54,6 +54,17 @@ class TawaranMasukTest extends TestCase
         }
         // Resto: setelah masuk, panel pesanan dibuka lagi
         $this->get(route('menu'))->assertSee('kembali: '.Js::from(route('menu', ['lanjut' => 1]))->toHtml(), false);
+    }
+
+    public function test_alamat_masuk_dan_daftar_memakai_login_dan_register(): void
+    {
+        $this->assertSame(url('/login'), route('login'));
+        $this->assertSame(url('/register'), route('register'));
+        $this->get('/login')->assertOk();
+        $this->get('/register')->assertOk();
+        // Alamat lama dialihkan permanen
+        $this->get('/masuk')->assertRedirect('/login')->assertStatus(301);
+        $this->get('/daftar')->assertRedirect('/register')->assertStatus(301);
     }
 
     public function test_pengguna_yang_sudah_masuk_tidak_ditawari(): void

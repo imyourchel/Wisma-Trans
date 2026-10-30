@@ -11,10 +11,12 @@ use App\Models\User;
 use App\Rules\NomorHp;
 use App\Support\PersonName;
 use App\Support\Phone;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Laravel\Socialite\Facades\Socialite;
@@ -58,12 +60,54 @@ class GoogleController extends Controller
             return redirect()->route('home')->with('error', 'Proses masuk dengan Google dibatalkan atau gagal. Silakan coba lagi.');
         }
 
-        $email = Str::lower((string) $google->getEmail());
-        if ($email === '' || ! ($google->user['email_verified'] ?? false)) {
+        return $this->masuk($request, (string) $google->getId(), (string) $google->getEmail(),
+            (bool) ($google->user['email_verified'] ?? false), $google->getName());
+    }
+
+    /**
+     * Google One Tap ("Lanjutkan sebagai ..."): kredensial ID token dari pustaka Google Identity Services diperiksa
+     * ke Google (tokeninfo), lalu memakai aturan akun yang sama dengan callback. Mengembalikan alamat tujuan untuk skrip.
+     */
+    public function oneTap(Request $request): JsonResponse
+    {
+        $request->validate(['credential' => ['required', 'string', 'max:4096']]);
+        $clientId = (string) config('services.google.client_id');
+        $gagal = fn () => response()->json(['message' => 'Masuk dengan Google gagal. Silakan coba lagi.'], 422);
+
+        if ($clientId === '') {
+            return $gagal();
+        }
+        try {
+            $token = Http::timeout(8)->get('https://oauth2.googleapis.com/tokeninfo', ['id_token' => $request->input('credential')]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return $gagal();
+        }
+        $data = $token->json() ?? [];
+        // Token harus untuk aplikasi ini, dari Google, dan belum kedaluwarsa
+        if (! $token->ok() || ($data['aud'] ?? null) !== $clientId
+            || ! in_array($data['iss'] ?? null, ['accounts.google.com', 'https://accounts.google.com'], true)
+            || (int) ($data['exp'] ?? 0) < now()->timestamp || blank($data['sub'] ?? null)) {
+            return $gagal();
+        }
+
+        $this->simpanKembali($request);
+        $tujuan = $this->masuk($request, (string) $data['sub'], (string) ($data['email'] ?? ''),
+            in_array($data['email_verified'] ?? false, [true, 'true'], true), $data['name'] ?? null);
+
+        return response()->json(['redirect' => $tujuan->getTargetUrl()]);
+    }
+
+    /** Aturan akun bersama untuk callback OAuth dan One Tap. */
+    private function masuk(Request $request, string $googleId, string $email, bool $terverifikasi, ?string $nama): RedirectResponse
+    {
+        $email = Str::lower($email);
+        if ($email === '' || ! $terverifikasi) {
             return redirect()->route('home')->with('error', 'Email akun Google Anda belum terverifikasi.');
         }
 
-        $social = SocialAccount::where('provider', 'google')->where('provider_user_id', $google->getId())->first();
+        $social = SocialAccount::where('provider', 'google')->where('provider_user_id', $googleId)->first();
 
         if ($social) {
             $user = $social->user; // null bila akunnya sudah dihapus
@@ -74,7 +118,7 @@ class GoogleController extends Controller
                 if ($user->socialAccounts()->where('provider', 'google')->exists()) {
                     return redirect()->route('home')->with('error', 'Akun ini sudah terhubung dengan akun Google lain.');
                 }
-                $this->linkGoogle($user, $google->getId(), $email);
+                $this->linkGoogle($user, $googleId, $email);
             }
         }
 
@@ -95,9 +139,9 @@ class GoogleController extends Controller
 
         // Belum punya akun: lengkapi nomor telepon dulu sebelum akun customer dibuat
         $request->session()->put(self::PENDING, [
-            'id' => $google->getId(),
+            'id' => $googleId,
             'email' => $email,
-            'name' => $google->getName() ?: Str::before($email, '@'),
+            'name' => $nama ?: Str::before($email, '@'),
         ]);
 
         return redirect()->route('auth.google.lengkapi');

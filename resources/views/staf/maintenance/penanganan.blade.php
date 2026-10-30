@@ -101,7 +101,7 @@
     </form>
 
     <div class="wt-card overflow-x-auto">
-        <table class="w-full min-w-[920px] border-collapse">
+        <table class="wt-tabel-kartu w-full min-w-[920px] border-collapse">
             <thead>
                 <tr>
                     <th class="wt-th">Kode</th>
@@ -114,19 +114,19 @@
             <tbody>
                 @forelse ($laporan as $i => $l)
                     <tr @click="buka({{ $loop->index }})" class="cursor-pointer hover:bg-row-hover">
-                        <td class="wt-td whitespace-nowrap font-semibold tabular-nums">
+                        <td class="wt-td wt-kartu-judul whitespace-nowrap font-semibold tabular-nums">
                             {{ $l->request_code }}
                             @if ($l->isJalurCepat())<div class="mt-1"><x-staf.lencana-mnt jalur-cepat /></div>@endif
                         </td>
-                        <td class="wt-td max-w-[420px]">
+                        <td class="wt-td max-w-[420px]" data-label="Kerusakan">
                             <div class="font-semibold">{{ $l->lokasi() }}</div>
                             <div class="mt-0.5 text-[13px] text-ink-500">{{ Str::limit($l->damage_description, 80) }}</div>
                             @if (($k = $l->kamar()) && $k->status === RoomStatus::Maintenance)
                                 <div class="mt-0.5 text-[11px] text-status-dirty">Kamar ditutup (Perbaikan)</div>
                             @endif
                         </td>
-                        <td class="wt-td"><x-staf.lencana-mnt :prioritas="$l->priority" /></td>
-                        <td class="wt-td whitespace-nowrap text-ink-500">
+                        <td class="wt-td" data-label="Prioritas"><x-staf.lencana-mnt :prioritas="$l->priority" /></td>
+                        <td class="wt-td whitespace-nowrap text-ink-500" data-label="{{ $tab === 'reported' ? 'Dilaporkan' : ($tab === 'in_progress' ? 'Dikerjakan' : 'Pengerja') }}">
                             @if ($tab === 'reported')
                                 {{ $l->reported_at->translatedFormat('d M Y, H.i') }}
                                 <div class="text-[11px]">{{ $l->reported_at->diffForHumans() }}</div>
@@ -137,7 +137,7 @@
                                 {{ $l->pengerja() ?? '—' }}
                             @endif
                         </td>
-                        <td class="wt-td whitespace-nowrap {{ $tab === 'completed' ? 'tabular-nums' : 'text-ink-500' }}">
+                        <td class="wt-td whitespace-nowrap {{ $tab === 'completed' ? 'tabular-nums' : 'text-ink-500' }}" data-label="{{ $tab === 'completed' ? 'Biaya' : 'Pelapor' }}">
                             @if ($tab !== 'completed')
                                 {{ $l->reporter?->name ?? '—' }}
                             @elseif ($l->cost !== null)
@@ -159,7 +159,7 @@
     <div x-show="pilih !== null" x-cloak @click="tutup()" x-transition.opacity class="fixed inset-0 z-[340] bg-[rgba(62,42,28,.30)]"></div>
     <aside x-show="pilih !== null" x-cloak role="dialog" aria-modal="true" aria-labelledby="mnt-judul"
            x-transition:enter="transition duration-200 ease-wt" x-transition:enter-start="translate-x-8 opacity-0" x-transition:enter-end="translate-x-0 opacity-100"
-           class="fixed inset-y-0 right-0 z-[345] flex w-[520px] max-w-[94vw] flex-col border-l border-cream-300 bg-cream-50 shadow-wt-lg">
+           class="fixed inset-y-0 right-0 z-[345] flex w-[520px] max-w-full flex-col border-l pb-[env(safe-area-inset-bottom)] sm:max-w-[94vw] border-cream-300 bg-cream-50 shadow-wt-lg">
         <template x-if="b">
             <div class="flex min-h-0 flex-1 flex-col">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
@@ -168,7 +168,7 @@
                         <div class="mt-0.5 text-[13px] text-ink-500" x-text="b.lokasi + ' · Prioritas ' + b.prioritas"></div>
                         <div x-show="b.jalurCepat" class="mt-1.5"><x-staf.lencana-mnt jalur-cepat /></div>
                     </div>
-                    <button type="button" @click="tutup()" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" @click="tutup()" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
 
                 <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">

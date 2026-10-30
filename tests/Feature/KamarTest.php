@@ -60,7 +60,7 @@ class KamarTest extends TestCase
 
     public function test_KM06_jenis_kasur_tidak_valid_ditolak(): void
     {
-        $this->tambah(['bed_type' => 'queen'])->assertStatus(422)->assertJsonValidationErrors('bed_type');
+        $this->tambah(['bed_type' => 'twin'])->assertStatus(422)->assertJsonValidationErrors('bed_type');
         $this->assertDatabaseCount('rooms', 32);
     }
 

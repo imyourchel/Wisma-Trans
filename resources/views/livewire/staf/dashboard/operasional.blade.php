@@ -12,7 +12,7 @@
                 <h2 id="judul-fo" class="m-0 font-display text-sm font-bold uppercase tracking-[.08em]">Front Office hari ini</h2>
                 <span class="text-[12px] text-ink-500">Diperbarui {{ now()->format('H.i') }} WITA</span>
             </div>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 @foreach ($frontOffice as $k)
                     <a href="{{ $k['url'] }}" class="{{ $kelasKartu }}" data-kartu="{{ $k['kunci'] }}" @if ($k['awas']) data-awas @endif>
                         <div class="text-xs font-semibold uppercase tracking-[.08em] text-ink-500">{{ $k['label'] }}</div>
@@ -30,7 +30,7 @@
                 <h2 id="judul-hari-ini" class="m-0 font-display text-sm font-bold uppercase tracking-[.08em]">Hari ini</h2>
                 <span class="text-[12px] text-ink-500">Diperbarui {{ now()->format('H.i') }} WITA</span>
             </div>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 @foreach ($manager['hariIni'] as $k)
                     <a href="{{ $k['url'] }}" class="{{ $kelasKartu }}" @isset($k['kunci']) data-kartu="{{ $k['kunci'] }}" @endisset>
                         <div class="text-xs font-semibold uppercase tracking-[.08em] text-ink-500">{{ $k['label'] }}</div>
@@ -47,7 +47,7 @@
                 <h2 id="judul-bulan-ini" class="m-0 font-display text-sm font-bold uppercase tracking-[.08em]">Bulan ini</h2>
                 <span class="text-[12px] text-ink-500">1–{{ today()->translatedFormat('j M') }}, dibanding tanggal yang sama bulan lalu</span>
             </div>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 @foreach ($manager['bulanIni'] as $k)
                     @php $u = Format::perubahan($k['nilai'], $k['sebelum']); $teks = Format::teksPerubahan($k['nilai'], $k['sebelum']); @endphp
                     <a href="{{ $k['url'] }}" class="{{ $kelasKartu }}" data-kartu="{{ $k['label'] }}">

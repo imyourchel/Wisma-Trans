@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Tamu;
 
-use App\Models\FacilityUnit;
 use App\Models\Hall;
 use App\Rules\EmailWajar;
 use App\Rules\NomorHp;
@@ -10,6 +9,7 @@ use App\Services\Layanan\AulaService;
 use App\Services\Notifikasi\NotifikasiLayanan;
 use App\Support\Pelanggan;
 use App\Support\PersonName;
+use App\Support\PesananPerangkat;
 use App\Support\Phone;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Auth;
@@ -22,8 +22,8 @@ use Livewire\Component;
 use Throwable;
 
 /**
- * Halaman /aula: informasi aula dan pengajuan sewa. Jadwal pemesanan lain tidak ditampilkan; bentrok tetap dicek. Tamu tidak mengisi harga;
- * harga sewa dirundingkan staf lalu ditetapkan Manager saat menyetujui.
+ * Halaman /aula/ajukan: formulir pengajuan sewa (informasi aula di /aula, InfoLayananController). Jadwal pemesanan lain tidak ditampilkan; bentrok tetap dicek. Tamu tidak mengisi harga;
+ * kisaran tarif per hari (Hall::tarif) hanya informasi, harga sewa dirundingkan staf lalu ditetapkan Manager saat menyetujui.
  */
 class SewaAula extends Component
 {
@@ -35,7 +35,8 @@ class SewaAula extends Component
 
     public string $tanggalSelesai = '';
 
-    public string $jamSelesai = '12:00';
+    /** Sewa dihitung per hari (full day), jadi bawaannya sehari penuh. */
+    public string $jamSelesai = '17:00';
 
     public string $peserta = '';
 
@@ -100,20 +101,23 @@ class SewaAula extends Component
             'email' => ['nullable', 'max:150', new EmailWajar],
             'catatan' => ['nullable', 'string', 'max:200'],
         ], [
-            'tanggal.required' => 'Pilih tanggal acara.',
-            'tanggal.after_or_equal' => 'Tanggal acara tidak boleh sebelum hari ini.',
-            'tanggalSelesai.after_or_equal' => 'Tanggal selesai tidak boleh sebelum tanggal mulai.',
-            'jamMulai.*' => 'Pilih jam mulai.',
-            'jamSelesai.*' => 'Pilih jam selesai.',
-            'peserta.required' => 'Isi perkiraan jumlah peserta.',
-            'peserta.*' => 'Isi angka jumlah peserta.',
-            'keperluan.required' => 'Isi jenis acara.',
-            'keperluan.min' => 'Minimal 3 huruf.',
-            'nama.required' => 'Isi nama penanggung jawab.',
-            'nama.min' => 'Minimal 3 huruf.',
+            // Nama isian di pesan mengikuti label formulir
+            'tanggal.required' => 'Tanggal mulai wajib diisi.',
+            'tanggal.date_format' => 'Tanggal mulai tidak valid.',
+            'tanggal.after_or_equal' => 'Tanggal mulai tidak boleh sebelum hari ini.',
+            'tanggalSelesai.date_format' => 'Tanggal berakhir tidak valid.',
+            'tanggalSelesai.after_or_equal' => 'Tanggal berakhir tidak boleh sebelum tanggal mulai.',
+            'jamMulai.*' => 'Jam mulai wajib diisi.',
+            'jamSelesai.*' => 'Jam selesai wajib diisi.',
+            'peserta.required' => 'Perkiraan jumlah peserta wajib diisi.',
+            'peserta.*' => 'Perkiraan jumlah peserta tidak valid.',
+            'keperluan.required' => 'Nama atau jenis acara wajib diisi.',
+            'keperluan.min' => 'Nama atau jenis acara minimal 3 huruf.',
+            'nama.required' => 'Nama kontak wajib diisi.',
+            'nama.min' => 'Nama kontak minimal 3 huruf.',
             'nama.regex' => PersonName::MESSAGE,
-            'hp.required' => 'Isi nomor WhatsApp.',
-            'catatan.max' => 'Maksimal 200 karakter.',
+            'hp.required' => 'Nomor WhatsApp wajib diisi.',
+            'catatan.max' => 'Catatan tambahan maksimal 200 karakter.',
         ]);
         [$mulai, $selesai] = $this->waktu() ?? [null, null];
         if (! $mulai) {
@@ -127,6 +131,8 @@ class SewaAula extends Component
         $catatan = collect([$this->instansi !== '' ? 'Instansi: '.trim($this->instansi) : null, trim($this->catatan) ?: null])->filter()->join("\n");
         $b = $layanan->ajukan($penyewa, Hall::findOrFail((int) $this->aula), $mulai, $selesai, (int) $this->peserta, trim($this->keperluan), $catatan ?: null);
         $notifikasi->aula($b);
+        // Tamu tanpa akun: masuk ke tab "Pesanan terakhir" di Cek Pesanan
+        PesananPerangkat::aula($b);
 
         $this->terkirim = $b->booking_code;
         $this->reset('tanggal', 'tanggalSelesai', 'peserta', 'keperluan', 'catatan');
@@ -143,9 +149,7 @@ class SewaAula extends Component
             'daftarAula' => $aula,
             'dipilih' => $dipilih,
             'bentrok' => $bentrok,
-            // Fasilitas dari unit fasilitas yang terpasang di area Aula, misalnya "AC (3 unit)"
-            'fasilitas' => FacilityUnit::with('facility')->where('area_label', 'Aula')->where('is_active', true)->get()
-                ->groupBy(fn ($u) => $u->facility?->name)->map(fn ($g, $nama) => $g->count() > 1 ? "{$nama} ({$g->count()} unit)" : $nama)->values()->all(),
-        ])->layout('components.layouts.guest', ['title' => 'Sewa aula']);
+            'tarif' => Hall::tarif(),
+        ])->layout('components.layouts.guest', ['title' => 'Ajukan sewa aula']);
     }
 }

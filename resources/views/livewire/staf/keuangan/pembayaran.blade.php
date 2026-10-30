@@ -13,7 +13,7 @@
 
 <div>
     <div class="mb-4 flex flex-wrap items-center gap-3">
-        <div class="inline-flex rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Bagian pembayaran">
+        <div class="wt-geser inline-flex max-w-full rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Bagian pembayaran">
             @foreach (['transaksi' => 'Transaksi & rekap kas', 'refund' => 'Perlu pengembalian dana'] as $v => $l)
                 <button type="button" wire:click="$set('tab', '{{ $v }}')" role="tab" aria-selected="{{ $tab === $v ? 'true' : 'false' }}"
                         @class(['inline-flex h-8 items-center gap-2 rounded-md border-0 px-3.5 text-[13px] font-semibold transition-colors',
@@ -79,19 +79,19 @@
     @else
         {{-- Penyaring --}}
         <div class="mb-4 flex flex-wrap items-end gap-3">
-            <input type="date" wire:model.live="tanggal" class="wt-input w-[170px]" aria-label="Tanggal transaksi">
-            <select wire:model.live="metode" class="wt-input w-[170px]" aria-label="Metode">
+            <input type="date" wire:model.live="tanggal" class="wt-input w-full min-w-0 flex-1 sm:w-[170px] sm:flex-none" aria-label="Tanggal transaksi">
+            <select wire:model.live="metode" class="wt-input w-full sm:w-[170px]" aria-label="Metode">
                 <option value="">Semua metode</option>
                 @foreach (Payment::METHODS as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
             </select>
-            <select wire:model.live="kanal" class="wt-input w-[130px]" aria-label="Kanal">
+            <select wire:model.live="kanal" class="wt-input w-full sm:w-[130px]" aria-label="Kanal">
                 <option value="">Semua kanal</option><option value="online">Online</option><option value="manual">Manual</option>
             </select>
-            <select wire:model.live="status" class="wt-input w-[140px]" aria-label="Status">
+            <select wire:model.live="status" class="wt-input w-full sm:w-[140px]" aria-label="Status">
                 <option value="">Semua status</option>
                 @foreach (Payment::STATUS as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
             </select>
-            <select wire:model.live="tujuan" class="wt-input w-[150px]" aria-label="Tujuan">
+            <select wire:model.live="tujuan" class="wt-input w-full sm:w-[150px]" aria-label="Tujuan">
                 <option value="">Semua tujuan</option>
                 @foreach (Payment::TUJUAN as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
                 <option value="refund">Pengembalian</option>
@@ -106,6 +106,7 @@
                 <span class="text-[12px] text-ink-500">{{ $rekap['jumlah'] }} transaksi berhasil</span>
             </div>
             <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                <div class="min-w-0 overflow-x-auto">
                 <table class="w-full border-collapse text-[13px]">
                     <thead><tr><th class="wt-th">Metode</th><th class="wt-th text-right">Masuk</th><th class="wt-th text-right">Dikembalikan</th><th class="wt-th text-right">Bersih</th></tr></thead>
                     <tbody>
@@ -117,6 +118,7 @@
                         @endforelse
                     </tbody>
                 </table>
+                </div>
                 <dl class="m-0 flex flex-col gap-2 rounded bg-cream-100 px-4 py-3 text-[13px]">
                     <div class="flex justify-between"><dt class="text-ink-500">Online</dt><dd class="m-0 tabular-nums">{{ $rp($rekap['kanal']['online']) }}</dd></div>
                     <div class="flex justify-between"><dt class="text-ink-500">Manual</dt><dd class="m-0 tabular-nums">{{ $rp($rekap['kanal']['manual']) }}</dd></div>

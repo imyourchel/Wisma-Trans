@@ -20,15 +20,15 @@
 
 <div>
     <div class="mb-4 flex flex-wrap items-end gap-3">
-        <select wire:model.live="status" class="wt-input w-[170px]" aria-label="Status">
+        <select wire:model.live="status" class="wt-input w-full sm:w-[170px]" aria-label="Status">
             <option value="">Semua status</option>
             @foreach (BillingStatement::STATUS as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
         </select>
-        <select wire:model.live="instansi" class="wt-input w-[220px]" aria-label="Instansi">
+        <select wire:model.live="instansi" class="wt-input w-full sm:w-[220px]" aria-label="Instansi">
             <option value="">Semua instansi</option>
             @foreach ($instansiBulanan as $i)<option value="{{ $i->id }}">{{ $i->name }}</option>@endforeach
         </select>
-        <input type="date" wire:model.live="periode" class="wt-input w-[170px]" aria-label="Tanggal dalam periode" title="Tampilkan periode yang memuat tanggal ini">
+        <input type="date" wire:model.live="periode" class="wt-input w-full min-w-0 flex-1 sm:w-[170px] sm:flex-none" aria-label="Tanggal dalam periode" title="Tampilkan periode yang memuat tanggal ini">
         <button type="button" wire:click="bukaSusun" class="ml-auto inline-flex h-10 items-center gap-2 rounded border-0 bg-clay-500 px-4 font-display text-[13px] font-semibold text-cream-50 hover:bg-clay-600">
             <x-staf.ikon nama="tambah" ukuran="16" />Susun sekarang
         </button>
@@ -74,15 +74,15 @@
     {{ $daftar->links('partials.halaman') }}
 
     @if ($s)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="bs-judul" class="relative flex max-h-[94vh] w-[820px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="bs-judul" class="wt-dialog relative flex max-h-[94dvh] w-[820px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="bs-judul" class="flex flex-wrap items-center gap-2 font-display text-[17px] font-extrabold">{{ $s->statement_number }} <span class="wt-lencana {{ $warna[$s->status] ?? '' }} font-sans text-[11px]">{{ $s->label() }}</span></div>
                         <div class="mt-0.5 truncate text-[13px] text-ink-500">{{ $s->institution->name }} · periode {{ $s->rentang() }}{{ $s->issue_date ? ' · terbit '.$s->issue_date->translatedFormat('j M Y') : '' }}{{ $s->status !== 'draft' ? ' · jatuh tempo '.$s->due_date->translatedFormat('j M Y') : '' }}</div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
                 <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
                     <div class="overflow-x-auto rounded border border-cream-300">

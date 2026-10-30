@@ -6,13 +6,15 @@ use App\Models\Room;
 use App\Models\RoomType;
 use App\Models\Setting;
 use App\Services\Kamar\KetersediaanKamar;
+use App\Services\Reservasi\TambahanKamar;
 use App\Support\PencarianInap;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 
 /**
- * Tanggal menginap dan susunan tamu yang dibawa di URL (?masuk=&keluar=&tamu=), dipakai
- * halaman daftar kamar dan detail tipe kamar. Format tamu dijelaskan di PencarianInap.
+ * Tanggal menginap dan tamu yang dibawa di URL (?masuk=&keluar=&tamu=), dipakai halaman daftar kamar, detail tipe kamar,
+ * dan pemesan. Di daftar dan detail, tamu berupa total dewasa-anak ("4-2"); di halaman pemesan berupa susunan per kamar
+ * ("2-2_2-0"). Format dijelaskan di PencarianInap.
  */
 trait PencarianKamar
 {
@@ -25,12 +27,22 @@ trait PencarianKamar
     #[Url(except: '')]
     public string $tamu = '';
 
+    /** Simpanan sementara dalam satu permintaan (properti privat tidak dibawa Livewire antar permintaan). */
+    private ?Collection $memoTipe = null;
+
+    private array $memoSisa = [];
+
+    private ?int $memoExtra = null;
+
     /** Dipanggil tombol Cek Ketersediaan; daftar diperbarui tanpa pindah halaman. */
     public function cek(string $masuk, string $keluar, string $tamu): void
     {
         $this->masuk = $masuk;
         $this->keluar = $keluar;
         $this->tamu = PencarianInap::teks(PencarianInap::susunan($tamu));
+        if (method_exists($this, 'setelahCek')) {
+            $this->setelahCek();
+        }
     }
 
     protected function pencarian(): PencarianInap
@@ -38,116 +50,103 @@ trait PencarianKamar
         return PencarianInap::dari($this->masuk, $this->keluar, $this->tamu);
     }
 
-    /** Tipe yang punya kamar aktif, dari harga termurah; kasur diambil dari kamar-kamar aktifnya. */
+    /**
+     * Tipe yang punya kamar aktif, dari harga termurah. Jenis kasur diambil dari kamar-kamar aktifnya, urut Room::BED_TYPES:
+     * kodeKasur = kode (twin_single, double), kasur = label (Twin Single, Double Bed),
+     * kapasitas = dewasa dan anak terbesar dari jenis kasurnya (RoomType::kapasitasTerbesar), misalnya Family 4 dewasa + 2 anak.
+     */
     protected function tipeKamar(): Collection
     {
-        return RoomType::query()
+        return $this->memoTipe ??= RoomType::query()
             ->whereHas('rooms', fn ($q) => $q->where('is_active', true))
             ->with(['facilities' => fn ($q) => $q->orderBy('facilities.id'), 'rooms' => fn ($q) => $q->where('is_active', true)->select('id', 'room_type_id', 'bed_type')])
             ->orderBy('base_price')->orderBy('id')
             ->get()
-            ->each(fn (RoomType $t) => $t->setAttribute('kasur', $t->rooms->pluck('bed_type')->unique()
-                ->sortBy(fn ($b) => array_search($b, array_keys(Room::BED_TYPES), true))
-                ->map(fn ($b) => Room::BED_TYPES[$b] ?? $b)->values()->all()));
+            ->each(function (RoomType $t) {
+                $kode = $t->rooms->pluck('bed_type')->unique()->sortBy(fn ($b) => array_search($b, array_keys(Room::BED_TYPES), true))->values();
+                $t->setAttribute('kodeKasur', $kode->all());
+                $t->setAttribute('kasur', $kode->map(fn ($b) => Room::labelKasur($b))->all());
+                $t->setAttribute('kapasitas', $t->kapasitasTerbesar($kode->all()));
+            });
+    }
+
+    /** Susunan tamu per kamar dari pencarian ("2-2_2-0"), dipakai sebagai pembagian awal dan isi otomatis. */
+    protected function susunanTamu(): array
+    {
+        return PencarianInap::susunan($this->tamu);
+    }
+
+    /** Total dewasa dan anak pencarian (semua kamar dijumlahkan, PencarianInap::total). */
+    protected function jumlahTamu(): array
+    {
+        return PencarianInap::total($this->tamu);
+    }
+
+    /** Extra bed yang bisa ditambahkan per kamar saat ini (0 bila layanannya tidak ditawarkan). */
+    protected function extraTersedia(): int
+    {
+        return $this->memoExtra ??= app(TambahanKamar::class)->extraTersedia();
     }
 
     /**
-     * Keadaan tiap tipe untuk pencarian aktif. Penghuni per kamar (dewasa dan anak) dibandingkan dengan kapasitas tipe:
-     *  - tersedia   : semua kamar muat dan sisa kamar cukup
-     *  - kurang     : semua kamar muat, tetapi sisa kamar lebih sedikit dari yang diminta
-     *  - sebagian   : hanya sebagian kamar yang muat (kamar lain butuh tipe lebih besar)
-     *  - penuh      : ada kamar yang muat, tetapi tidak ada sisa kamar di tanggal itu
-     *  - tidak-muat : tidak ada kamar yang muat di tipe ini
-     * kamarDipesan = urutan kamar (0, 1, ...) yang bisa dipesan di tipe ini.
-     *
-     * @return array<int, array{jenis: string, sisa: int, muat: int, dipesan: int, kamarDipesan: list<int>, total: float}>
+     * Kecocokan satu jenis kasur dengan penghuni kamar-kamar di pencarian (RoomType::kecocokan): yang terbaik dari semua
+     * kamar, jadi jenis kasur dianggap muat bila muat untuk minimal satu kamar.
      */
-    protected function statusPerTipe(Collection $tipe, PencarianInap $cari): array
+    protected function cocokKasur(RoomType $tipe, string $kasur): string
     {
-        if (! $cari->aktif() || $tipe->isEmpty()) {
-            return [];
-        }
-        $sisa = app(KetersediaanKamar::class)->sisa($cari->masuk, $cari->keluar, $tipe->pluck('id')->all());
-        $penghuni = $cari->penghuni();
+        return collect($this->susunanTamu())
+            ->map(fn ($s) => $tipe->kecocokan($kasur, $s['dewasa'], $s['anak'], $this->extraTersedia()))
+            ->sortBy(fn ($c) => RoomType::URUT_KECOCOKAN[$c])->first() ?? RoomType::TIDAK_MUAT;
+    }
 
-        return $tipe->mapWithKeys(function (RoomType $t) use ($sisa, $cari, $penghuni) {
-            $n = $sisa[$t->id] ?? 0;
-            $muat = array_keys(array_filter($penghuni, fn ($orang) => $orang <= $t->max_capacity));
-            $kamarDipesan = array_slice($muat, 0, $n);
-
-            return [$t->id => [
-                'jenis' => match (true) {
-                    $muat === [] => 'tidak-muat',
-                    $n === 0 => 'penuh',
-                    count($muat) < $cari->jumlah => 'sebagian',
-                    $n < $cari->jumlah => 'kurang',
-                    default => 'tersedia',
-                },
-                'sisa' => $n,
-                'muat' => count($muat),
-                'dipesan' => count($kamarDipesan),
-                'kamarDipesan' => $kamarDipesan,
-                'total' => (float) $t->base_price * $cari->malam() * count($kamarDipesan),
-            ]];
-        })->all();
+    /** Kecocokan satu tipe: yang terbaik dari jenis kasurnya (cocokKasur). */
+    protected function cocokTipe(RoomType $tipe): string
+    {
+        return collect($tipe->kodeKasur)->map(fn ($b) => $this->cocokKasur($tipe, $b))
+            ->sortBy(fn ($c) => RoomType::URUT_KECOCOKAN[$c])->first() ?? RoomType::TIDAK_MUAT;
     }
 
     /**
-     * Rekomendasi untuk pesanan lebih dari satu kamar: tiap kamar diberi tipe termurah yang muat dan masih tersisa,
-     * dimulai dari kamar dengan penghuni terbanyak (pilihannya paling sedikit). Karena tipe yang muat untuk kamar besar
-     * juga muat untuk kamar kecil, cara ini menghasilkan total termurah.
-     *
-     * Hasil null bila tidak perlu (satu kamar, atau satu tipe saja sudah cukup dan termurah).
-     *
-     * @return array{lengkap: bool, kamar: list<array{no: int, orang: int, tipe: RoomType}>, kelompok: list<array{tipe: RoomType, jumlah: int}>, total: float, kurang: int}|null
+     * Kalimat saran bila ada kamar di pencarian yang hanya muat di sebagian tipe (kamar dengan penghuni terbanyak dulu):
+     * "Untuk 4 dewasa + 2 anak dalam satu kamar, pilih Family Room. Atau tambah jumlah kamar." Null bila semua tipe muat.
      */
-    protected function saranKombinasi(Collection $tipe, array $status, PencarianInap $cari): ?array
+    protected function saranTipe(): ?string
     {
-        if ($status === [] || $cari->jumlah < 2) {
-            return null;
-        }
-        $sisa = collect($status)->map(fn ($s) => $s['sisa'])->all();
-        $termurah = $tipe->sortBy(fn (RoomType $t) => [(float) $t->base_price, $t->id])->values();
-        $penghuni = $cari->penghuni();
-        arsort($penghuni);
-
-        $pilihan = [];
-        foreach ($penghuni as $i => $orang) {
-            $t = $termurah->first(fn (RoomType $t) => $t->max_capacity >= $orang && ($sisa[$t->id] ?? 0) > 0);
-            if ($t) {
-                $sisa[$t->id]--;
-                $pilihan[$i] = $t;
+        $tipe = $this->tipeKamar();
+        foreach (collect($this->susunanTamu())->sortByDesc(fn ($s) => [$s['dewasa'], $s['anak']]) as $s) {
+            $muat = $tipe->filter(fn ($t) => collect($t->kodeKasur)
+                ->contains(fn ($b) => $t->kecocokan($b, $s['dewasa'], $s['anak'], $this->extraTersedia()) !== RoomType::TIDAK_MUAT));
+            $teks = RoomType::teksBatas($s).' dalam satu kamar';
+            if ($muat->isEmpty()) {
+                return "Belum ada kamar yang muat untuk {$teks}. Silakan tambah jumlah kamar.";
+            }
+            if ($muat->count() < $tipe->count()) {
+                return "Untuk {$teks}, pilih ".$muat->pluck('name')->join(', ', ' atau ').'. Atau tambah jumlah kamar.';
             }
         }
-        ksort($pilihan);
-        $kurang = $cari->jumlah - count($pilihan);
-        $kelompok = collect($pilihan)->groupBy(fn (RoomType $t) => $t->id)
-            ->map(fn ($g) => ['tipe' => $g->first(), 'jumlah' => $g->count()])
-            ->sortBy(fn ($k) => (float) $k['tipe']->base_price)->values()->all();
 
-        // Satu tipe saja dan tipe itu memang tersedia untuk semua kamar: kartunya sudah cukup, tidak perlu rekomendasi
-        if ($kurang === 0 && count($kelompok) === 1 && ($status[$kelompok[0]['tipe']->id]['jenis'] ?? null) === 'tersedia') {
-            return null;
-        }
-
-        return [
-            'lengkap' => $kurang === 0,
-            'kamar' => collect($pilihan)->map(fn (RoomType $t, $i) => ['no' => $i + 1, 'orang' => $cari->penghuni()[$i], 'tipe' => $t])->values()->all(),
-            'kelompok' => $kelompok,
-            'total' => (float) collect($pilihan)->sum(fn (RoomType $t) => (float) $t->base_price * $cari->malam()),
-            'kurang' => $kurang,
-        ];
+        return null;
     }
 
-    /** Urutan tampil saat pencarian aktif: yang bisa dipesan lebih dulu, lalu dari harga termurah. */
-    protected function urutkan(Collection $tipe, array $status): Collection
+    /**
+     * Sisa kamar untuk tanggal pencarian: per tipe (KetersediaanKamar::sisa) dan per jenis kasur (sisaKasur).
+     * Null bila tanggal belum dipilih atau tidak sah.
+     *
+     * @return array{tipe: array<int, int>, kasur: array<int, array<string, int>>}|null
+     */
+    protected function sisaKamar(Collection $tipe, PencarianInap $cari): ?array
     {
-        if ($status === []) {
-            return $tipe;
+        if (! $cari->aktif() || $tipe->isEmpty()) {
+            return null;
         }
-        $peringkat = ['tersedia' => 0, 'kurang' => 1, 'sebagian' => 2, 'penuh' => 3, 'tidak-muat' => 4];
+        $id = $tipe->pluck('id')->sort()->values()->all();
+        $kunci = $cari->masuk->toDateString().'|'.$cari->keluar->toDateString().'|'.implode(',', $id);
+        if (! isset($this->memoSisa[$kunci])) {
+            $k = app(KetersediaanKamar::class);
+            $this->memoSisa[$kunci] = ['tipe' => $k->sisa($cari->masuk, $cari->keluar, $id), 'kasur' => $k->sisaKasur($cari->masuk, $cari->keluar, $id)];
+        }
 
-        return $tipe->sortBy(fn (RoomType $t) => [$peringkat[$status[$t->id]['jenis']] ?? 9, (float) $t->base_price, $t->id])->values();
+        return $this->memoSisa[$kunci];
     }
 
     /** Ketentuan dari pengaturan sistem, ditampilkan apa adanya kepada tamu. */

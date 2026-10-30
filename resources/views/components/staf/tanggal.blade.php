@@ -17,7 +17,7 @@
 <div x-data="isianTanggal(@js(['nilai' => (string) $nilai, 'min' => $min, 'max' => $max, 'hariIni' => today()->toDateString(), 'kirim' => $kirim]))"
      wire:key="isian-tanggal-{{ $name ?? $wire->first() }}-{{ $nilai }}"
      @click.outside="buka = false" @keydown.escape="buka && (buka = false, $refs.tombol.focus(), $event.stopPropagation())"
-     {{ $attributes->whereDoesntStartWith('wire:model')->merge(['class' => 'relative']) }}>
+     {{ $attributes->whereDoesntStartWith('wire:model')->merge(['class' => 'wt-isian-lebar relative']) }}>
     <input type="hidden" x-ref="isian" @if ($name) name="{{ $name }}" @endif value="{{ $nilai }}" {{ $wire }}>
     <button type="button" x-ref="tombol" @click="buka ? (buka = false) : bukaPanel()" @keydown.arrow-down.prevent="bukaPanel()"
             aria-haspopup="dialog" :aria-expanded="buka" @if ($label) aria-label="{{ $label }}" @endif

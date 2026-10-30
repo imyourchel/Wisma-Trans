@@ -20,7 +20,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * Halaman /laundry: pesan laundry kiloan.
+ * Halaman /laundry/pesan: formulir pesan laundry kiloan (harga dan alur di /laundry, InfoLayananController).
  *  - Tamu menginap: kamar dipilih dari reservasi yang sedang check-in (akun pemilik, atau kode kamar seperti di Resto).
  *  - Tamu luar: nama dan nomor WhatsApp, cucian diantar ke resepsionis.
  */
@@ -159,6 +159,6 @@ class PesanLaundry extends Component
             'kamarTersedia' => $this->kamarTersedia(),
             'dariKode' => app(KodeKamar::class)->reservasiSesi() !== null,
             'minKg' => LaundryService::MIN_KG,
-        ])->layout('components.layouts.guest', ['title' => 'Laundry']);
+        ])->layout('components.layouts.guest', ['title' => 'Pesan laundry']);
     }
 }

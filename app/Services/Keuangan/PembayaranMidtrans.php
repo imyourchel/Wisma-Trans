@@ -30,6 +30,12 @@ use Throwable;
  * WT-RSV0016-DP-K3J9, karena order_id yang sudah dipakai tidak dapat dipakai lagi. Semua percobaan berakhir
  * pada batas bayar yang sama. Status diterapkan dari notifikasi Midtrans maupun dari pengecekan langsung,
  * dan aman diterapkan berulang kali.
+ *
+ * Sumber kebenaran percobaan bayar adalah tabel payments: setiap tagihan yang berhasil dibuat langsung dicatat sebagai
+ * pembayaran online berstatus pending (satu baris per midtrans_order_id, invoice_id = nota yang dibayar). Cache
+ * (tagihan aktif, daftar percobaan, jumlah per order_id) hanya percepatan; bila cache terhapus, sinkronkan(), terapkan(),
+ * dan perintah midtrans:sinkron tetap menemukan percobaan dari payments. Percobaan yang diakhiri (ganti metode,
+ * dibatalkan, kedaluwarsa) ditandai expired.
  */
 class PembayaranMidtrans
 {
@@ -103,7 +109,7 @@ class PembayaranMidtrans
         $sisaMenit = max(1, (int) ceil(now()->diffInSeconds($x->batasBayar(), false) / 60));
         $pembayar = $x->pembayar();
 
-        $hasil = (array) CoreApi::charge([
+        $hasil = $this->chargeDiMidtrans([
             ...$this->parameterMetode($metode, $x),
             'transaction_details' => ['order_id' => $idMidtrans, 'gross_amount' => $jumlah],
             'item_details' => $x->rincianBayar(),
@@ -117,10 +123,13 @@ class PembayaranMidtrans
 
         $tagihan = ['metode' => $metode, 'order_id' => $idMidtrans, 'jumlah' => $jumlah, ...self::bacaHasil($hasil)];
         Cache::put(self::kunci($x, 'tagihan'), $tagihan, $x->batasBayar());
-        $this->catatPercobaan($x, $idMidtrans, $jumlah);
+        $this->catatPercobaan($x, $idMidtrans, $jumlah, $metode);
 
-        if ($lama) {
-            $this->akhiri($lama['order_id']);
+        // Tagihan lama (dari cache maupun yang masih pending di payments) diakhiri agar tamu tidak membayar dua kali
+        foreach ($this->percobaanMenunggu($x, $lama ? [$lama['order_id']] : []) as $idLama) {
+            if ($idLama !== $idMidtrans) {
+                $this->akhiri($idLama);
+            }
         }
 
         return $tagihan;
@@ -130,31 +139,102 @@ class PembayaranMidtrans
      * Ingat setiap percobaan bayar beserta jumlahnya. Status dari Midtrans dicocokkan dengan jumlah percobaan itu,
      * bukan dengan sisa saat ini, karena sisa nota bisa berubah setelah tamu terlanjur membayar QR lama.
      */
-    public function catatPercobaan(BayarOnline $x, string $idMidtrans, int $jumlah): void
+    public function catatPercobaan(BayarOnline $x, string $idMidtrans, int $jumlah, ?string $metode = null): void
     {
         $sampai = $x->batasBayar()->copy()->addDays(2);
         Cache::put(self::kunci($x, 'percobaan'), array_values(array_unique([
             ...Cache::get(self::kunci($x, 'percobaan'), []), $idMidtrans,
         ])), $sampai);
         Cache::put(self::kunci($x, 'jumlah'), [...Cache::get(self::kunci($x, 'jumlah'), []), $idMidtrans => $jumlah], $sampai);
+
+        // Catatan permanen: satu baris pending per order_id (dicari dulu, tidak dobel); yang sudah diproses tidak diubah
+        DB::transaction(function () use ($x, $idMidtrans, $jumlah, $metode) {
+            $bayar = Payment::where('midtrans_order_id', $idMidtrans)->lockForUpdate()->first();
+            if ($bayar && $bayar->status !== 'pending') {
+                return;
+            }
+            $nota = $x->notaBayar();
+            $bayar ??= new Payment([
+                'payment_code' => Nomor::pembayaran(),
+                'transaction_type' => 'payment',
+                'channel' => 'online',
+                'midtrans_order_id' => $idMidtrans,
+                // Tanpa nota untuk ditautkan: penanda pemiliknya disimpan di gateway_response sampai status Midtrans datang
+                'gateway_response' => $nota ? null : json_encode(['untuk' => $x->keteranganBayar()]),
+            ]);
+            $bayar->fill([
+                'invoice_id' => $nota?->id,
+                'payment_purpose' => self::tujuan($x),
+                'amount' => $jumlah,
+                'method' => match ($metode) {
+                    'qris' => 'qris',
+                    null => $bayar->method ?? 'bank_transfer',
+                    default => 'virtual_account',
+                },
+                'status' => 'pending',
+            ])->save();
+        });
+    }
+
+    /**
+     * order_id percobaan yang masih pending untuk tagihan ini: gabungan $tambahan (misalnya dari cache) dan payments online
+     * berawalan order_id milik tagihan ini (WT-ORD202609-0132-…, WT-RSV0016-DP-…, WT-INV2026100012-…).
+     *
+     * @param  list<string>  $tambahan
+     * @return list<string>
+     */
+    private function percobaanMenunggu(BayarOnline $x, array $tambahan = []): array
+    {
+        $tercatat = Payment::where('channel', 'online')->where('transaction_type', 'payment')->where('status', 'pending')
+            ->where('midtrans_order_id', 'like', $x->awalanMidtrans().'-%')->orderBy('id')->pluck('midtrans_order_id')->all();
+
+        return array_values(array_unique([...$tambahan, ...$tercatat]));
     }
 
     /** Akhiri tagihan yang sedang berjalan, misalnya saat reservasi dibatalkan sebelum dibayar. */
     public function akhiriTagihan(BayarOnline $x): void
     {
-        if ($lama = $this->tagihanAktif($x)) {
-            Cache::forget(self::kunci($x, 'tagihan'));
-            $this->akhiri($lama['order_id']);
+        $lama = $this->tagihanAktif($x);
+        Cache::forget(self::kunci($x, 'tagihan'));
+        foreach ($this->percobaanMenunggu($x, $lama ? [$lama['order_id']] : []) as $idMidtrans) {
+            $this->akhiri($idMidtrans);
         }
     }
 
+    /** Akhiri satu percobaan di Midtrans dan tandai expired di payments (pembayaran yang sudah berhasil tidak diubah). */
     private function akhiri(string $idMidtrans): void
     {
         try {
-            Transaction::expire($idMidtrans);
+            $this->akhiriDiMidtrans($idMidtrans);
         } catch (Throwable $e) {
             Log::warning('Tagihan Midtrans lama gagal diakhiri', ['order_id' => $idMidtrans, 'pesan' => $e->getMessage()]);
         }
+        Payment::where('midtrans_order_id', $idMidtrans)->where('status', 'pending')->update(['status' => 'expired']);
+    }
+
+    /** Panggilan Midtrans dipisah agar bisa diganti di tes (tes tidak pernah memanggil Midtrans sungguhan). */
+    protected function akhiriDiMidtrans(string $idMidtrans): void
+    {
+        Transaction::expire($idMidtrans);
+    }
+
+    protected function chargeDiMidtrans(array $parameter): array
+    {
+        return (array) CoreApi::charge($parameter);
+    }
+
+    protected function statusDiMidtrans(string $idMidtrans): array
+    {
+        return (array) Transaction::status($idMidtrans);
+    }
+
+    private static function tujuan(BayarOnline $x): string
+    {
+        return match (true) {
+            $x instanceof Reservation => 'down_payment',
+            $x instanceof Invoice => 'settlement',
+            default => 'service',
+        };
     }
 
     private function parameterMetode(string $metode, BayarOnline $x): array
@@ -178,21 +258,51 @@ class PembayaranMidtrans
         ];
     }
 
-    /** Tanyakan status ke Midtrans untuk semua percobaan bayar (cadangan bila notifikasi tidak sampai). */
+    /**
+     * Tanyakan status ke Midtrans untuk semua percobaan bayar (cadangan bila notifikasi tidak sampai).
+     * order_id diambil dari cache (percepatan) digabung dengan payments online yang masih pending (sumber kebenaran).
+     */
     public function sinkronkan(BayarOnline $x): void
     {
         if ($x->sudahDibayar() || ! self::siap()) {
             return;
         }
 
-        foreach (Cache::get(self::kunci($x, 'percobaan'), []) as $idMidtrans) {
-            try {
-                $this->terapkan((array) Transaction::status($idMidtrans));
-            } catch (Throwable $e) {
-                // 404 = tamu belum memilih metode bayar; transaksinya belum ada di Midtrans
-                if (! str_contains($e->getMessage(), '404')) {
-                    Log::warning('Cek status Midtrans gagal', ['order_id' => $idMidtrans, 'pesan' => $e->getMessage()]);
-                }
+        foreach ($this->percobaanMenunggu($x, Cache::get(self::kunci($x, 'percobaan'), [])) as $idMidtrans) {
+            $this->cekStatus($idMidtrans);
+        }
+    }
+
+    /**
+     * Perintah midtrans:sinkron: cek semua pembayaran online pending berumur kurang dari 2 hari ke Midtrans.
+     * Hasilnya jumlah pembayaran yang statusnya berubah; 0 tanpa memanggil Midtrans bila kuncinya kosong.
+     */
+    public function sinkronSemua(): int
+    {
+        if (! self::siap()) {
+            return 0;
+        }
+        $berubah = 0;
+        $menunggu = Payment::where('channel', 'online')->where('transaction_type', 'payment')->where('status', 'pending')
+            ->whereNotNull('midtrans_order_id')->where('created_at', '>=', now()->subDays(2))->orderBy('id')->pluck('midtrans_order_id');
+        foreach ($menunggu as $idMidtrans) {
+            $this->cekStatus($idMidtrans);
+            if (Payment::where('midtrans_order_id', $idMidtrans)->value('status') !== 'pending') {
+                $berubah++;
+            }
+        }
+
+        return $berubah;
+    }
+
+    private function cekStatus(string $idMidtrans): void
+    {
+        try {
+            $this->terapkan($this->statusDiMidtrans($idMidtrans));
+        } catch (Throwable $e) {
+            // 404 = tamu belum memilih metode bayar; transaksinya belum ada di Midtrans
+            if (! str_contains($e->getMessage(), '404')) {
+                Log::warning('Cek status Midtrans gagal', ['order_id' => $idMidtrans, 'pesan' => $e->getMessage()]);
             }
         }
     }
@@ -210,9 +320,11 @@ class PembayaranMidtrans
         if (! $x || ! $x->notaBayar()) {
             return null;
         }
-        // Jumlah harus sama dengan tagihan; transaksi yang jumlahnya lain bukan milik data ini.
-        // Nota: dicocokkan dengan jumlah percobaan yang tercatat untuk order_id itu (sisa nota bisa sudah berubah)
-        $diharapkan = $x instanceof Invoice ? (Cache::get(self::kunci($x, 'jumlah'), [])[$id] ?? null) : $x->jumlahBayar();
+        // Jumlah harus sama dengan tagihan; transaksi yang jumlahnya lain bukan milik data ini. Dicocokkan dengan jumlah
+        // percobaan yang tercatat untuk order_id itu (cache, lalu payments), karena sisa nota bisa sudah berubah.
+        // Pesanan dan reservasi tanpa catatan memakai jumlah tagihannya sekarang.
+        $tercatat = Cache::get(self::kunci($x, 'jumlah'), [])[$id] ?? Payment::where('midtrans_order_id', $id)->value('amount');
+        $diharapkan = $tercatat !== null ? (int) round((float) $tercatat) : ($x instanceof Invoice ? null : $x->jumlahBayar());
         if ($diharapkan === null || (isset($st['gross_amount']) && (int) round((float) $st['gross_amount']) !== $diharapkan)) {
             Log::warning('Status Midtrans diabaikan: jumlah tidak sesuai tagihan', ['order_id' => $id, 'jumlah' => $st['gross_amount'], 'tagihan' => $x->jumlahBayar()]);
 
@@ -240,11 +352,7 @@ class PembayaranMidtrans
                 'payment_code' => Nomor::pembayaran(),
                 'invoice_id' => $nota->id,
                 'transaction_type' => 'payment',
-                'payment_purpose' => match (true) {
-                    $x instanceof Reservation => 'down_payment',
-                    $x instanceof Invoice => 'settlement',
-                    default => 'service',
-                },
+                'payment_purpose' => self::tujuan($x),
                 'channel' => 'online',
                 'midtrans_order_id' => $st['order_id'],
             ]);

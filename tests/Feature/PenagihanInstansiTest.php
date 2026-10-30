@@ -198,7 +198,8 @@ class PenagihanInstansiTest extends TestCase
             ->call('terbitkan')->assertHasNoErrors();
         $s->refresh();
         $this->assertSame(['issued', '2026-10-27', '2026-11-10'], [$s->status, $s->issue_date->toDateString(), $s->due_date->toDateString()]);
-        Notification::assertSentOnDemand(PesanReservasi::class, fn ($n, $kanal, $tujuan) => $tujuan->routes['mail'] === $a->primaryContact->email);
+        // Email ke email kantor instansi dengan tembusan ke narahubung utama
+        Notification::assertSentOnDemand(PesanReservasi::class, fn ($n, $kanal, $tujuan) => $tujuan->routes['mail'] === $a->email && $n->cc === [$a->primaryContact->email]);
         Http::assertSent(fn (Request $q) => str_contains((string) $q['target'], substr($a->primaryContact->phone, 1))
             && str_contains($q['message'], 'BS/2026/10/0001') && str_contains($q['message'], '/tagihan-bulanan/'));
     }
@@ -292,7 +293,7 @@ class PenagihanInstansiTest extends TestCase
         Carbon::setTestNow('2026-10-20 10:00:00');
         app(CheckOutService::class)->proses($r->fresh(), [$r->rooms->first()->id], [], $this->akun('fo'));
         $akhir = app(FolioService::class)->notaMenginap($r->fresh());
-        $this->assertSame(['Kamar 107, 9 malam (11–20 Okt 2026)'], $akhir->items()->where('item_type', 'room')->pluck('description')->all());
+        $this->assertSame(['Kamar 107 · Twin Single, 9 malam (11–20 Okt 2026)'], $akhir->items()->where('item_type', 'room')->pluck('description')->all());
         $this->assertSame([2700000.0, 1500000.0], [(float) $akhir->total_amount, (float) $n->fresh()->total_amount]);
     }
 
@@ -341,7 +342,7 @@ class PenagihanInstansiTest extends TestCase
         $this->assertSame([['whatsapp', 'sent'], ['email', 'sent']], $kirim->map(fn ($b) => [$b->channel, $b->status])->all());
         $this->assertSame([2, 2], $kirim->pluck('verified_by')->all());
         Http::assertSent(fn (Request $q) => str_contains((string) $q['target'], substr($i->primaryContact->phone, 1)) && str_contains($q['message'], $n->invoice_number));
-        Notification::assertSentOnDemand(PesanReservasi::class, fn ($x, $k, $tujuan) => $tujuan->routes['mail'] === $i->primaryContact->email);
+        Notification::assertSentOnDemand(PesanReservasi::class, fn ($x, $k, $tujuan) => $tujuan->routes['mail'] === $i->email && $x->cc === [$i->primaryContact->email]);
 
         // Surat untuk tagihan di atas ambang
         $pengingat->suratTerkirim($n->fresh(), $this->akun('manager'));

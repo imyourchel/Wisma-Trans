@@ -5,6 +5,8 @@
     $grup ??= \App\Support\MenuStaf::grupAktif();
     $inisial = collect(explode(' ', $user->name))->filter()->take(2)->map(fn ($k) => mb_substr($k, 0, 1))->join('');
     $namaPeran = $user->roles->whereIn('code', \App\Models\Role::STAFF)->pluck('name')->join(', ');
+    // Menu akun: Admin dan Manager mendapat Lihat situs dan Keluar; staf operasional (FO, F&B, HK) hanya Keluar
+    $lihatSitus = $user->roles->whereIn('code', ['admin', 'manager'])->isNotEmpty();
 @endphp
 <!DOCTYPE html>
 <html lang="id">
@@ -20,7 +22,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
-<body class="min-h-screen" x-data="panelStaf" @keydown.escape.window="laci = false; akun = false">
+<body class="min-h-dvh" x-data="panelStaf" @keydown.escape.window="laci = false; akun = false">
 
 {{-- Sidebar: 256px, dapat diciutkan menjadi 72px berisi ikon. Di layar kecil menjadi laci.
      Gaya ciut diatur CSS (.wt-sidebar.is-ciut) supaya perubahan lebar terasa halus. --}}
@@ -34,7 +36,7 @@
             <span class="wt-label block"><img src="{{ asset('ds/logo/DC-wismatrans-landscape.png') }}" alt="Wisma Trans" class="h-9 w-auto max-w-none"></span>
             <img src="{{ asset('ds/logo/LC-wismatrans-Logo-NoBG.png') }}" alt="" class="wt-logo-kecil absolute left-5 top-1/2 h-8 w-8 -translate-y-1/2 object-contain">
         </a>
-        <button type="button" @click="laci = false" class="ml-auto flex h-9 w-9 flex-none items-center justify-center rounded border-0 bg-transparent text-cream-150 hover:bg-[rgba(242,235,220,.12)] md:hidden" aria-label="Tutup menu">
+        <button type="button" @click="laci = false" class="ml-auto flex h-11 w-11 flex-none items-center justify-center rounded border-0 bg-transparent text-cream-150 hover:bg-[rgba(242,235,220,.12)] md:hidden" aria-label="Tutup menu">
             <x-staf.ikon nama="tutup" />
         </button>
     </div>
@@ -43,7 +45,7 @@
         @foreach ($menu as $g)
             @if (! $g['anak'])
                 <a href="{{ $g['url'] }}" data-tip="{{ $g['label'] }}"
-                   @class(['mb-1 flex h-10 items-center gap-3 rounded px-[15px] text-sm hover:no-underline',
+                   @class(['mb-1 flex h-10 pointer-coarse:h-11 items-center gap-3 rounded px-[15px] text-sm hover:no-underline',
                        'wt-grup-aktif bg-[rgba(242,235,220,.16)] font-semibold text-cream-50' => $g['aktif'],
                        'text-[rgba(242,235,220,.78)] hover:bg-[rgba(242,235,220,.10)] hover:text-cream-50' => ! $g['aktif']])>
                     <x-staf.ikon :nama="$g['ikon']" />
@@ -55,7 +57,7 @@
                     <button type="button" data-tip="{{ $g['label'] }}" data-grup="g{{ $loop->index }}" :aria-expanded="modeCiut() ? melayang === 'g{{ $loop->index }}' : buka"
                             @click="modeCiut() ? alihMelayang($el) : buka = !buka"
                             :class="melayang === 'g{{ $loop->index }}' && 'bg-[rgba(242,235,220,.10)] text-cream-50'"
-                            @class(['flex h-10 w-full items-center gap-3 rounded border-0 bg-transparent pl-[15px] pr-3 text-left text-sm hover:bg-[rgba(242,235,220,.10)]',
+                            @class(['flex h-10 pointer-coarse:h-11 w-full items-center gap-3 rounded border-0 bg-transparent pl-[15px] pr-3 text-left text-sm hover:bg-[rgba(242,235,220,.10)]',
                                 'wt-grup-aktif text-cream-50' => $g['aktif'], 'text-[rgba(242,235,220,.78)] hover:text-cream-50' => ! $g['aktif']])>
                         <x-staf.ikon :nama="$g['ikon']" />
                         <span class="wt-label flex-1 @if ($g['aktif']) font-semibold @endif">{{ $g['label'] }}</span>
@@ -71,11 +73,25 @@
         @endforeach
     </nav>
 
-    <button type="button" @click="ubahCiut()" :data-tip="ciut ? 'Lebarkan sidebar' : 'Ciutkan sidebar'" :aria-label="ciut ? 'Lebarkan sidebar' : 'Ciutkan sidebar'" :aria-expanded="!ciut"
-            class="hidden h-12 flex-none items-center gap-3 border-0 border-t border-[rgba(242,235,220,.12)] bg-transparent px-[27px] text-[13px] text-[rgba(242,235,220,.66)] hover:text-cream-50 md:flex">
-        <x-staf.ikon nama="ciut" class="wt-ciut-ikon" />
-        <span class="wt-label">Ciutkan</span>
-    </button>
+    {{-- Bawah sidebar: ke situs tamu (Admin dan Manager) dan keluar (ciut/lebar hanya lewat tombol ☰ di kepala) --}}
+    <div class="flex-none border-t border-[rgba(242,235,220,.12)] px-3 py-3">
+        @if ($lihatSitus)
+            <a href="{{ route('home') }}" target="_blank" rel="noopener" data-tip="Lihat situs tamu" data-sidebar-situs
+               class="mb-1 flex h-10 pointer-coarse:h-11 items-center gap-3 rounded px-[15px] text-sm text-[rgba(242,235,220,.78)] hover:bg-[rgba(242,235,220,.10)] hover:text-cream-50 hover:no-underline">
+                <x-staf.ikon nama="tautan-keluar" />
+                <span class="wt-label">Lihat situs tamu</span>
+            </a>
+        @endif
+        <form method="POST" action="{{ route('logout') }}" data-sidebar-keluar
+              @submit.prevent="$store.konfirmasi.tanya({ judul: 'Keluar dari panel staf?', pesan: 'Anda perlu masuk lagi untuk membuka panel staf.', label: 'Keluar', aksi: () => $el.submit() })">
+            @csrf
+            <button type="submit" data-tip="Keluar"
+                    class="flex h-10 pointer-coarse:h-11 w-full items-center gap-3 rounded border-0 bg-transparent px-[15px] text-left text-sm font-medium text-[#F0918A] hover:bg-[rgba(212,81,74,.22)] hover:text-[#FFC2BC]">
+                <x-staf.ikon nama="keluar" />
+                <span class="wt-label">Keluar</span>
+            </button>
+        </form>
+    </div>
 </aside>
 
 {{-- Panel submenu melayang saat sidebar diciutkan --}}
@@ -99,26 +115,51 @@
      class="pointer-events-none fixed z-[70] hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-brown-800 px-3 py-1.5 text-[13px] font-semibold text-cream-50 shadow-wt-lg md:block"
      x-text="tip.teks"></div>
 
-<div class="wt-konten flex min-h-screen min-w-0 flex-col" :class="ciut && 'is-ciut'">
-    <header class="sticky top-0 z-40 flex min-h-16 items-center gap-3 border-b border-cream-300 bg-cream-50 px-4 py-2 sm:px-6">
-        <button type="button" @click="laci = true" class="flex h-9 w-9 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 md:hidden" aria-label="Buka menu">
-            <x-staf.ikon nama="menu" />
+<div class="wt-konten flex min-h-dvh min-w-0 flex-col" :class="ciut && 'is-ciut'">
+    {{-- Kepala: tombol menu, jejak halaman (Panel › Grup › Halaman), tanggal, dan akun --}}
+    <header class="sticky top-0 z-40 flex min-h-16 items-center gap-3 border-b border-cream-300 bg-cream-50 px-4 py-2.5 shadow-[0_2px_10px_-4px_rgba(62,42,28,.12)] sm:gap-4 sm:px-6">
+        {{-- Layar lebar: ciutkan/lebarkan sidebar; layar kecil: buka laci menu --}}
+        <button type="button" @click="window.innerWidth >= 768 ? ubahCiut() : (laci = !laci)"
+                :aria-label="window.innerWidth >= 768 ? (ciut ? 'Lebarkan sidebar' : 'Ciutkan sidebar') : (laci ? 'Tutup menu' : 'Buka menu')" :aria-expanded="window.innerWidth >= 768 ? !ciut : laci"
+                class="flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-cream-300 bg-cream-50 text-brown-800 shadow-wt-xs transition hover:bg-cream-200" data-tombol-menu>
+            <x-staf.ikon nama="menu" ukuran="18" />
         </button>
-        <div class="min-w-0 flex-1">
-            <h1 class="m-0 truncate font-display text-lg font-bold uppercase leading-tight tracking-[.04em]">{{ $title }}</h1>
-            <div class="truncate text-xs text-ink-500">{{ $grup ? $grup.' · '.$title : 'Panel staf' }}</div>
-        </div>
+
+        <nav aria-label="Jejak halaman" class="min-w-0 flex-1">
+            <ol class="m-0 flex min-w-0 list-none items-center gap-1.5 p-0 text-[14px]">
+                <li class="hidden flex-none sm:block">
+                    <a href="{{ route('staf.dashboard') }}" class="inline-flex items-center gap-1.5 font-semibold text-clay-600 hover:text-clay-500 hover:no-underline">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>
+                        Panel
+                    </a>
+                </li>
+                @if ($grup)
+                    <li class="hidden flex-none items-center gap-1.5 text-ink-500 md:flex">
+                        <span class="text-cream-400" aria-hidden="true">›</span>{{ $grup }}
+                    </li>
+                @endif
+                <li class="flex min-w-0 items-center gap-1.5">
+                    <span class="hidden text-cream-400 sm:inline" aria-hidden="true">›</span>
+                    <h1 class="m-0 truncate font-sans text-[14px] font-semibold normal-case leading-tight tracking-normal text-ink-900 sm:font-medium" aria-current="page" title="{{ $title }}">{{ $title }}</h1>
+                </li>
+            </ol>
+        </nav>
+
         {{-- Tanggal dan jam berjalan (WITA, mengikuti jam server) --}}
-        <div class="hidden text-[13px] tabular-nums text-ink-500 lg:block" x-data="jamStaf(@js(['ms' => now()->getTimestampMs(), 'zona' => config('app.timezone')]))">
-            <span x-text="tanggal">{{ now()->translatedFormat('l, j F Y') }}</span>
-            <span class="mx-1.5 text-cream-400">|</span>
-            <span class="font-semibold text-ink-900" x-text="jam">{{ now()->format('H.i') }}</span> WITA
+        <div class="hidden flex-none items-center gap-4 lg:flex">
+            <div class="text-[13px] tabular-nums text-ink-500" x-data="jamStaf(@js(['ms' => now()->getTimestampMs(), 'zona' => config('app.timezone')]))">
+                <span x-text="tanggal">{{ now()->translatedFormat('j M Y') }}</span>
+                <span class="mx-1 text-cream-400">·</span>
+                <span x-text="jam">{{ now()->format('H.i') }}</span> WITA
+            </div>
+            <span class="h-6 w-px bg-cream-300" aria-hidden="true"></span>
         </div>
+
         <div class="relative" @click.outside="akun = false">
-            <button type="button" @click="akun = !akun" :aria-expanded="akun" class="flex items-center gap-2.5 rounded-full border-0 bg-transparent p-0.5 pr-1 hover:bg-cream-200 sm:pr-3">
-                <span class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-cream-200 font-display text-[13px] font-bold text-brown-800">{{ $inisial }}</span>
+            <button type="button" @click="akun = !akun" :aria-expanded="akun" aria-label="Akun {{ $user->name }}" class="flex items-center gap-2.5 rounded-full border border-cream-300 bg-cream-50 p-1 shadow-wt-xs transition hover:bg-cream-200 sm:pr-4">
+                <span class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-clay-500 font-display text-[13px] font-bold text-cream-50">{{ $inisial }}</span>
                 <span class="hidden min-w-0 text-left sm:block">
-                    <span class="block max-w-[180px] truncate text-[13px] font-semibold leading-tight">{{ $user->name }}</span>
+                    <span class="block max-w-[180px] truncate text-[13px] font-semibold uppercase leading-tight tracking-[.02em] text-ink-900">{{ $user->name }}</span>
                     <span class="block max-w-[180px] truncate text-[11px] leading-tight text-ink-500">{{ $namaPeran }}</span>
                 </span>
             </button>
@@ -128,9 +169,10 @@
                     <div class="truncate text-sm font-semibold">{{ $user->name }}</div>
                     <div class="truncate text-xs text-ink-500">{{ $namaPeran }}</div>
                 </div>
-                <a href="{{ route('home') }}" class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-900 hover:bg-row-hover hover:text-ink-900 hover:no-underline"><x-staf.ikon nama="situs" ukuran="16" class="text-ink-500" />Lihat situs</a>
-                <a href="{{ route('profil') }}" class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-900 hover:bg-row-hover hover:text-ink-900 hover:no-underline"><x-staf.ikon nama="pelanggan" ukuran="16" class="text-ink-500" />Profil</a>
-                <form method="POST" action="{{ route('logout') }}" class="border-t border-cream-300">
+                @if ($lihatSitus)
+                    <a href="{{ route('home') }}" class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-900 hover:bg-row-hover hover:text-ink-900 hover:no-underline" data-menu-situs><x-staf.ikon nama="situs" ukuran="16" class="text-ink-500" />Lihat situs</a>
+                @endif
+                <form method="POST" action="{{ route('logout') }}" @class(['border-t border-cream-300' => $lihatSitus])>
                     @csrf
                     <button type="submit" class="flex w-full items-center gap-2.5 border-0 bg-transparent px-4 py-2.5 text-left text-sm text-status-dirty hover:bg-row-hover"><x-staf.ikon nama="keluar" ukuran="16" />Keluar</button>
                 </form>
@@ -138,11 +180,7 @@
         </div>
     </header>
 
-    <div class="border-b border-[rgba(232,172,69,.4)] bg-[rgba(232,172,69,.14)] px-4 py-2 text-[13px] text-ink-900 md:hidden">
-        Paling nyaman dibuka di laptop.
-    </div>
-
-    <main class="min-w-0 flex-1 p-4 sm:p-6">
+    <main class="min-w-0 flex-1 p-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:p-6">
         {{ $slot }}
     </main>
 </div>

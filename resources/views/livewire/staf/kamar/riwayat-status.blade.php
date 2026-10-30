@@ -4,13 +4,13 @@
     use Illuminate\Support\Carbon;
 
     $lencana = fn (?RoomStatus $s) => $s
-        ? '<span class="wt-lencana" style="color: '.$s->color().'; background: color-mix(in srgb, '.$s->color().' 14%, transparent)">'.e($s->label()).'</span>'
+        ? '<span class="wt-lencana wt-st-lencana" style="'.$s->gaya().'">'.e($s->label()).'</span>'
         : '<span class="text-ink-500">—</span>';
 @endphp
 
 <div>
-    {{-- Penyaring dalam satu baris di layar lebar: kotak cari menyusut mengikuti sisa ruang, yang lain lebar tetap --}}
-    <div class="mb-4 flex flex-wrap items-center gap-2.5 xl:flex-nowrap">
+    {{-- Penyaring dalam satu baris di layar sangat lebar (2xl), membungkus di layar lain: kotak cari menyusut mengikuti sisa ruang, yang lain lebar tetap --}}
+    <div class="mb-4 flex flex-wrap items-center gap-2.5 2xl:flex-nowrap">
         <label class="relative block min-w-[180px] flex-1">
             <span class="sr-only">Cari di catatan</span>
             <x-staf.ikon nama="cari" ukuran="16" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
@@ -23,7 +23,7 @@
                       :pilihan="['' => 'Semua status'] + collect(RoomStatus::cases())->mapWithKeys(fn ($s) => [$s->value => ['label' => $s->label(), 'warna' => $s->color()]])->all()" />
         <x-staf.pilih model="$wire.staf" x-on:change="$wire.$commit()" :nilai="$staf" label="Diubah oleh" class="w-[170px] flex-none"
                       :pilihan="['' => 'Semua staf', 'sistem' => 'Sistem'] + collect($stafPilihan)->all()" />
-        <div class="flex flex-none items-center gap-1.5">
+        <div class="flex flex-none items-center gap-1.5 max-sm:w-full">
             <x-staf.tanggal wire:model.live="dari" :nilai="$dari" :max="today()->toDateString()" label="Dari tanggal" class="w-[176px]" />
             <span class="text-ink-500">–</span>
             <x-staf.tanggal wire:model.live="sampai" :nilai="$sampai" :max="today()->toDateString()" label="Sampai tanggal" class="w-[176px]" />
@@ -66,15 +66,15 @@
     {{ $logs->links('partials.halaman') }}
 
     @if ($lini)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.tutupLini()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.tutupLini()">
             <div wire:click="tutupLini" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="lini-judul" class="relative flex max-h-[92vh] w-[640px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="lini-judul" class="wt-dialog relative flex max-h-[92dvh] w-[640px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="lini-judul" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]">Lini masa kamar {{ $lini['room']->room_number }}</div>
                         <div class="mt-0.5 text-[13px] text-ink-500">{{ $rentangTeks }} · sekarang {{ $lini['room']->status->label() }}</div>
                     </div>
-                    <button type="button" wire:click="tutupLini" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="tutupLini" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
                 <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
                     <section>

@@ -5,57 +5,40 @@
     $menginap = $jenis === 'menginap';
 @endphp
 
+{{-- Halaman formulir pemesanan laundry; harga dan alur ada di halaman /laundry (tamu.laundry) --}}
 <div class="animate-wt-masuk">
-    <x-tamu.kepala-halaman judul="Laundry" gambar="ds/img/laundry.jpg" teks="Cuci dan setrika kiloan, selesai dalam 1×24 jam. Tamu menginap cukup pesan dari kamar; tamu luar bisa mengantar cucian ke resepsionis.">
-        <a href="#pesan-laundry" class="inline-flex h-12 w-full max-w-[260px] items-center justify-center rounded-sm bg-clay-500 px-7 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 hover:bg-clay-600 hover:text-cream-50 hover:no-underline sm:w-auto">Pesan laundry</a>
-        <a href="{{ $tanyaWa }}" target="_blank" rel="noopener" class="inline-flex h-12 w-full max-w-[260px] items-center justify-center gap-2.5 rounded-sm border border-[rgba(242,235,220,.38)] px-7 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 hover:bg-[rgba(242,235,220,.10)] hover:text-cream-50 hover:no-underline sm:w-auto">
+    <x-tamu.kepala-halaman judul="Pesan Laundry" gambar="ds/img/laundry.jpg"
+                           teks="Tamu menginap memilih kamar dan cucian kami jemput; tamu luar mengisi nama dan WhatsApp lalu mengantar cucian ke resepsionis.">
+        <a href="{{ route('laundry') }}" class="inline-flex h-11 items-center justify-center gap-2 rounded-sm border border-[rgba(242,235,220,.38)] px-6 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 hover:bg-[rgba(242,235,220,.10)] hover:text-cream-50 hover:no-underline">
+            <x-tamu.ikon nama="kiri" ukuran="16" />Info laundry
+        </a>
+        <a href="{{ $tanyaWa }}" target="_blank" rel="noopener" class="inline-flex h-11 items-center justify-center gap-2.5 rounded-sm border border-[rgba(242,235,220,.38)] px-6 font-display text-xs font-semibold uppercase tracking-[.16em] text-cream-50 hover:bg-[rgba(242,235,220,.10)] hover:text-cream-50 hover:no-underline">
             <img src="{{ asset('ds/icons/whatsapp.svg') }}" alt="" width="16" height="16" class="brightness-0 invert">Tanya dulu
         </a>
     </x-tamu.kepala-halaman>
 
     <div class="wt-container max-w-[1120px] py-10 sm:py-14">
-        {{-- Harga dan alur --}}
-        <div class="grid gap-4 md:grid-cols-[320px_minmax(0,1fr)]">
-            <div class="wt-card flex flex-col justify-center p-6">
-                <div class="wt-eyebrow">{{ $layanan?->name ?? 'Laundry kiloan' }}</div>
-                <div class="mt-2 font-display text-[34px] font-extrabold leading-none tabular-nums">{{ $rp($layanan?->price) }}<span class="text-base font-semibold text-ink-500">/kg</span></div>
-                <ul class="m-0 mt-4 flex list-none flex-col gap-1.5 p-0 text-sm text-ink-900">
-                    <li>Cuci, kering, dan setrika rapi</li>
-                    <li>Minimal {{ $minKg }} kg per pesanan</li>
-                    <li>Selesai 1×24 jam sejak ditimbang</li>
-                </ul>
-            </div>
-            <ol class="m-0 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-4">
-                @foreach ([
-                    ['Pesan', 'Isi formulir di bawah. Tamu menginap memilih kamar; tamu luar mengisi nama dan WhatsApp.'],
-                    ['Serahkan cucian', 'Kami jemput ke kamar Anda, atau antar sendiri ke resepsionis.'],
-                    ['Ditimbang', 'Tagihan dihitung dari berat dan dikirim ke WhatsApp.'],
-                    ['Selesai', 'Diantar ke kamar, atau diambil di resepsionis.'],
-                ] as $i => [$judul, $isi])
-                    <li class="wt-card p-4">
-                        <span class="flex h-7 w-7 items-center justify-center rounded-full bg-cream-200 font-display text-xs font-bold text-brown-800">{{ $i + 1 }}</span>
-                        <div class="mt-2.5 font-display text-[13px] font-bold uppercase tracking-[.06em]">{{ $judul }}</div>
-                        <p class="mb-0 mt-1 text-[13px] leading-relaxed text-ink-500">{{ $isi }}</p>
-                    </li>
-                @endforeach
-            </ol>
+        {{-- Ringkasan tarif --}}
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-lg border border-cream-300 bg-cream-50 px-5 py-3.5 text-sm" data-ringkasan-laundry>
+            <span><strong class="font-semibold">{{ $layanan?->name ?? 'Laundry kiloan' }}</strong>
+                <span class="text-ink-500">· {{ $rp($layanan?->price) }}/kg · minimal {{ $minKg }} kg · selesai 1×24 jam sejak ditimbang</span></span>
+            <a href="{{ route('laundry') }}" class="text-[13px] font-semibold text-olive-600">Lihat alur layanan</a>
         </div>
 
         {{-- Formulir --}}
-        <form id="pesan-laundry" wire:submit="kirim" class="wt-card mt-8 scroll-mt-24 overflow-hidden" novalidate>
+        {{-- Tamu belum masuk ditawari masuk/daftar (pop-up x-tawaran-akun) saat mulai mengisi, sebelum ada isian yang bisa hilang --}}
+        <form id="pesan-laundry" wire:submit="kirim" class="wt-card mt-6 scroll-mt-24 overflow-hidden" novalidate
+              @guest x-data @focusin.once="$dispatch('tawar-akun', { varian: $wire.jenis === 'menginap' ? 'menginap' : 'luar' })" @endguest>
             <div class="border-b border-cream-300 bg-cream-100 px-5 py-4 sm:px-6">
                 <h2 class="m-0 font-display text-[15px] font-extrabold uppercase tracking-[.06em]">Pesan laundry</h2>
-                {{-- Saran masuk paling atas, sebelum isian pertama --}}
-                <x-tawaran-masuk class="mt-3" :manfaat="$menginap
-                    ? 'kamar Anda langsung tampil tanpa kode kamar dan pesanan tersimpan di Pesanan saya'
-                    : 'data pemesan terisi otomatis dan status laundry tampil di Pesanan saya'" />
-                <div class="mt-3 inline-flex rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Jenis tamu">
-                    @foreach (['menginap' => 'Saya sedang menginap', 'luar' => 'Saya tamu luar'] as $v => $l)
+                <div class="mt-3 wt-geser inline-flex max-w-full rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Jenis tamu">
+                    @foreach (['menginap' => 'Sedang menginap', 'luar' => 'Tidak menginap'] as $v => $l)
                         <button type="button" wire:click="$set('jenis', '{{ $v }}')" role="tab" aria-selected="{{ $jenis === $v ? 'true' : 'false' }}"
                                 @class(['h-9 rounded-md border-0 px-4 text-[13px] font-semibold transition-colors',
                                     'bg-brown-800 text-cream-50' => $jenis === $v, 'bg-transparent text-ink-500 hover:text-ink-900' => $jenis !== $v])>{{ $l }}</button>
                     @endforeach
                 </div>
+                <p class="mb-0 mt-2 text-xs leading-relaxed text-ink-500" data-keterangan-jenis>{{ $jenis === 'menginap' ? 'Masukkan kode kamar, tagihan masuk ke nota kamar Anda.' : 'Bayar langsung saat memesan.' }}</p>
             </div>
 
             <div class="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -103,7 +86,7 @@
                     @else
                         @foreach ([
                             ['nama', 'Nama', 'text', 'name', 'Nama Anda'],
-                            ['hp', 'Nomor WhatsApp', 'tel', 'tel', 'Contoh: 081234567890'],
+                            ['hp', 'Nomor WhatsApp', 'tel', 'tel', '08xxxxxxxxxx'],
                             ['email', 'Email (opsional)', 'email', 'email', 'Untuk bukti pembayaran'],
                         ] as [$f, $label, $type, $auto, $ph])
                             <label class="block">
@@ -141,4 +124,14 @@
             </div>
         </form>
     </div>
+    <x-tawaran-akun kunci="wt.laundry.tanpa-akun" :varian="[
+        'menginap' => ['manfaat' => [
+                ['Kamar langsung dikenali', 'Kamar Anda tampil otomatis, tanpa perlu memasukkan kode kamar.'],
+                ['Status laundry terpantau', 'Penjemputan, penimbangan, hingga selesai tampil di menu Pesanan saya.'],
+            ], 'lanjut' => 'Lanjutkan sebagai tamu', 'ingat' => true, 'catatan' => 'Sebaiknya masuk sebelum mengisi formulir agar isian tidak perlu diulang.'],
+        'luar' => ['manfaat' => [
+                ['Data pemesan terisi otomatis', 'Nama, nomor WhatsApp, dan email tidak perlu diketik ulang.'],
+                ['Status laundry terpantau', 'Penimbangan, tagihan, hingga selesai tampil di menu Pesanan saya.'],
+            ], 'lanjut' => 'Lanjutkan sebagai tamu', 'ingat' => true, 'catatan' => 'Sebaiknya masuk sebelum mengisi formulir agar isian tidak perlu diulang.'],
+    ]" />
 </div>

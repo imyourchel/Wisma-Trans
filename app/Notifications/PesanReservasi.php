@@ -19,6 +19,8 @@ class PesanReservasi extends Notification
         public ?string $url = null,
         /** @var array{0: string, 1: string}|null [isi berkas, nama berkas], misalnya nota PDF */
         public ?array $lampiran = null,
+        /** @var list<string> tembusan, misalnya narahubung utama saat tagihan dikirim ke email kantor instansi */
+        public array $cc = [],
     ) {}
 
     public function via(object $notifiable): array
@@ -35,6 +37,10 @@ class PesanReservasi extends Notification
             if ($i === 0 && $this->tombol && $this->url) {
                 $pesan->action($this->tombol, $this->url);
             }
+        }
+
+        if ($this->cc) {
+            $pesan->cc($this->cc);
         }
 
         if ($this->lampiran) {

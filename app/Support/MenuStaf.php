@@ -12,8 +12,8 @@ use Illuminate\Support\Str;
  * Kode peran: admin, manager, front_office, fnb, housekeeping.
  * Menu yang belum punya 'route' diarahkan ke halaman "segera" lewat slug-nya.
  * Menu dengan kunci 'gate' tampil sesuai Gate (lihat AppServiceProvider), bukan daftar 'peran'.
- * Menu dengan kunci 'params' memakai route yang sama dengan query string tertentu (misalnya Kalender Ketersediaan
- * = Papan Status dengan tampilan=kalender) dan aktif hanya bila query string itu cocok.
+ * Menu dengan kunci 'params' memakai route yang sama dengan query string tertentu dan aktif hanya bila query string
+ * itu cocok. Papan Status Kamar satu menu untuk tampilan papan dan kalender (tombol Papan/Kalender di halamannya).
  * Staf yang merangkap peran melihat gabungan menunya.
  */
 class MenuStaf
@@ -36,12 +36,7 @@ class MenuStaf
         return [
             ['label' => 'Dashboard', 'ikon' => 'dashboard', 'route' => 'staf.dashboard', 'peran' => self::SEMUA],
 
-            ['label' => 'Operasional', 'ikon' => 'papan', 'anak' => [
-                ['label' => 'Papan Status Kamar', 'route' => 'staf.papan-status', 'gate' => 'view-rooms'],
-            ]],
-
             ['label' => 'Reservasi', 'ikon' => 'reservasi', 'anak' => [
-                ['label' => 'Kalender Ketersediaan', 'route' => 'staf.papan-status', 'params' => ['tampilan' => 'kalender'], 'gate' => 'view-reservations'],
                 ['label' => 'Daftar Reservasi', 'route' => 'staf.reservasi', 'gate' => 'view-reservations'],
                 // FO melihat pengajuan, tetapi hanya Manager yang dapat menyetujui atau menolak
                 ['label' => 'Pengajuan Instansi', 'route' => 'staf.pengajuan-instansi', 'gate' => 'view-reservations'],
@@ -51,6 +46,8 @@ class MenuStaf
             ]],
 
             ['label' => 'Kamar', 'ikon' => 'kamar', 'anak' => [
+                // Papan dan Kalender Ketersediaan (?tampilan=kalender) satu halaman, satu menu
+                ['label' => 'Papan Status Kamar', 'route' => 'staf.papan-status', 'gate' => 'view-rooms'],
                 ['label' => 'Riwayat Status', 'route' => 'staf.kamar.riwayat-status', 'gate' => 'view-reservations'],
             ]],
 

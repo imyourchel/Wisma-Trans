@@ -51,8 +51,8 @@
         @endif
     </div>
 
-    @if ($belumWaktunya)
-        <p class="mb-4 rounded bg-[rgba(232,172,69,.14)] px-4 py-3 text-[13px] text-[#7A520C]">Check-in dibuka pukul {{ $jamCheckIn }} WITA. Tamu yang datang lebih awal bisa menunggu atau dititipkan barangnya.</p>
+    @if ($masaEarly)
+        <p class="mb-4 rounded bg-[rgba(232,172,69,.14)] px-4 py-3 text-[13px] text-[#7A520C]" data-banner-early>Check-in normal mulai pukul {{ $jamCheckIn }} WITA. Tamu yang datang lebih awal bisa langsung masuk bila kamarnya sudah Siap (early check-in).</p>
     @endif
 
     @if ($daftar->isEmpty())
@@ -81,7 +81,7 @@
                     <ul class="m-0 mt-3 flex list-none flex-col gap-1 p-0 text-[13px]">
                         @foreach ($baris as $b)
                             <li class="flex justify-between gap-3">
-                                <span>{{ $b->roomType->name }}</span>
+                                <span>{{ $b->roomType->name }}{{ $b->room ? ' · '.$b->room->bedTypeLabel() : '' }}@if ($t = \App\Services\Reservasi\TambahanKamar::teks($b))<span class="block text-[12px] font-medium text-clay-600" data-tambahan-checkin>+ {{ $t }}</span>@endif</span>
                                 <span @class(['tabular-nums', 'font-semibold' => $b->room, 'text-ink-500' => ! $b->room])>{{ $b->room ? 'Kamar '.$b->room->room_number : 'belum ditetapkan' }}</span>
                             </li>
                         @endforeach
@@ -89,7 +89,8 @@
                     <div class="mt-3 border-t border-cream-300 pt-3 text-[12px] text-ink-500">
                         {{ ReservasiService::rentang($x->masuk(), $x->keluar()) }}
                         @if ($nota) · sisa bayar <span class="font-semibold text-ink-900">{{ $rp(max(0, (float) $nota->total_amount - (float) $nota->paid_amount)) }}</span>@endif
-                        @if ($x->special_request)<div class="mt-1 line-clamp-2 italic text-ink-900">“{{ $x->special_request }}”</div>@endif
+                        @if ($bagiTamu = $x->catatanPembagian())<div class="mt-1 text-ink-900" data-pembagian-tamu>Pembagian tamu: {{ $bagiTamu }}</div>@endif
+                        @if (($catatanTamu = $x->catatanTamu(tanpaInstansi: false)) !== '')<div class="mt-1 line-clamp-2 italic text-ink-900">“{{ $catatanTamu }}”</div>@endif
                     </div>
                     @if ($bolehKelola && $x->instansi() && $buktiUntuk !== $x->id)
                         {{-- Reservasi instansi: check-in hanya setelah bukti pemesanan dari PIC diverifikasi --}}
@@ -103,36 +104,63 @@
     @endif
 
     @if ($r)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
             <form wire:submit="simpan" role="dialog" aria-modal="true" aria-labelledby="ci-judul" novalidate
-                  class="relative flex max-h-[92vh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+                  class="wt-dialog relative flex max-h-[92dvh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
-                        <div id="ci-judul" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]">Check-in {{ $r->reservation_code }}</div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div id="ci-judul" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]">Check-in {{ $r->reservation_code }}</div>
+                            @if ($early)
+                                <span class="wt-lencana bg-[rgba(232,172,69,.18)] text-[#7A520C]" data-lencana-early>Early check-in</span>
+                            @endif
+                        </div>
                         <div class="mt-0.5 text-[13px] text-ink-500">{{ $r->customer?->full_name }} · {{ ReservasiService::rentang($r->masuk(), $r->keluar()) }}</div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
                         <x-staf.ikon nama="tutup" ukuran="16" />
                     </button>
                 </div>
                 <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
                     @foreach ($r->rooms->where('status', 'booked') as $b)
-                        <x-staf.isian :nama="'kamar.'.$b->id" :label="'Kamar untuk '.$b->roomType->name" tag="div" wire:key="tempat-{{ $b->id }}">
+                        @php
+                            $mau = $mauKasur[$b->id] ?? null;
+                            $kasurPilih = $kasurKamar[$b->id][(int) ($penempatan[$b->id] ?? 0)] ?? null;
+                            $beda = $mau && $kasurPilih && $kasurPilih !== $mau;
+                        @endphp
+                        <x-staf.isian :nama="'kamar.'.$b->id" :label="'Kamar untuk '.$b->roomType->name.($mau ? ' · '.\App\Models\Room::labelKasur($mau) : '')" tag="div" wire:key="tempat-{{ $b->id }}">
                             <x-staf.pilih model="$wire.penempatan[{{ $b->id }}]" :nilai="$penempatan[$b->id] ?? ''" label="Nomor kamar"
                                           :galat="$errors->has('kamar.'.$b->id) ? 'true' : null"
                                           :pilihan="['' => 'Pilih nomor kamar'] + ($pilihanKamar[$b->id] ?? [])" />
                             @isset($usulan[$b->id])
                                 <span class="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-500" data-usulan>
-                                    <x-staf.ikon nama="bintang" ukuran="14" class="text-clay-500" /> Usulan: Kamar {{ $usulan[$b->id]['nomor'] }} (kamar favorit tamu)
+                                    <x-staf.ikon nama="bintang" ukuran="14" class="text-clay-500" /> Usulan: Kamar {{ $usulan[$b->id]['nomor'] }} ({{ $usulan[$b->id]['alasan'] }})
                                     @if (($penempatan[$b->id] ?? '') !== (string) $usulan[$b->id]['id'])
                                         <button type="button" wire:click="$set('penempatan.{{ $b->id }}', '{{ $usulan[$b->id]['id'] }}')" class="border-0 bg-transparent p-0 text-xs font-semibold text-clay-600 hover:underline">Pakai</button>
                                     @endif
                                 </span>
                             @endisset
+                            @if ($mau)
+                                {{-- Diperbarui langsung di peramban saat FO memilih nomor kamar lain --}}
+                                <span x-data="{ kasur: @js($kasurKamar[$b->id] ?? []) }" data-peringatan-kasur="{{ $beda ? 'beda' : 'sama' }}"
+                                      x-show="kasur[$wire.penempatan[{{ $b->id }}]] && kasur[$wire.penempatan[{{ $b->id }}]] !== @js($mau)" @style(['display: none' => ! $beda])
+                                      class="mt-1.5 flex items-center gap-1.5 rounded bg-[rgba(232,172,69,.14)] px-2.5 py-1.5 text-xs font-medium text-[#7A520C]" role="status">
+                                    Jenis kasur berbeda dari pesanan tamu ({{ \App\Models\Room::labelKasur($mau) }})
+                                </span>
+                                <span x-data="{ kurang: @js($kurangMuat[$b->id] ?? []) }" data-peringatan-kapasitas
+                                      x-show="kurang[$wire.penempatan[{{ $b->id }}]]" @style(['display: none' => ! ($kurangMuat[$b->id][(int) ($penempatan[$b->id] ?? 0)] ?? false)])
+                                      class="mt-1.5 flex items-center gap-1.5 rounded bg-[rgba(212,81,74,.1)] px-2.5 py-1.5 text-xs font-medium text-status-dirty" role="status">
+                                    Kamar ini menampung lebih sedikit tamu dari pesanan (maks {{ $b->roomType->teksKapasitas($mau) }})
+                                </span>
+                            @endif
                         </x-staf.isian>
                     @endforeach
-                    <p class="m-0 text-xs text-ink-500">Hanya kamar berstatus Siap yang bisa dipakai. Kamar yang belum siap perlu dibersihkan dulu oleh Housekeeping.</p>
+                    @if ($early)
+                        <p class="m-0 text-xs text-ink-500">Early check-in sebelum pukul {{ $jamCheckIn }} WITA tanpa biaya tambahan. Hanya kamar berstatus Siap yang ditampilkan.</p>
+                    @else
+                        <p class="m-0 text-xs text-ink-500">Hanya kamar berstatus Siap yang bisa dipakai. Kamar yang belum siap perlu dibersihkan dulu oleh Housekeeping.</p>
+                    @endif
 
                     <div class="flex flex-col gap-3 border-t border-cream-300 pt-4">
                         <label class="flex items-center gap-2.5 text-[13px]">

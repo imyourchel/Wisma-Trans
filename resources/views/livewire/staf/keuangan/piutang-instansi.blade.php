@@ -36,9 +36,9 @@
     </div>
 
     @if ($i)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="pi-judul" class="relative flex max-h-[94vh] w-[860px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="pi-judul" class="wt-dialog relative flex max-h-[94dvh] w-[860px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="pi-judul" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]">{{ $i->name }}</div>
@@ -46,7 +46,7 @@
                             {{ $i->ringkasSkema() }} · Narahubung: {{ $i->primaryContact?->full_name ?? 'belum diatur' }}{{ $i->primaryContact?->phone ? ', '.$i->primaryContact->phone : '' }}{{ ($i->primaryContact?->email ?: $i->email) ? ', '.($i->primaryContact?->email ?: $i->email) : '' }}
                         </div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
                 <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
                     <section>

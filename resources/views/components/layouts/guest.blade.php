@@ -14,13 +14,13 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
-<body class="min-h-screen">
+<body class="min-h-dvh">
 @php
     $nav = [
         ['label' => 'Kamar', 'route' => 'kamar', 'aktif' => ['kamar', 'kamar.tipe']],
         ['label' => 'Resto', 'route' => 'menu', 'aktif' => ['menu']],
-        ['label' => 'Laundry', 'route' => 'laundry', 'aktif' => ['laundry']],
-        ['label' => 'Aula', 'route' => 'aula', 'aktif' => ['aula']],
+        ['label' => 'Laundry', 'route' => 'laundry', 'aktif' => ['laundry', 'laundry.pesan']],
+        ['label' => 'Aula', 'route' => 'aula', 'aktif' => ['aula', 'aula.ajukan']],
         ['label' => 'Kontak', 'route' => 'kontak', 'aktif' => ['kontak']],
     ];
 @endphp
@@ -28,7 +28,7 @@
 <header x-data="{ laci: false, akun: false }" @keydown.escape.window="laci = false; akun = false"
         class="sticky top-0 z-40 bg-brown-800">
     <div class="flex min-h-[72px] items-center gap-4 px-4 py-2 sm:px-6">
-        <a href="{{ route('home') }}" class="flex-none">
+        <a href="{{ route('home') }}" class="flex flex-none items-center pointer-coarse:min-h-11">
             <img src="{{ asset('ds/logo/DC-wismatrans-landscape.png') }}" alt="Wisma Trans" class="h-10 w-auto sm:h-12">
         </a>
 
@@ -49,7 +49,7 @@
         <div class="ml-auto flex flex-none items-center gap-3 lg:ml-0">
             {{-- Cek Pesanan hanya untuk tamu tanpa akun; yang sudah masuk memakai Pesanan saya --}}
             @guest
-                <a href="{{ route('cek') }}" class="hidden whitespace-nowrap p-2 text-sm text-[rgba(242,235,220,.78)] hover:text-cream-150 hover:no-underline sm:inline-block">Cek Pesanan</a>
+                <a href="{{ route('cek') }}" class="hidden whitespace-nowrap p-2 text-sm text-[rgba(242,235,220,.78)] pointer-coarse:py-3 hover:text-cream-150 hover:no-underline sm:inline-block">Cek Pesanan</a>
             @endguest
 
             @auth
@@ -77,7 +77,7 @@
                    class="wt-btn-primary h-10 px-5 text-[13px] !font-semibold !normal-case">Masuk</a>
             @endauth
 
-            <button type="button" @click="laci = true" class="flex h-10 w-10 flex-col items-center justify-center gap-[5px] rounded border border-[rgba(242,235,220,.22)] lg:hidden" aria-label="Buka menu">
+            <button type="button" @click="laci = true" :aria-expanded="laci" class="flex h-11 w-11 flex-col items-center justify-center gap-[5px] rounded border border-[rgba(242,235,220,.22)] lg:hidden" aria-label="Buka menu">
                 <span class="block h-0.5 w-[18px] rounded bg-cream-150"></span>
                 <span class="block h-0.5 w-[18px] rounded bg-cream-150"></span>
                 <span class="block h-0.5 w-[18px] rounded bg-cream-150"></span>
@@ -93,7 +93,7 @@
              class="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-brown-800 p-5">
             <div class="mb-6 flex items-center justify-between">
                 <img src="{{ asset('ds/logo/DC-wismatrans-landscape.png') }}" alt="Wisma Trans" class="h-9 w-auto">
-                <button type="button" @click="laci = false" class="flex h-9 w-9 items-center justify-center rounded hover:bg-[rgba(242,235,220,.12)]" aria-label="Tutup menu">
+                <button type="button" @click="laci = false" class="flex h-11 w-11 items-center justify-center rounded hover:bg-[rgba(242,235,220,.12)]" aria-label="Tutup menu">
                     <img src="{{ asset('ds/icons/x-cream.svg') }}" alt="" width="18" height="18">
                 </button>
             </div>
@@ -120,7 +120,8 @@
                     </div>
                 </div>
             @endauth
-            <nav class="flex flex-col gap-1" aria-label="Menu utama">
+            {{-- Laci menutup saat tautan diklik (termasuk Masuk yang membuka modal) atau Esc --}}
+            <nav class="flex flex-col gap-1" aria-label="Menu utama" @click="$event.target.closest('a') && (laci = false)">
                 @foreach ($nav as $item)
                     @php $aktif = request()->routeIs(...$item['aktif']); @endphp
                     <a href="{{ route($item['route']) }}"
@@ -130,7 +131,10 @@
                            'text-cream-150 hover:text-cream-150' => ! $aktif,
                        ])>{{ $item['label'] }}</a>
                 @endforeach
-                @guest<a href="{{ route('cek') }}" class="mt-2 rounded border-t border-[rgba(242,235,220,.16)] px-3 py-3 text-sm text-[rgba(242,235,220,.78)] hover:text-cream-150 hover:no-underline">Cek Pesanan</a>@endguest
+                @guest
+                    <a href="{{ route('cek') }}" class="mt-2 rounded border-t border-[rgba(242,235,220,.16)] px-3 py-3 text-sm text-[rgba(242,235,220,.78)] hover:text-cream-150 hover:no-underline">Cek Pesanan</a>
+                    <a href="{{ route('login') }}" @click.prevent="$dispatch('buka-akun', { mode: 'masuk' })" class="wt-btn-primary mt-3 h-11 text-[13px] !font-semibold !normal-case">Masuk</a>
+                @endguest
             </nav>
             @auth
                 <form method="POST" action="{{ route('logout') }}" class="mt-auto border-t border-[rgba(242,235,220,.16)] pt-3">
@@ -151,17 +155,17 @@
         <div class="flex min-w-0 flex-col gap-5">
             <img src="{{ asset('ds/logo/wismatrans-landscape-dark.png') }}" alt="Wisma Trans" class="-mb-3 h-[52px] w-auto self-start">
             <p class="m-0 max-w-[280px] text-sm leading-[1.7]">Menginap nyaman, bersantap hangat, dan ruang pertemuan untuk setiap acara di pusat kota Malili.</p>
-            <div class="flex items-center gap-4">
-                <a href="https://wa.me/{{ $wisma['whatsapp'] }}" target="_blank" rel="noopener" title="WhatsApp" class="flex opacity-80 hover:opacity-100"><img src="{{ asset('ds/icons/whatsapp.svg') }}" alt="WhatsApp" width="20" height="20"></a>
-                <a href="{{ $wisma['instagram'] }}" target="_blank" rel="noopener" title="Instagram" class="flex opacity-80 hover:opacity-100"><img src="{{ asset('ds/icons/instagram.svg') }}" alt="Instagram" width="20" height="20"></a>
-                <a href="{{ $wisma['facebook'] }}" target="_blank" rel="noopener" title="Facebook" class="flex opacity-80 hover:opacity-100"><img src="{{ asset('ds/icons/facebook.svg') }}" alt="Facebook" width="20" height="20"></a>
+            <div class="flex items-center gap-4 pointer-coarse:-mx-3 pointer-coarse:gap-0">
+                <a href="https://wa.me/{{ $wisma['whatsapp'] }}" target="_blank" rel="noopener" title="WhatsApp" class="flex opacity-80 hover:opacity-100 pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:items-center pointer-coarse:justify-center"><img src="{{ asset('ds/icons/whatsapp.svg') }}" alt="WhatsApp" width="20" height="20"></a>
+                <a href="{{ $wisma['instagram'] }}" target="_blank" rel="noopener" title="Instagram" class="flex opacity-80 hover:opacity-100 pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:items-center pointer-coarse:justify-center"><img src="{{ asset('ds/icons/instagram.svg') }}" alt="Instagram" width="20" height="20"></a>
+                <a href="{{ $wisma['facebook'] }}" target="_blank" rel="noopener" title="Facebook" class="flex opacity-80 hover:opacity-100 pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:items-center pointer-coarse:justify-center"><img src="{{ asset('ds/icons/facebook.svg') }}" alt="Facebook" width="20" height="20"></a>
             </div>
             <div class="font-display text-[11px] font-bold uppercase tracking-[.2em] text-sand-300">Simple · Clean · Favour</div>
         </div>
         <div class="flex min-w-0 flex-col gap-3">
             <div class="font-display text-[11px] font-bold uppercase tracking-[.16em] text-[rgba(242,235,220,.45)]">Alamat</div>
             <div class="text-sm leading-[1.7] text-[rgba(242,235,220,.82)]">{!! implode('<br>', array_map('e', $wisma['alamat'])) !!}</div>
-            <a href="{{ $wisma['maps'] }}" target="_blank" rel="noopener" class="self-start text-sm text-sand-300 underline underline-offset-4 hover:text-cream-150">Lihat di Google Maps</a>
+            <a href="{{ $wisma['maps'] }}" target="_blank" rel="noopener" class="self-start text-sm text-sand-300 underline underline-offset-4 hover:text-cream-150 pointer-coarse:-my-3 pointer-coarse:py-3">Lihat di Google Maps</a>
         </div>
         <div class="flex min-w-0 flex-col gap-3">
             <div class="font-display text-[11px] font-bold uppercase tracking-[.16em] text-[rgba(242,235,220,.45)]">Jam layanan</div>
@@ -176,7 +180,7 @@
             <div class="font-display text-[11px] font-bold uppercase tracking-[.16em] text-[rgba(242,235,220,.45)]">Reservasi</div>
             <div class="whitespace-nowrap font-display text-[19px] font-bold tabular-nums tracking-[.02em] text-cream-150">{{ $wisma['telepon'] }}</div>
             <div class="text-sm text-[rgba(242,235,220,.62)]">Telepon atau WhatsApp</div>
-            <a href="{{ route('instansi') }}" class="self-start text-sm text-sand-300 underline underline-offset-4 hover:text-cream-150">Pengajuan untuk instansi</a>
+            <a href="{{ route('instansi') }}" class="self-start text-sm text-sand-300 underline underline-offset-4 hover:text-cream-150 pointer-coarse:-my-3 pointer-coarse:py-3">Pengajuan untuk instansi</a>
         </div>
     </div>
     <div class="border-t border-[rgba(242,235,220,.16)]">
@@ -189,6 +193,7 @@
 
 @guest
     @include('partials.auth-modal')
+    @include('partials.google-one-tap')
 @endguest
 
 @include('partials.toasts')

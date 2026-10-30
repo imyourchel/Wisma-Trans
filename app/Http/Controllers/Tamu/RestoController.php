@@ -16,7 +16,7 @@ class RestoController extends Controller
     public function __invoke(Request $request, KodeKamar $kodeKamar): View
     {
         // Urutan kelompok mengikuti urutan menu di basis data (sama dengan menu cetak)
-        $menu = Service::where('category', 'fnb')->where('is_active', true)->orderBy('id')->get();
+        $menu = Service::menuKafe()->orderBy('id')->get();
         $ids = Service::terlarisIds();
 
         // Isian pemesan diisi otomatis untuk tamu yang sudah masuk

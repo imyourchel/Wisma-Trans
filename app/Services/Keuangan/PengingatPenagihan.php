@@ -306,10 +306,13 @@ class PengingatPenagihan
     {
         try {
             $nota = $t instanceof Invoice;
+            // Tembusan ke narahubung utama bila pengingat dikirim ke alamat lain (misalnya email kantor instansi)
+            $narahubung = $t->institution->primaryContact?->email;
+            $cc = $narahubung && Str::lower($narahubung) !== Str::lower($email) ? [$narahubung] : [];
             Notification::route('mail', $email)->notify(new PesanReservasi(
                 'Pengingat tagihan '.self::nomor($t).' Wisma Trans', 'Yth. '.$t->institution->name.',',
                 array_filter(explode("\n", $this->teks($t))), 'Lihat tagihan', $this->tautan($t),
-                $nota ? [$this->notaPdf->isi($t), $this->notaPdf->namaBerkas($t)] : [$this->bulanan->pdf($t), $this->bulanan->namaBerkas($t)],
+                $nota ? [$this->notaPdf->isi($t), $this->notaPdf->namaBerkas($t)] : [$this->bulanan->pdf($t), $this->bulanan->namaBerkas($t)], $cc,
             ));
 
             return true;

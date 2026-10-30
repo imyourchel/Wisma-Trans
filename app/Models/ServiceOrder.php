@@ -3,25 +3,47 @@
 namespace App\Models;
 
 use App\Contracts\BayarOnline;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
-/** Pesanan layanan (makanan, laundry). Tamu luar memesan makanan lewat halaman Resto. */
+/**
+ * Pesanan layanan (makanan, laundry). Tamu luar memesan makanan lewat halaman Resto.
+ *
+ * Tambahan pemesanan kamar (Extra bed, Sarapan tambahan) juga disimpan di sini sebagai layanan berdurasi:
+ * service_start_date/service_end_date terisi dan ditagihkan lewat nota menginap (App\Services\Reservasi\TambahanKamar).
+ * Pesanan seperti itu bukan pesanan dapur atau laundry, jadi disaring keluar dari semua kueri lewat lingkup global
+ * LINGKUP_LAYANAN; ambil dengan ServiceOrder::tambahanKamar().
+ */
 class ServiceOrder extends Model implements BayarOnline
 {
     public const SERVING = ['take_away' => 'Ambil di tempat', 'dine_in' => 'Makan di tempat', 'room_service' => 'Antar ke kamar'];
 
+    /** Nama lingkup global yang menyembunyikan tambahan pemesanan kamar. */
+    public const LINGKUP_LAYANAN = 'layanan_harian';
+
     protected $fillable = [
-        'order_code', 'access_token', 'order_type', 'customer_id', 'reservation_room_id', 'serving_type',
-        'invoice_id', 'payment_mode', 'order_date', 'status', 'created_by', 'note',
+        'order_code', 'access_token', 'order_type', 'customer_id', 'reservation_room_id', 'service_start_date', 'service_end_date',
+        'serving_type', 'invoice_id', 'payment_mode', 'order_date', 'status', 'created_by', 'note',
     ];
 
     protected function casts(): array
     {
-        return ['order_date' => 'datetime'];
+        return ['order_date' => 'datetime', 'service_start_date' => 'date', 'service_end_date' => 'date'];
+    }
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope(self::LINGKUP_LAYANAN, fn (Builder $q) => $q->whereNull($q->qualifyColumn('service_start_date')));
+    }
+
+    /** Tambahan pemesanan kamar (layanan berdurasi), yang disembunyikan lingkup global. */
+    public static function tambahanKamar(): Builder
+    {
+        return static::withoutGlobalScope(self::LINGKUP_LAYANAN)->whereNotNull('service_start_date');
     }
 
     public function items(): HasMany

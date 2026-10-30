@@ -102,10 +102,10 @@
     <div x-data="formStaf({ j: null, pengerja: 'vendor' })" @catat-pelaksanaan.window="j = $event.detail; pengerja = j.vendor ? 'vendor' : 'staf'; galat = {}"
          @keydown.escape.window="j && !proses && (j = null)">
         <template x-if="j">
-            <div class="fixed inset-0 z-[350] flex items-center justify-center p-4">
+            <div class="wt-modal fixed inset-0 z-[350] flex items-center justify-center p-4">
                 <div @click="!proses && (j = null)" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
                 <form :action="j.url" @submit.prevent="kirim($el)" novalidate role="dialog" aria-modal="true" aria-labelledby="laksana-judul"
-                      class="relative flex max-h-[92vh] w-[500px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+                      class="wt-dialog relative flex max-h-[92dvh] w-[500px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                     @csrf
                     <div class="flex-none border-b border-cream-300 px-6 py-4">
                         <div id="laksana-judul" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]" x-text="'Catat perawatan ' + j.nama"></div>

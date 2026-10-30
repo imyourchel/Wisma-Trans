@@ -30,7 +30,7 @@
     </div>
 
     <div class="wt-card overflow-x-auto">
-        <table class="w-full min-w-[960px] border-collapse">
+        <table class="wt-tabel-kartu w-full min-w-[960px] border-collapse">
             <thead>
                 <tr>
                     <th class="wt-th">Kode</th>
@@ -46,22 +46,22 @@
                 @forelse ($daftar as $x)
                     @php $m = $x->masuk(); $k = $x->keluar(); @endphp
                     <tr wire:key="rsv-{{ $x->id }}" class="cursor-pointer hover:bg-row-hover" wire:click="open({{ $x->id }})">
-                        <td class="wt-td">
+                        <td class="wt-td wt-kartu-judul">
                             <div class="font-semibold tabular-nums">{{ $x->reservation_code }}</div>
                             <div class="text-[11px] text-ink-500">{{ $x->booking_channel === 'walk_in' ? 'Datang langsung' : ($x->request ? 'Instansi' : 'Online') }}</div>
                         </td>
-                        <td class="wt-td">
+                        <td class="wt-td" data-label="Pemesan">
                             <div class="font-semibold">{{ $x->customer?->full_name }}</div>
                             <div class="text-[11px] text-ink-500">{{ $x->institution?->name ?? $x->customer?->phone }}</div>
                         </td>
-                        <td class="wt-td whitespace-nowrap">
+                        <td class="wt-td whitespace-nowrap" data-label="Menginap">
                             <div>{{ ReservasiService::rentang($m, $k) }}</div>
                             <div class="text-[11px] text-ink-500">{{ $m && $k ? $m->diffInDays($k).' malam' : '' }}</div>
                         </td>
-                        <td class="wt-td max-w-[200px] truncate tabular-nums">{{ $ringkasKamar($x) }}</td>
-                        <td class="wt-td"><x-staf.status-reservasi :status="$x->status" /></td>
-                        <td class="wt-td text-right tabular-nums">{{ $x->stayInvoice ? $rp($x->stayInvoice->total_amount) : '—' }}</td>
-                        <td class="wt-td text-right"><button type="button" class="wt-btn-sm">Detail</button></td>
+                        <td class="wt-td max-w-[200px] truncate tabular-nums" data-label="Kamar" title="{{ $ringkasKamar($x) }}"><span>{{ $ringkasKamar($x) }}</span></td>
+                        <td class="wt-td" data-label="Status"><x-staf.status-reservasi :status="$x->status" /></td>
+                        <td class="wt-td text-right tabular-nums" data-label="Total kamar"><span>{{ $x->stayInvoice ? $rp($x->stayInvoice->total_amount) : '—' }}</span></td>
+                        <td class="wt-td wt-kartu-aksi text-right"><button type="button" class="wt-btn-sm">Detail</button></td>
                     </tr>
                 @empty
                     <tr><td colspan="7" class="wt-td py-10 text-center text-sm text-ink-500">Tidak ada reservasi yang cocok.</td></tr>
@@ -78,10 +78,10 @@
             $nota = $r->stayInvoice;
             $kamar = $r->rooms->sortBy(fn ($b) => [$b->check_in_date->toDateString(), $b->id]);
         @endphp
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
             <div role="dialog" aria-modal="true" aria-labelledby="detail-rsv-judul"
-                 class="relative flex max-h-[92vh] w-[720px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+                 class="wt-dialog relative flex max-h-[92dvh] w-[720px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="detail-rsv-judul" class="flex flex-wrap items-center gap-2.5">
@@ -90,7 +90,7 @@
                         </div>
                         <div class="mt-1 text-[13px] text-ink-500">{{ $r->customer?->full_name }}{{ $r->institution ? ' · '.$r->institution->name : '' }} · {{ $r->customer?->phone }}</div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
                         <x-staf.ikon nama="tutup" ukuran="16" />
                     </button>
                 </div>
@@ -110,8 +110,14 @@
                         @if ($r->id_card_held)
                             <div class="col-span-2"><dt class="wt-field-label">KTP ditahan</dt><dd class="m-0 mt-1">{{ $r->id_card_holder_name }}</dd></div>
                         @endif
-                        @if ($r->special_request)
-                            <div class="col-span-2 sm:col-span-4"><dt class="wt-field-label">Permintaan / catatan</dt><dd class="m-0 mt-1 whitespace-pre-line">{{ $r->special_request }}</dd></div>
+                        @if ($bagiTamu = $r->catatanPembagian())
+                            <div class="col-span-2 sm:col-span-4" data-pembagian-tamu><dt class="wt-field-label">Pembagian tamu</dt><dd class="m-0 mt-1">{{ $bagiTamu }}</dd></div>
+                        @endif
+                        @if ($peserta = $r->pesertaInstansi())
+                            <div data-peserta-instansi><dt class="wt-field-label">Peserta</dt><dd class="m-0 mt-1">{{ $peserta }} orang</dd></div>
+                        @endif
+                        @if (($catatanTamu = $r->catatanTamu(tanpaInstansi: false)) !== '')
+                            <div class="col-span-2 sm:col-span-4"><dt class="wt-field-label">Permintaan / catatan</dt><dd class="m-0 mt-1 whitespace-pre-line">{{ $catatanTamu }}</dd></div>
                         @endif
                     </dl>
 
@@ -130,11 +136,14 @@
                             @foreach ($kamar as $b)
                                 <div wire:key="baris-{{ $b->id }}" @class(['flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-cream-300 px-4 py-3 text-[13px] first:border-t-0', 'opacity-60' => in_array($b->status, ['moved', 'cancelled'], true)])>
                                     <div class="min-w-[140px] flex-1">
-                                        <div class="font-semibold">{{ $b->room ? 'Kamar '.$b->room->room_number : 'Belum ditetapkan' }} · {{ $b->roomType->name }}</div>
+                                        <div class="font-semibold">{{ $b->room ? 'Kamar '.$b->room->room_number : 'Belum ditetapkan' }} · {{ $b->roomType->name }}{{ $b->room ? ' · '.$b->room->bedTypeLabel() : '' }}</div>
                                         <div class="text-[12px] text-ink-500">
                                             {{ ReservasiService::rentang($b->check_in_date, $b->check_out_date) }} · {{ $b->malam() }} malam · {{ $rp($b->price_per_night) }}/malam
                                             @if ($b->potongan() > 0) · potongan {{ $rp($b->potongan()) }} @endif
                                         </div>
+                                        @if ($t = \App\Services\Reservasi\TambahanKamar::teks($b))
+                                            <div class="mt-0.5 text-[12px] font-medium text-clay-600" data-tambahan-detail>+ {{ $t }}</div>
+                                        @endif
                                     </div>
                                     <span class="wt-lencana wt-lencana-netral">{{ \App\Models\ReservationRoom::STATUS[$b->status] ?? $b->status }}</span>
                                     @if ($bolehKelola && $b->status === 'checked_in')
@@ -229,7 +238,18 @@
                                 <form wire:submit="simpanPindah" class="flex flex-col gap-3" novalidate>
                                     <x-staf.isian nama="kamarBaru" label="Pindah ke kamar (siap ditempati)">
                                         <x-staf.pilih model="$wire.kamarBaru" label="Kamar tujuan" :galat="$errors->has('kamarBaru') ? 'true' : null"
-                                                      :pilihan="['' => 'Pilih kamar'] + $kamarPindah->mapWithKeys(fn ($x) => [$x->id => 'Kamar '.$x->room_number.' · '.($namaTipe[$x->room_type_id] ?? '')])->all()" />
+                                                      :pilihan="['' => 'Pilih kamar'] + $kamarPindah->mapWithKeys(fn ($x) => [$x->id => 'Kamar '.$x->room_number.' · '.($namaTipe[$x->room_type_id] ?? '').' · '.\App\Models\Room::labelKasur($x->bed_type)])->all()" />
+                                        @if ($kasurPindah)
+                                            <span x-data="{ kasur: @js($kamarPindah->mapWithKeys(fn ($x) => [$x->id => $x->bed_type])) }" data-peringatan-kasur
+                                                  x-show="kasur[$wire.kamarBaru] && kasur[$wire.kamarBaru] !== @js($kasurPindah)" style="display: none"
+                                                  class="mt-1.5 flex rounded bg-[rgba(232,172,69,.14)] px-2.5 py-1.5 text-xs font-medium text-[#7A520C]" role="status">
+                                                Jenis kasur berbeda dari pesanan tamu ({{ \App\Models\Room::labelKasur($kasurPindah) }})
+                                            </span>
+                                            <span x-data="{ kurang: @js($kurangPindah) }" data-peringatan-kapasitas x-show="kurang[$wire.kamarBaru]" style="display: none"
+                                                  class="mt-1.5 flex rounded bg-[rgba(212,81,74,.1)] px-2.5 py-1.5 text-xs font-medium text-status-dirty" role="status">
+                                                Kamar ini menampung lebih sedikit tamu dari pesanan (maks {{ $r->rooms->firstWhere('id', $barisId)?->roomType->teksKapasitas($kasurPindah) }})
+                                            </span>
+                                        @endif
                                     </x-staf.isian>
                                     <x-staf.isian nama="alasan" label="Alasan (opsional)"><input type="text" wire:model="alasan" maxlength="150" placeholder="Contoh: AC kamar rusak" class="wt-input"></x-staf.isian>
                                     @error('kamar')<p class="m-0 text-xs font-medium text-status-dirty">{{ $message }}</p>@enderror

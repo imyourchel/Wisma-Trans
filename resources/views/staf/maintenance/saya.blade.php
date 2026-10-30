@@ -16,7 +16,7 @@
     @endif
 
     <div class="mb-4 flex flex-wrap items-center gap-3">
-        <nav class="inline-flex rounded-lg border border-cream-300 bg-cream-50 p-0.5" aria-label="Tab laporan kerusakan">
+        <nav class="wt-geser inline-flex max-w-full rounded-lg border border-cream-300 bg-cream-50 p-0.5" aria-label="Tab laporan kerusakan">
             @foreach (['terbuka' => 'Belum selesai', 'saya' => 'Laporan saya'] as $t => $label)
                 <a href="{{ $tabUrl($t) }}" @if ($tab === $t) aria-current="page" @endif
                    @class(['inline-flex h-8 items-center rounded-md px-3.5 text-[13px] font-semibold hover:no-underline',
@@ -90,9 +90,9 @@
     {{-- Detail hanya-baca --}}
     @if ($detail)
         @php $tutup = request()->fullUrlWithoutQuery(['lihat']); @endphp
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-data x-on:keydown.escape.window="window.location.href = @js($tutup)">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-data x-on:keydown.escape.window="window.location.href = @js($tutup)">
             <a href="{{ $tutup }}" class="absolute inset-0 bg-[rgba(62,42,28,.44)]" aria-label="Tutup"></a>
-            <div role="dialog" aria-modal="true" aria-labelledby="mnt-judul" class="relative flex max-h-[92vh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="mnt-judul" class="wt-dialog relative flex max-h-[92dvh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-start gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="mnt-judul" class="flex flex-wrap items-center gap-2.5">

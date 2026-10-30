@@ -25,11 +25,16 @@ use Livewire\Component;
 use Throwable;
 
 /**
- * Pemesanan Aula. FO dan F&B mencatat pemesanan, mengisi harga usulan, menandai selesai, dan membatalkan;
+ * Pemesanan Aula. FO mencatat pemesanan, mengisi harga usulan, menandai selesai, dan membatalkan;
  * Manager menyetujui dengan harga akhir (nota perorangan atau ditagihkan ke instansi) atau menolak dengan alasan.
+ * Pengguna tanpa manage-halls/approve-halls (F&B) hanya melihat jadwal yang sudah terkonfirmasi, untuk persiapan
+ * konsumsi: tanpa tab Menunggu, tanpa nomor WhatsApp penyewa, harga, nota, dan aksi apa pun.
  */
 class PemesananAula extends Component
 {
+    /** Status yang boleh dilihat pengguna lihat saja. */
+    public const STATUS_LIHAT_SAJA = ['confirmed', 'completed'];
+
     /** menunggu | terkonfirmasi | riwayat */
     #[Url(except: 'menunggu')]
     public string $tab = 'menunggu';
@@ -59,14 +64,36 @@ class PemesananAula extends Component
     public function mount(): void
     {
         Gate::authorize('view-halls');
-        if ($this->selectedId && ! HallBooking::whereKey($this->selectedId)->exists()) {
+        if ($this->selectedId && ! $this->terlihat()->whereKey($this->selectedId)->exists()) {
             $this->selectedId = null;
+        }
+        if (self::lihatSaja() && $this->tab === 'menunggu') {
+            $this->tab = 'terkonfirmasi';
+        }
+    }
+
+    /** Tidak bisa mengelola maupun menyetujui (F&B): hanya melihat jadwal terkonfirmasi. */
+    public static function lihatSaja(): bool
+    {
+        return ! Gate::any(['manage-halls', 'approve-halls']);
+    }
+
+    /** Pemesanan yang boleh dilihat pengguna ini. */
+    private function terlihat()
+    {
+        return HallBooking::query()->when(self::lihatSaja(), fn ($q) => $q->whereIn('status', self::STATUS_LIHAT_SAJA));
+    }
+
+    public function updatedTab(): void
+    {
+        if (self::lihatSaja() && $this->tab === 'menunggu') {
+            $this->tab = 'terkonfirmasi';
         }
     }
 
     public function open(int $id): void
     {
-        $this->selectedId = HallBooking::findOrFail($id)->id;
+        $this->selectedId = $this->terlihat()->findOrFail($id)->id;
         $this->tutupAksi();
     }
 
@@ -214,12 +241,13 @@ class PemesananAula extends Component
     {
         abort_if($this->selectedId === null, 404);
 
-        return HallBooking::with(['hall', 'customer.institution', 'invoice', 'createdBy'])->findOrFail($this->selectedId);
+        return $this->terlihat()->with(['hall', 'customer.institution', 'invoice', 'createdBy'])->findOrFail($this->selectedId);
     }
 
     public function render(): View
     {
-        $daftar = HallBooking::with(['hall', 'customer.institution', 'invoice'])
+        $lihatSaja = self::lihatSaja();
+        $daftar = $this->terlihat()->with(['hall', 'customer.institution', 'invoice'])
             ->when($this->tab === 'menunggu', fn ($q) => $q->where('status', 'pending')->orderBy('start_at'))
             ->when($this->tab === 'terkonfirmasi', fn ($q) => $q->where('status', 'confirmed')->orderBy('start_at'))
             ->when($this->tab === 'riwayat', fn ($q) => $q->whereIn('status', ['completed', 'rejected', 'cancelled'])->orderByDesc('start_at')->limit(100))
@@ -228,15 +256,17 @@ class PemesananAula extends Component
 
         return view('livewire.staf.aula.pemesanan-aula', [
             'daftar' => $daftar,
-            'jumlah' => HallBooking::whereIn('status', ['pending', 'confirmed'])->selectRaw('status, COUNT(*) n')->groupBy('status')->pluck('n', 'status'),
+            'jumlah' => $this->terlihat()->whereIn('status', ['pending', 'confirmed'])->selectRaw('status, COUNT(*) n')->groupBy('status')->pluck('n', 'status'),
             'b' => $b,
+            'lihatSaja' => $lihatSaja,
             'bolehKelola' => Gate::allows('manage-halls'),
             'bolehPutuskan' => Gate::allows('approve-halls'),
-            'daftarInstansi' => Institution::orderBy('name')->pluck('name', 'id'),
+            'daftarInstansi' => $lihatSaja ? collect() : Institution::orderBy('name')->pluck('name', 'id'),
             'daftarAula' => Hall::where('is_active', true)->orderBy('id')->pluck('name', 'id'),
             'bentrok' => $b && $b->status === 'pending' ? app(AulaService::class)->bentrok($b->hall_id, $b->start_at, $b->end_at, $b->id) : null,
-            'waUlang' => $b ? WhatsAppService::tautan($b->customer?->phone, app(NotifikasiLayanan::class)->teksAula($b)) : null,
-            'urlNota' => $b?->invoice && $b->invoice->status !== 'cancelled' ? app(NotaPdf::class)->tautan($b->invoice) : null,
+            // Nomor penyewa dan nota tidak dikirim ke halaman lihat saja
+            'waUlang' => $b && ! $lihatSaja ? WhatsAppService::tautan($b->customer?->phone, app(NotifikasiLayanan::class)->teksAula($b)) : null,
+            'urlNota' => ! $lihatSaja && $b?->invoice && $b->invoice->status !== 'cancelled' ? app(NotaPdf::class)->tautan($b->invoice) : null,
         ])->layout('components.layouts.staf', ['title' => 'Pemesanan Aula']);
     }
 }

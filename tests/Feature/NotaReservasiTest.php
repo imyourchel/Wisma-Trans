@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Staf\Keuangan\Nota;
 use App\Models\Customer;
+use App\Models\Institution;
 use App\Models\Reservation;
 use App\Notifications\PesanReservasi;
 use App\Services\Keuangan\NotaPdf;
@@ -13,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Livewire\Livewire;
 use Tests\Concerns\DataContohWisma;
 use Tests\TestCase;
 
@@ -86,5 +89,54 @@ class NotaReservasiTest extends TestCase
 
         $r = $this->bayar($r);
         $this->get($r->urlStatus())->assertOk()->assertSee('Unduh nota (PDF)');
+    }
+
+    public function test_N04_kirim_ulang_nota_pribadi_ke_pelanggan(): void
+    {
+        $nota = $this->bayar($this->reservasi())->stayInvoice;
+        Notification::fake();
+        Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
+
+        Livewire::actingAs($this->akun('fo'))->test(Nota::class)->call('open', $nota->id)->call('kirimUlang')
+            ->assertDispatched('toast', teks: 'Nota dikirim ke Rizky Pratama (WhatsApp dan email).');
+        Http::assertSent(fn (Request $q) => $q['target'] === '081299110022' && str_contains($q['message'], 'Halo Rizky, berikut nota INV/2026/10/0001 Wisma Trans senilai'));
+        Notification::assertSentOnDemand(PesanReservasi::class, fn (PesanReservasi $n, $k, $tujuan) => $tujuan->routes['mail'] === 'rizky@contoh.id' && $n->cc === []);
+        Notification::assertSentOnDemandTimes(PesanReservasi::class, 1);
+    }
+
+    public function test_N05_kirim_ulang_nota_instansi_ke_email_kantor_tembusan_narahubung_dan_pemohon(): void
+    {
+        $nota = $this->bayar($this->reservasi())->stayInvoice;
+        $siti = Customer::create(['full_name' => 'Siti Rahma', 'phone' => '081377700001', 'email' => 'siti@vale.test']);
+        $vale = Institution::create(['name' => 'PT Vale Indonesia Tbk', 'address' => 'Jl. Sumantri Brojonegoro, Sorowako', 'email' => 'kantor@vale.test',
+            'primary_contact_id' => $siti->id, 'default_billing_scheme' => 'due_after_checkout', 'due_days' => 14]);
+        $siti->update(['institution_id' => $vale->id]);
+        $nota->update(['institution_id' => $vale->id]);
+        Notification::fake();
+        Http::fake(['api.fonnte.com/*' => Http::response(['status' => true])]);
+
+        // Email kantor, tembusan narahubung utama dan pemohon reservasi; WhatsApp ke narahubung utama, bukan pemohon
+        Livewire::actingAs($this->akun('fo'))->test(Nota::class)->call('open', $nota->id)->call('kirimUlang')
+            ->assertDispatched('toast', teks: 'Nota dikirim ke PT Vale Indonesia Tbk (email kantor, tembusan Siti Rahma dan Rizky Pratama; WhatsApp Siti Rahma).');
+        Notification::assertSentOnDemand(PesanReservasi::class, fn (PesanReservasi $n, $k, $tujuan) => $tujuan->routes['mail'] === 'kantor@vale.test'
+            && $n->cc === ['siti@vale.test', 'rizky@contoh.id'] && $n->sapaan === 'Yth. PT Vale Indonesia Tbk,'
+            && str_contains($n->baris[0], 'atas nama PT Vale Indonesia Tbk') && $n->toMail($tujuan)->cc === [['siti@vale.test', null], ['rizky@contoh.id', null]]);
+        Http::assertSent(fn (Request $q) => $q['target'] === '081377700001' && str_contains($q['message'], 'Halo Siti, berikut nota INV/2026/10/0001 Wisma Trans atas nama PT Vale Indonesia Tbk'));
+        Http::assertNotSent(fn (Request $q) => $q['target'] === '081299110022');
+
+        // Email kantor kosong: langsung ke narahubung utama, pemohon tetap ditembuskan
+        $vale->update(['email' => null]);
+        Notification::fake();
+        Livewire::actingAs($this->akun('fo'))->test(Nota::class)->call('open', $nota->id)->call('kirimUlang')
+            ->assertDispatched('toast', teks: 'Nota dikirim ke PT Vale Indonesia Tbk (email Siti Rahma, tembusan Rizky Pratama; WhatsApp Siti Rahma).');
+        Notification::assertSentOnDemand(PesanReservasi::class, fn (PesanReservasi $n, $k, $tujuan) => $tujuan->routes['mail'] === 'siti@vale.test' && $n->cc === ['rizky@contoh.id']);
+
+        // Pemohon = narahubung utama: tidak ditembuskan dua kali
+        $vale->update(['email' => 'kantor@vale.test']);
+        $nota->update(['customer_id' => $siti->id]);
+        Notification::fake();
+        Livewire::actingAs($this->akun('fo'))->test(Nota::class)->call('open', $nota->id)->call('kirimUlang')
+            ->assertDispatched('toast', teks: 'Nota dikirim ke PT Vale Indonesia Tbk (email kantor, tembusan Siti Rahma; WhatsApp Siti Rahma).');
+        Notification::assertSentOnDemand(PesanReservasi::class, fn (PesanReservasi $n, $k, $tujuan) => $tujuan->routes['mail'] === 'kantor@vale.test' && $n->cc === ['siti@vale.test']);
     }
 }

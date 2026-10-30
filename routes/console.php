@@ -25,6 +25,16 @@ Artisan::command('reservasi:batalkan-kedaluwarsa', function (ReservasiService $r
     $this->info(count($batal).' reservasi dibatalkan.');
 })->purpose('Batalkan reservasi yang lewat batas bayar uang muka');
 
+// Cadangan notifikasi Midtrans: pembayaran online yang masih pending (< 2 hari) dicek langsung ke Midtrans
+Artisan::command('midtrans:sinkron', function (PembayaranMidtrans $midtrans) {
+    if (! PembayaranMidtrans::siap()) {
+        $this->info('Kunci Midtrans kosong, sinkron dilewati.');
+
+        return;
+    }
+    $this->info($midtrans->sinkronSemua().' pembayaran online diperbarui dari Midtrans.');
+})->purpose('Cek status pembayaran online yang masih menunggu ke Midtrans');
+
 // Tamu yang tidak datang sampai akhir hari kedatangan: no_show, uang muka hangus
 Artisan::command('reservasi:tandai-tidak-datang', function (ReservasiService $reservasi) {
     $this->info($reservasi->tandaiTidakDatang().' reservasi ditandai tidak datang.');
@@ -57,6 +67,7 @@ Artisan::command('penagihan:pengingat', function (PengingatPenagihan $pengingat)
 Schedule::command('penagihan:harian')->dailyAt('00:10')->withoutOverlapping();
 Schedule::command('penagihan:pengingat')->dailyAt('07:30')->withoutOverlapping();
 Schedule::command('reservasi:batalkan-kedaluwarsa')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('midtrans:sinkron')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('reservasi:tandai-tidak-datang')->dailyAt('00:05')->withoutOverlapping();
 Schedule::command('housekeeping:batalkan-tugas-lama')->dailyAt('00:05')->withoutOverlapping();
 Schedule::command('maintenance:pengingat-jadwal')->dailyAt('07:00')->withoutOverlapping();

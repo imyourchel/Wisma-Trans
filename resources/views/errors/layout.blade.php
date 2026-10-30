@@ -17,7 +17,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css'])
 </head>
-<body class="min-h-screen bg-cream-100 font-sans text-ink-900 antialiased">
+<body class="min-h-dvh bg-cream-100 font-sans text-ink-900 antialiased">
     <header class="bg-brown-800">
         <div class="flex min-h-[64px] items-center px-4 py-2 sm:px-6">
             <a href="{{ route('home') }}" target="_top" class="flex-none"><img src="{{ asset('ds/logo/DC-wismatrans-landscape.png') }}" alt="Wisma Trans" class="h-10 w-auto"></a>

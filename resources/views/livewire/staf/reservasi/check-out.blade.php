@@ -73,10 +73,10 @@
             $segera = $f['nota']->filter(fn ($n) => $n['termin'] === 'immediate' && $n['sisa'] > 0);
             $namaNota = ['stay' => 'Nota kamar', 'service' => 'Nota layanan'];
         @endphp
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
             <div role="dialog" aria-modal="true" aria-labelledby="co-judul"
-                 class="relative flex max-h-[94vh] w-[760px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+                 class="wt-dialog relative flex max-h-[94dvh] w-[760px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="co-judul" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]">{{ $selesai ? 'Check-out selesai' : 'Check-out' }} {{ $r->reservation_code }}</div>
@@ -84,7 +84,7 @@
                             {{ $r->customer?->full_name }}{{ $r->institution ? ' · '.$r->institution->name : '' }} · {{ ReservasiService::rentang($r->masuk(), $r->keluar()) }}
                         </div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
                         <x-staf.ikon nama="tutup" ukuran="16" />
                     </button>
                 </div>

@@ -20,6 +20,7 @@ use App\Services\Keuangan\NotaService;
 use App\Services\Keuangan\PembayaranService;
 use App\Services\SmartCleaning\TugasHousekeepingService;
 use App\Support\Nomor;
+use App\Support\PilihanKamar;
 use App\Support\TokenAkses;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -35,10 +36,14 @@ class ReservasiService
 {
     public const MAKS_MALAM = 30;
 
+    /** Batas malam pengajuan instansi (form /instansi, pengajuan oleh staf, ajukanInstansi); satu-satunya tempat angka ini. */
+    public const MAKS_MALAM_INSTANSI = 180;
+
     public function __construct(
         private KetersediaanKamar $ketersediaan,
         private NotaService $nota,
         private RoomStatusService $statusKamar,
+        private TambahanKamar $tambahan,
     ) {}
 
     /* ======================== Pengaturan ======================== */
@@ -57,6 +62,35 @@ class ReservasiService
     public static function jamCheckIn(): string
     {
         return str_replace(':', '.', substr((string) Setting::get('check_in_time', '14:00'), 0, 5));
+    }
+
+    /** "06.00": tamu yang tiba mulai jam ini boleh early check-in bila kamarnya sudah Siap. */
+    public static function jamEarlyCheckIn(): string
+    {
+        return str_replace(':', '.', substr((string) Setting::get('early_check_in_from', '06:00'), 0, 5));
+    }
+
+    /** Kalimat untuk tamu di halaman reservasi dan pesan konfirmasi. */
+    public static function teksEarlyCheckIn(): string
+    {
+        return 'Early check-in mulai pukul '.self::jamEarlyCheckIn().', bila kamar sudah siap.';
+    }
+
+    /**
+     * Masa check-in pada hari kedatangan menurut jam sekarang: 'normal' mulai check_in_time, 'early' mulai
+     * early_check_in_from sampai sebelum check_in_time, dan 'terlalu_pagi' sebelum early_check_in_from.
+     *
+     * @return 'normal'|'early'|'terlalu_pagi'
+     */
+    public static function masaCheckIn(): string
+    {
+        $jam = now()->format('H:i');
+
+        return match (true) {
+            $jam >= str_replace('.', ':', self::jamCheckIn()) => 'normal',
+            $jam >= str_replace('.', ':', self::jamEarlyCheckIn()) => 'early',
+            default => 'terlalu_pagi',
+        };
     }
 
     public static function hariMinimalBatal(): int
@@ -79,9 +113,17 @@ class ReservasiService
     /**
      * Reservasi online tamu perorangan: berstatus menunggu uang muka sampai pembayaran Midtrans berhasil.
      *
+     * Uang muka dihitung dari total kamar ditambah Extra bed dan Sarapan tambahan (TambahanKamar).
+     * Setiap kamar langsung mendapat nomor kamar fisik dengan jenis kasur pilihan tamu (nomor terkecil yang bebas), jadi
+     * jenis kasurnya terjamin. Jumlah tamu per kamar diperiksa dengan kapasitas jenis kasur kamar itu (RoomType::kapasitasKasur)
+     * ditambah extra bed yang dipilih; kamar tanpa pilihan kasur mendapat jenis kasur terkecil yang muat untuk tamunya.
+     *
      * @param  array<int, int>  $pesanan  id tipe kamar => jumlah kamar
+     * @param  array<int, list<array{extra?: int, sarapan?: int}>>  $tambahan  id tipe kamar => pilihan tambahan per kamar, urut kamar
+     * @param  array<int, list<string|null>>  $kasur  id tipe kamar => jenis kasur per kamar (Room::BED_TYPES), urut kamar
+     * @param  array<int, list<array{dewasa: int, anak: int}|null>>  $orang  id tipe kamar => tamu per kamar, urut kamar; kosong = tidak diperiksa
      */
-    public function buatOnline(Customer $pemesan, CarbonInterface $masuk, CarbonInterface $keluar, array $pesanan, ?string $permintaan = null): Reservation
+    public function buatOnline(Customer $pemesan, CarbonInterface $masuk, CarbonInterface $keluar, array $pesanan, ?string $permintaan = null, array $tambahan = [], array $kasur = [], array $orang = []): Reservation
     {
         $this->periksaTanggal($masuk, $keluar);
         $pesanan = array_filter($pesanan, fn ($n) => $n > 0);
@@ -89,12 +131,57 @@ class ReservasiService
             throw ValidationException::withMessages(['kamar' => 'Pilih minimal satu kamar.']);
         }
 
-        return DB::transaction(function () use ($pemesan, $masuk, $keluar, $pesanan, $permintaan) {
+        return DB::transaction(function () use ($pemesan, $masuk, $keluar, $pesanan, $permintaan, $tambahan, $kasur, $orang) {
             $tipe = $this->kunciTipe(array_keys($pesanan));
             $this->periksaSisa($tipe, $pesanan, $masuk, $keluar);
 
+            // Kamar fisik per kamar yang dipesan, sesuai jenis kasur; tipe sudah dikunci sehingga pemesanan bersamaan antre
+            $kamarFisik = [];
+            $diambil = [];
+            $pilihan = [];
+            $pembagian = [];
+            $no = 0;
+            foreach ($pesanan as $id => $n) {
+                for ($i = 0; $i < $n; $i++) {
+                    $no++;
+                    $jenis = $kasur[$id][$i] ?? null;
+                    $tamu = isset($orang[$id][$i]) ? ['dewasa' => (int) $orang[$id][$i]['dewasa'], 'anak' => (int) ($orang[$id][$i]['anak'] ?? 0)] : null;
+                    $extra = max(0, (int) ($tambahan[$id][$i]['extra'] ?? 0));
+                    $calon = $this->calonKasur($tipe[$id], $jenis, $tamu, $extra);
+                    if ($calon === []) {
+                        throw ValidationException::withMessages(['kamar' => "{$tipe[$id]->name} tidak punya jenis kasur untuk ".self::teksTamu($tamu).' dalam satu kamar.']);
+                    }
+                    $room = null;
+                    foreach ($calon as $b) {
+                        if ($room = $this->ketersediaan->ambilKamar($id, $b, $masuk, $keluar, null, $diambil)) {
+                            break;
+                        }
+                    }
+                    if (! $room) {
+                        throw ValidationException::withMessages(['kamar' => $jenis
+                            ? 'Maaf, '.PilihanKamar::namaPendek($tipe[$id]).' · '.Room::labelKasur($jenis)." baru saja habis. Silakan pilih jenis kasur lain untuk Kamar {$no}."
+                            : "Maaf, {$tipe[$id]->name} baru saja habis untuk tanggal ini. Silakan pilih tipe lain untuk Kamar {$no}."]);
+                    }
+                    // Tamu melebihi kapasitas kasur: hanya boleh bila extra bed yang dipilih menutup kekurangannya
+                    if ($tamu !== null && ! $tipe[$id]->muatKasur($room->bed_type, $tamu['dewasa'], $tamu['anak'], $extra)) {
+                        $perlu = $tipe[$id]->extraPerlu($room->bed_type, $tamu['dewasa'], $tamu['anak']);
+                        $bisaExtra = $perlu !== null && $perlu <= $this->tambahan->extraTersedia();
+                        throw ValidationException::withMessages(['kamar' => Room::labelKasur($room->bed_type).' hanya muat '.$tipe[$id]->teksKapasitas($room->bed_type)
+                            .($extra > 0 ? " ditambah {$extra} extra bed" : '').", sedangkan kamar {$no} untuk ".self::teksTamu($tamu).'. '
+                            .($bisaExtra ? 'Tambahkan extra bed atau pilih jenis kasur lain.' : 'Silakan pilih jenis kasur lain.')]);
+                    }
+                    $diambil[] = $room->id;
+                    $kamarFisik[$id][$i] = $room;
+                    if ($tamu !== null) {
+                        $pembagian[] = "Kamar {$no} {$tipe[$id]->name} · ".Room::labelKasur($room->bed_type).": {$tamu['dewasa']} dewasa".($tamu['anak'] > 0 ? " {$tamu['anak']} anak" : '');
+                    }
+                    $pilihan[$id][$i] = $this->tambahan->periksa($tambahan[$id][$i] ?? [], $tipe[$id], "kamar {$no}", 'tambahan', $room->bed_type);
+                }
+            }
+
             $malam = (int) $masuk->diffInDays($keluar);
-            $total = collect($pesanan)->sum(fn ($n, $id) => (float) $tipe[$id]->base_price * $malam * $n);
+            $total = collect($pesanan)->sum(fn ($n, $id) => (float) $tipe[$id]->base_price * $malam * $n)
+                + collect($pilihan)->flatten(1)->sum(fn ($p) => $this->tambahan->biaya($p, $malam));
 
             $r = Reservation::create([
                 'reservation_code' => Nomor::reservasi(),
@@ -109,14 +196,39 @@ class ReservasiService
             ]);
             foreach ($pesanan as $id => $n) {
                 for ($i = 0; $i < $n; $i++) {
-                    $this->barisKamar($r, $tipe[$id], null, $masuk, $keluar);
+                    $this->tambahan->simpan($this->barisKamar($r, $tipe[$id], $kamarFisik[$id][$i], $masuk, $keluar), $r, $pilihan[$id][$i], null);
                 }
             }
             $this->notaMenginap($r, null);
-            $this->catat($r, 'pending_payment', null, null);
+            // Pembagian tamu tidak punya kolom sendiri: dicatat sebagai teks di log pembuatan (Reservation::pembagianTamu)
+            $this->catat($r, 'pending_payment', null, $pembagian ? Reservation::AWALAN_PEMBAGIAN.implode('; ', $pembagian) : null);
 
             return $r;
         });
+    }
+
+    /**
+     * Jenis kasur yang dicoba untuk satu kamar: pilihan tamu; tanpa pilihan dan tanpa jumlah tamu semua jenis (null);
+     * tanpa pilihan dengan jumlah tamu: jenis kasur tipe itu yang muat (dengan extra bed yang dipilih), dari yang terkecil.
+     *
+     * @return list<string|null>
+     */
+    private function calonKasur(RoomType $tipe, ?string $jenis, ?array $tamu, int $extra): array
+    {
+        if ($jenis !== null || $tamu === null) {
+            return [$jenis];
+        }
+
+        return Room::where('room_type_id', $tipe->id)->where('is_active', true)->distinct()->pluck('bed_type')
+            ->filter(fn ($b) => $tipe->muatKasur($b, $tamu['dewasa'], $tamu['anak'], $extra))
+            ->sortBy(fn ($b) => [$tipe->kapasitasKasur($b)['dewasa'], $tipe->kapasitasKasur($b)['anak'], array_search($b, array_keys(Room::BED_TYPES), true)])
+            ->values()->all();
+    }
+
+    /** "3 dewasa" atau "2 dewasa dan 2 anak". */
+    private static function teksTamu(array $tamu): string
+    {
+        return $tamu['dewasa'].' dewasa'.($tamu['anak'] > 0 ? " dan {$tamu['anak']} anak" : '');
     }
 
     /* ======================== B. Reservasi langsung (walk-in) ======================== */
@@ -125,8 +237,9 @@ class ReservasiService
      * Tamu datang langsung: tamu memilih nomor kamar, reservasi langsung terkonfirmasi.
      *
      * @param  list<int>  $kamar  id kamar
+     * @param  array<int, array{extra?: int, sarapan?: int}>  $tambahan  id kamar => Extra bed dan Sarapan tambahan (TambahanKamar)
      */
-    public function buatLangsung(Customer $pemesan, CarbonInterface $masuk, CarbonInterface $keluar, array $kamar, User $oleh, ?string $permintaan = null): Reservation
+    public function buatLangsung(Customer $pemesan, CarbonInterface $masuk, CarbonInterface $keluar, array $kamar, User $oleh, ?string $permintaan = null, array $tambahan = []): Reservation
     {
         $this->periksaTanggal($masuk, $keluar);
         $kamar = array_values(array_unique(array_map('intval', $kamar)));
@@ -134,11 +247,13 @@ class ReservasiService
             throw ValidationException::withMessages(['kamar' => 'Pilih minimal satu kamar.']);
         }
 
-        return DB::transaction(function () use ($pemesan, $masuk, $keluar, $kamar, $oleh, $permintaan) {
+        return DB::transaction(function () use ($pemesan, $masuk, $keluar, $kamar, $oleh, $permintaan, $tambahan) {
             $rooms = Room::with('roomType')->whereIn('id', $kamar)->lockForUpdate()->get()->keyBy('id');
             $tipe = $this->kunciTipe($rooms->pluck('room_type_id')->unique()->values()->all());
+            $pilihan = [];
             foreach ($kamar as $id) {
                 $this->periksaKamarBebas($rooms->get($id), $masuk, $keluar, null);
+                $pilihan[$id] = $this->tambahan->periksa($tambahan[$id] ?? [], $tipe[$rooms[$id]->room_type_id], 'kamar '.$rooms[$id]->room_number);
             }
             $this->periksaSisa($tipe, $rooms->countBy('room_type_id')->all(), $masuk, $keluar);
 
@@ -153,7 +268,7 @@ class ReservasiService
                 'created_by' => $oleh->id,
             ]);
             foreach ($kamar as $id) {
-                $this->barisKamar($r, $tipe[$rooms[$id]->room_type_id], $rooms[$id], $masuk, $keluar);
+                $this->tambahan->simpan($this->barisKamar($r, $tipe[$rooms[$id]->room_type_id], $rooms[$id], $masuk, $keluar), $r, $pilihan[$id], $oleh);
             }
             $this->notaMenginap($r, $oleh);
             $this->catat($r, 'confirmed', $oleh, 'Tamu datang langsung');
@@ -164,15 +279,16 @@ class ReservasiService
 
     /* ======================== C. Pengajuan instansi ======================== */
 
-    public function ajukanInstansi(Customer $pic, ?Institution $instansi, CarbonInterface $masuk, CarbonInterface $keluar, int $jumlahKamar, ?string $kegiatan, ?string $catatan, ?User $oleh = null): Reservation
+    public function ajukanInstansi(Customer $pic, ?Institution $instansi, CarbonInterface $masuk, CarbonInterface $keluar, int $jumlahKamar, ?string $kegiatan, ?string $catatan, ?User $oleh = null, bool $ikutInstansiNarahubung = true): Reservation
     {
-        $this->periksaTanggal($masuk, $keluar, maksMalam: 366);
+        $this->periksaTanggal($masuk, $keluar, maksMalam: self::MAKS_MALAM_INSTANSI);
 
-        return DB::transaction(function () use ($pic, $instansi, $masuk, $keluar, $jumlahKamar, $kegiatan, $catatan, $oleh) {
+        return DB::transaction(function () use ($pic, $instansi, $masuk, $keluar, $jumlahKamar, $kegiatan, $catatan, $oleh, $ikutInstansiNarahubung) {
             $r = Reservation::create([
                 'reservation_code' => Nomor::reservasi(),
                 'customer_id' => $pic->id,
-                'institution_id' => $instansi?->id ?? $pic->institution_id,
+                // Pengajuan dari situs tidak ikut instansi narahubung: narahubung bisa saja mengajukan untuk instansi lain
+                'institution_id' => $instansi?->id ?? ($ikutInstansiNarahubung ? $pic->institution_id : null),
                 'service_billing_scheme' => 'satu_nota',
                 'booking_channel' => 'online',
                 'status' => 'waiting_approval',
@@ -216,7 +332,8 @@ class ReservasiService
             $rooms = Room::whereIn('id', $ids)->lockForUpdate()->get()->keyBy('id');
             $tipe = $this->kunciTipe($rooms->pluck('room_type_id')->unique()->values()->all());
             foreach ($ids as $id) {
-                $this->periksaKamarBebas($rooms->get($id), $masuk, $keluar, $r->id);
+                // Kamar dikunci (lockForUpdate) lalu diperiksa ulang: bisa saja terpakai reservasi lain sejak dialog dibuka
+                $this->periksaKamarBebas($rooms->get($id), $masuk, $keluar, $r->id, pesanBentrok: 'Kamar %s baru saja dipakai reservasi lain. Pilih kamar lain.');
             }
             $this->periksaSisa($tipe, $rooms->countBy('room_type_id')->all(), $masuk, $keluar, $r->id);
 
@@ -279,7 +396,10 @@ class ReservasiService
         return round($r->dpDibayar() * self::persenPengembalian() / 100);
     }
 
-    /** Tanggal baru; harga per malam tetap mengikuti harga saat memesan. */
+    /**
+     * Tanggal baru; harga per malam tetap mengikuti harga saat memesan. Jenis kasur dipertahankan: bila kamar lama sudah
+     * dipesan tamu lain pada tanggal baru, dicarikan kamar lain bertipe dan berjenis kasur sama.
+     */
     public function ubahTanggal(Reservation $r, CarbonInterface $masuk, CarbonInterface $keluar, ?User $oleh): void
     {
         $r->loadMissing('rooms.room');
@@ -296,16 +416,26 @@ class ReservasiService
             $baris = $r->kamarBerlaku();
             $tipe = $this->kunciTipe($baris->pluck('room_type_id')->unique()->values()->all());
             $this->periksaSisa($tipe, $baris->countBy('room_type_id')->all(), $masuk, $keluar, $r->id);
-            foreach ($baris->whereNotNull('room_id') as $k) {
-                if (! $this->ketersediaan->bebas($k->room_id, $masuk, $keluar, $r->id)) {
-                    throw ValidationException::withMessages(['tanggal' => "Kamar {$k->room->room_number} sudah dipesan tamu lain pada tanggal baru."]);
+            $tetap = $baris->whereNotNull('room_id')->filter(fn ($k) => $this->ketersediaan->bebas($k->room_id, $masuk, $keluar, $r->id));
+            $dipakai = $tetap->pluck('room_id')->map(fn ($id) => (int) $id)->all();
+            $ganti = [];
+            foreach ($baris->whereNotNull('room_id')->diffKeys($tetap) as $k) {
+                $kasur = $k->room?->bed_type;
+                $lain = $this->ketersediaan->ambilKamar($k->room_type_id, $kasur, $masuk, $keluar, $r->id, $dipakai);
+                if (! $lain) {
+                    throw ValidationException::withMessages(['tanggal' => "Tidak ada kamar {$k->roomType?->name} ".Room::labelKasur($kasur)
+                        .' yang kosong pada tanggal baru. Pilih tanggal lain atau hubungi resepsionis.']);
                 }
+                $dipakai[] = $lain->id;
+                $ganti[$k->id] = $lain;
             }
             foreach ($baris as $k) {
-                $k->update(['check_in_date' => $masuk->toDateString(), 'check_out_date' => $keluar->toDateString()]);
+                $k->update(['check_in_date' => $masuk->toDateString(), 'check_out_date' => $keluar->toDateString()]
+                    + (isset($ganti[$k->id]) ? ['room_id' => $ganti[$k->id]->id] : []));
             }
             $this->susunUlangNota($r);
-            $this->catat($r, 'confirmed', $oleh, "Tanggal diubah dari {$lama} menjadi ".self::rentang($masuk, $keluar).', harga tetap');
+            $this->catat($r, 'confirmed', $oleh, "Tanggal diubah dari {$lama} menjadi ".self::rentang($masuk, $keluar).', harga tetap'
+                .collect($ganti)->map(fn (Room $k, $id) => '; kamar '.$baris->firstWhere('id', $id)?->room?->room_number.' diganti '.$k->room_number.' (jenis kasur sama)')->join(''));
         });
     }
 
@@ -398,8 +528,10 @@ class ReservasiService
     /* ======================== E. Check-in ======================== */
 
     /**
-     * Check-in pada hari kedatangan mulai check_in_time. Nomor kamar ditetapkan untuk baris yang belum punya,
-     * kamar harus berstatus Siap; status kamar menjadi Terisi lewat RoomStatusService.
+     * Check-in pada hari kedatangan mulai check_in_time. Mulai early_check_in_from tamu boleh early check-in tanpa biaya
+     * tambahan, asalkan semua kamarnya sudah Siap; kedatangan sebelum itu dihitung menginap malam sebelumnya.
+     * Tamu yang terlambat (tanggal kedatangan sudah lewat) bisa check-in kapan saja.
+     * Nomor kamar ditetapkan untuk baris yang belum punya, kamar harus berstatus Siap; status kamar menjadi Terisi lewat RoomStatusService.
      *
      * Reservasi instansi hanya bisa check-in dengan bukti pemesanan yang cocok ($bukti = access_token hasil verifikasi
      * kode bukti), supaya jatah instansi tidak dipakai orang yang tidak ditugaskan.
@@ -421,14 +553,17 @@ class ReservasiService
         if ($masuk === null || $masuk->isAfter(today())) {
             throw ValidationException::withMessages(['status' => 'Check-in baru bisa pada tanggal kedatangan, '.$masuk?->translatedFormat('j F Y').'.']);
         }
-        if ($masuk->isSameDay(today()) && $sekarang->format('H:i') < substr((string) Setting::get('check_in_time', '14:00'), 0, 5)) {
-            throw ValidationException::withMessages(['status' => 'Check-in mulai pukul '.self::jamCheckIn().' WITA.']);
+        $masa = $masuk->isSameDay(today()) ? self::masaCheckIn() : 'normal';
+        if ($masa === 'terlalu_pagi') {
+            throw ValidationException::withMessages(['status' => 'Kedatangan sebelum pukul '.self::jamEarlyCheckIn()
+                .' dihitung menginap malam sebelumnya. Ubah tanggal masuk reservasi terlebih dahulu.']);
         }
+        $early = $masa === 'early';
         if ($ktpDitahan && blank($namaKtp)) {
             throw ValidationException::withMessages(['nama_ktp' => 'Isi nama sesuai KTP yang ditahan.']);
         }
 
-        DB::transaction(function () use ($r, $penempatan, $ktpDitahan, $namaKtp, $oleh, $instansi) {
+        DB::transaction(function () use ($r, $penempatan, $ktpDitahan, $namaKtp, $oleh, $instansi, $early, $sekarang) {
             $baris = ReservationRoom::where('reservation_id', $r->id)->where('status', 'booked')->lockForUpdate()->get();
             if ($baris->isEmpty()) {
                 throw ValidationException::withMessages(['status' => 'Tidak ada kamar yang menunggu check-in.']);
@@ -448,7 +583,9 @@ class ReservasiService
                     throw ValidationException::withMessages([$galat => "Kamar {$room->room_number} bukan tipe yang dipesan."]);
                 }
                 if ($room->status !== RoomStatus::Available) {
-                    throw ValidationException::withMessages([$galat => "Kamar {$room->room_number} belum siap ({$room->status->label()})."]);
+                    throw ValidationException::withMessages([$galat => $early
+                        ? "Kamar {$room->room_number} belum siap. Early check-in hanya untuk kamar berstatus Siap."
+                        : "Kamar {$room->room_number} belum siap ({$room->status->label()})."]);
                 }
                 if (! $this->ketersediaan->bebas($room->id, $k->check_in_date, $k->check_out_date, $r->id)) {
                     throw ValidationException::withMessages([$galat => "Kamar {$room->room_number} sudah dipesan tamu lain."]);
@@ -464,7 +601,7 @@ class ReservasiService
             if ($ktpDitahan) {
                 $this->catat($r, null, $oleh, 'KTP atas nama '.trim((string) $namaKtp), 'id_card_received');
             }
-            $this->catat($r, 'checked_in', $oleh, null);
+            $this->catat($r, 'checked_in', $oleh, $early ? 'Early check-in pukul '.$sekarang->format('H.i').' WITA' : null);
             $this->susunUlangNota($r);
         });
     }
@@ -542,6 +679,7 @@ class ReservasiService
                 'status' => 'checked_in',
                 'moved_from_id' => $k->id,
             ]);
+            $this->tambahan->pindahkan($k, $barisBaru);
 
             $lama = $k->room;
             if ($lama && $lama->status->canTransitionTo(RoomStatus::VacantDirty)) {
@@ -601,6 +739,7 @@ class ReservasiService
     {
         $r->update(['status' => $status]);
         $r->rooms()->whereIn('status', ['booked'])->update(['status' => 'cancelled']);
+        $this->tambahan->batalkan($r);
         foreach ($r->invoices()->where('status', '!=', 'cancelled')->get() as $nota) {
             $nota->update(['status' => 'cancelled', 'note' => mb_substr($catatanNota, 0, 255)]);
             Payment::where('invoice_id', $nota->id)->where('status', 'pending')->update(['status' => 'expired']);
@@ -672,7 +811,8 @@ class ReservasiService
         }
     }
 
-    private function periksaKamarBebas(?Room $room, CarbonInterface $masuk, CarbonInterface $keluar, ?int $kecuali, string $kunci = 'kamar'): void
+    /** $pesanBentrok: pesan bila kamar sudah terpakai, dengan %s untuk nomor kamar. */
+    private function periksaKamarBebas(?Room $room, CarbonInterface $masuk, CarbonInterface $keluar, ?int $kecuali, string $kunci = 'kamar', string $pesanBentrok = 'Kamar %s sudah dipesan pada tanggal itu.'): void
     {
         if (! $room || ! $room->is_active) {
             throw ValidationException::withMessages([$kunci => 'Kamar tidak ditemukan atau nonaktif.']);
@@ -681,7 +821,7 @@ class ReservasiService
             throw ValidationException::withMessages([$kunci => "Kamar {$room->room_number} sedang diperbaiki."]);
         }
         if (! $this->ketersediaan->bebas($room->id, $masuk, $keluar, $kecuali)) {
-            throw ValidationException::withMessages([$kunci => "Kamar {$room->room_number} sudah dipesan pada tanggal itu."]);
+            throw ValidationException::withMessages([$kunci => sprintf($pesanBentrok, $room->room_number)]);
         }
     }
 

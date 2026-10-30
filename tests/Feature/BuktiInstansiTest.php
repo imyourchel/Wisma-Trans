@@ -56,12 +56,16 @@ class BuktiInstansiTest extends TestCase
     {
         $this->post(route('instansi.store'), [
             'instansi' => 'PT PLN UP3 Palopo', 'name' => 'Fajar Nugroho', 'phone' => self::HP_PIC, 'email' => 'fajar@pln.test',
-            'masuk' => $masuk, 'keluar' => $keluar, 'jumlah' => count($kamar), 'kegiatan' => 'Pemeliharaan jaringan',
+            'masuk' => $masuk, 'keluar' => $keluar, 'jumlah' => count($kamar), 'peserta' => count($kamar) * 2, 'kegiatan' => 'Pemeliharaan jaringan',
         ])->assertRedirect();
         $r = Reservation::latest('id')->first();
 
-        Livewire::actingAs($this->akun('manager'))->test(PengajuanInstansi::class)
-            ->call('open', $r->id, 'setuju')
+        // Pengajuan pertama membuat instansi baru; pengajuan berikutnya dengan nama yang sama sudah tertaut otomatis
+        $dialog = Livewire::actingAs($this->akun('manager'))->test(PengajuanInstansi::class)->call('open', $r->id, 'setuju');
+        if ($dialog->get('instansi') === '') {
+            $dialog->set('pilihan', 'baru')->set('alamatBaru', 'Jl. Andi Djemma No. 1, Palopo');
+        }
+        $dialog
             ->set('skema', 'due_after_checkout')->set('jatuhTempo', '7')
             ->set('kamar', array_map(fn ($n) => (string) $this->kamar($n)->id, $kamar))
             ->call('setujui')->assertHasNoErrors();

@@ -17,15 +17,15 @@
         </label>
         <label class="block">
             <span class="wt-field-label mb-1.5 block">Periode pendapatan</span>
-            <select wire:model.live="periode" class="wt-input w-[180px]">
+            <select wire:model.live="periode" class="wt-input w-full sm:w-[180px]">
                 @foreach (Instansi::PERIODE as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
             </select>
         </label>
         @if ($periode === 'rentang')
-            <div class="flex items-center gap-1.5">
-                <input type="date" wire:model.live="dari" class="wt-input w-[150px]" aria-label="Dari">
+            <div class="flex items-center gap-1.5 max-sm:w-full">
+                <input type="date" wire:model.live="dari" class="wt-input w-full min-w-0 flex-1 sm:w-[150px] sm:flex-none" aria-label="Dari">
                 <span class="text-ink-500">–</span>
-                <input type="date" wire:model.live="sampai" class="wt-input w-[150px]" aria-label="Sampai">
+                <input type="date" wire:model.live="sampai" class="wt-input w-full min-w-0 flex-1 sm:w-[150px] sm:flex-none" aria-label="Sampai">
             </div>
         @endif
         <button type="button" wire:click="mulaiTambah" class="ml-auto flex h-10 items-center gap-2 rounded border-0 bg-brown-800 px-4 font-display text-xs font-bold text-cream-50 hover:bg-brown-900">
@@ -70,13 +70,13 @@
 
     {{-- Formulir tambah / ubah --}}
     @if ($formulir)
-        <div class="fixed inset-0 z-[350] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.tutupFormulir()">
+        <div class="wt-modal fixed inset-0 z-[350] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.tutupFormulir()">
             <div wire:click="tutupFormulir" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
             <form wire:submit="simpan" role="dialog" aria-modal="true" aria-labelledby="ins-form-judul" novalidate
-                  class="relative flex max-h-[94vh] w-[620px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+                  class="wt-dialog relative flex max-h-[94dvh] w-[620px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div id="ins-form-judul" class="min-w-0 flex-1 font-display text-[17px] font-extrabold uppercase tracking-[.04em]">{{ $formulir === 'ubah' ? 'Ubah instansi' : 'Tambah instansi' }}</div>
-                    <button type="button" wire:click="tutupFormulir" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="tutupFormulir" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
                 <div class="grid min-h-0 flex-1 gap-4 overflow-y-auto px-6 py-5 sm:grid-cols-[140px_1fr]">
                     <x-staf.isian nama="kode" label="Kode (opsional)"><input type="text" wire:model="kode" maxlength="20" placeholder="PTVALE" class="wt-input uppercase {{ $galat('kode') }}"></x-staf.isian>
@@ -109,18 +109,65 @@
 
     {{-- Detail dan narahubung --}}
     @if ($i)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="ins-judul" class="relative flex max-h-[94vh] w-[780px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="ins-judul" class="wt-dialog relative flex max-h-[94dvh] w-[780px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="ins-judul" class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]">{{ $i->name }}</div>
                         <div class="mt-0.5 truncate text-[13px] text-ink-500">{{ $i->code ? $i->code.' · ' : '' }}{{ $i->ringkasSkema() }}</div>
                     </div>
+                    <button type="button" wire:click="mulaiGabung" class="wt-btn-sm h-8" data-mulai-gabung>Gabungkan ke…</button>
                     <button type="button" wire:click="mulaiUbah" class="wt-btn-sm h-8">Ubah data</button>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
                 <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+                    {{-- Gabungkan instansi duplikat: pilih tujuan (pencarian + saran), lihat yang ikut pindah, lalu konfirmasi --}}
+                    @if ($gabung)
+                        <section class="rounded border border-cream-300 bg-cream-100 p-4" data-panel-gabung>
+                            <div class="mb-2 flex items-center justify-between gap-3">
+                                <div class="wt-field-label">Gabungkan {{ $i->name }} ke…</div>
+                                <button type="button" wire:click="tutupGabung" class="wt-btn-sm h-8">Batal</button>
+                            </div>
+                            @error('tujuan')<p class="mb-2 mt-0 rounded bg-[rgba(212,81,74,.08)] px-3 py-2 text-[13px] text-status-dirty" role="alert">{{ $message }}</p>@enderror
+                            @if ($tujuan)
+                                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded bg-cream-50 px-3 py-2 text-[13px]">
+                                    <span>Tujuan: <strong>{{ $tujuan->name }}</strong></span>
+                                    <button type="button" wire:click="pilihTujuan(null)" class="ml-auto border-0 bg-transparent p-0 text-[13px] font-semibold text-clay-600 hover:underline">Ganti</button>
+                                </div>
+                                <p class="mb-1.5 mt-3 text-[13px]">Yang dipindah ke {{ $tujuan->name }}:</p>
+                                <ul class="m-0 grid list-none grid-cols-2 gap-x-4 gap-y-1 p-0 text-[13px] sm:grid-cols-3" data-ringkasan-gabung>
+                                    @foreach (['reservasi' => 'reservasi', 'narahubung' => 'narahubung', 'nota' => 'nota', 'tagihan' => 'tagihan bulanan', 'pengingat' => 'pengingat', 'aula' => 'pemesanan aula'] as $kunci => $label)
+                                        <li><strong class="tabular-nums">{{ $ringkasanGabung[$kunci] }}</strong> {{ $label }}</li>
+                                    @endforeach
+                                </ul>
+                                <p class="mb-0 mt-2 text-[12px] text-ink-500">
+                                    {{ $tujuan->primary_contact_id ? 'Narahubung utama '.$tujuan->name.' tetap.' : ($i->primaryContact ? $i->primaryContact->full_name.' menjadi narahubung utama '.$tujuan->name.'.' : '') }}
+                                    {{ $i->name }} lalu dihapus. Tindakan ini tidak bisa dibatalkan.
+                                </p>
+                                <button type="button" wire:click="gabungkan" wire:confirm="Gabungkan {{ $i->name }} ke {{ $tujuan->name }}? {{ $i->name }} akan dihapus."
+                                        class="mt-3 h-10 rounded border-0 bg-clay-500 px-4 font-display text-xs font-bold text-cream-50 hover:bg-clay-600" data-gabungkan>Gabungkan sekarang</button>
+                            @else
+                                @if ($saranGabung->isNotEmpty())
+                                    <ul class="m-0 mb-2.5 flex list-none flex-col gap-1.5 p-0" data-saran-gabung>
+                                        @foreach ($saranGabung as $s)
+                                            <li class="flex flex-wrap items-center gap-2 text-[13px]"><span class="text-ink-500">Mungkin:</span> <span class="font-semibold">{{ $s->name }}</span>
+                                                <button type="button" wire:click="pilihTujuan({{ $s->id }})" class="wt-btn-sm h-7 px-2.5 text-xs">Pilih</button></li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                                <input type="search" wire:model.live.debounce.250ms="cariGabung" placeholder="Ketik nama atau kode instansi tujuan" aria-label="Cari instansi tujuan" class="wt-input h-10">
+                                <div class="mt-1.5 flex max-h-[200px] flex-col overflow-y-auto rounded border border-cream-300 bg-cream-50">
+                                    @forelse ($hasilGabung as $c)
+                                        <button type="button" wire:key="gb-{{ $c->id }}" wire:click="pilihTujuan({{ $c->id }})" class="border-0 border-t border-cream-300 bg-transparent px-3 py-2 text-left text-[13px] first:border-t-0 hover:bg-cream-200">{{ $c->name }}{{ $c->code ? ' · '.$c->code : '' }}</button>
+                                    @empty
+                                        <p class="m-0 px-3 py-2 text-[13px] text-ink-500">Tidak ada instansi yang cocok.</p>
+                                    @endforelse
+                                </div>
+                            @endif
+                        </section>
+                    @endif
+
                     <dl class="m-0 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-3">
                         <div><dt class="text-[11px] text-ink-500">Telepon</dt><dd class="m-0">{{ $i->phone ?: '—' }}</dd></div>
                         <div><dt class="text-[11px] text-ink-500">Email</dt><dd class="m-0 break-all">{{ $i->email ?: '—' }}</dd></div>
@@ -163,7 +210,7 @@
                                             @if ($utama)<span class="wt-lencana ml-1.5 bg-[rgba(92,158,103,.16)] text-status-available">Utama</span>@endif
                                             @unless ($n->is_active)<span class="wt-lencana ml-1.5 bg-[rgba(155,139,120,.20)] text-[#6E604F]">Nonaktif</span>@endunless
                                         </div>
-                                        <div class="text-[12px] text-ink-500">{{ $n->phone }}{{ $n->email ? ' · '.$n->email : '' }}</div>
+                                        <div class="text-[12px] text-ink-500">{{ $n->phone }}{{ $n->email ? ' · '.$n->email : '' }} · {{ $n->pengajuan }} pengajuan</div>
                                     </div>
                                     <div class="flex gap-1.5">
                                         @if ($n->is_active && ! $utama)

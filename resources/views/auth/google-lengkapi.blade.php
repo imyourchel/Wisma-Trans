@@ -4,7 +4,7 @@
     <div class="fixed inset-0 z-[370] bg-[rgba(62,42,28,.44)] backdrop-blur-[2px]"></div>
 
     <div role="dialog" aria-modal="true" aria-labelledby="judul-lengkapi"
-         class="fixed inset-0 z-[375] m-auto grid h-fit max-h-[calc(100vh-24px)] w-[900px] max-w-[calc(100vw-24px)] animate-wt-fade overflow-y-auto overflow-x-hidden rounded-2xl bg-cream-50 shadow-wt-lg min-[760px]:min-h-[560px] min-[760px]:grid-cols-2">
+         class="fixed inset-0 z-[375] m-auto grid h-fit max-h-[calc(100dvh-24px)] w-[900px] max-w-[calc(100vw-24px)] animate-wt-fade overflow-y-auto overflow-x-hidden rounded-2xl bg-cream-50 shadow-wt-lg min-[760px]:min-h-[560px] min-[760px]:grid-cols-2">
         <div class="relative hidden overflow-hidden bg-brown-800 min-[760px]:block">
             <img src="{{ asset('ds/img/bangunan_depan.png') }}" alt="" class="absolute inset-0 h-full w-full object-cover opacity-[.22]">
             <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(62,42,28,.55),rgba(62,42,28,.92))]"></div>
@@ -42,7 +42,7 @@
                 </div>
                 @foreach ([
                     ['name', 'Nama lengkap', 'text', 'user-muted', 'Nama lengkap Anda', 'name', old('name', $googlePending['name'])],
-                    ['phone', 'Nomor telepon', 'tel', 'phone-muted', 'Contoh: 081234567890', 'tel', old('phone')],
+                    ['phone', 'Nomor telepon', 'tel', 'phone-muted', '08xxxxxxxxxx', 'tel', old('phone')],
                 ] as [$field, $label, $type, $icon, $placeholder, $autocomplete, $nilai])
                     <label class="block">
                         {{-- Galat di samping label, sama seperti formulir daftar --}}

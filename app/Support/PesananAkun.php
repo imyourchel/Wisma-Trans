@@ -7,6 +7,7 @@ use App\Models\Reservation;
 use App\Models\ServiceOrder;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Pesanan dikenali dari data pelanggan yang tertaut ke akun, atau yang belum tertaut tetapi
  * bernomor HP sama dengan akun (pesanan lama sebelum akun ditautkan).
+ * Bentuk yang sama dipakai tab "Pesanan terakhir" untuk tamu tanpa akun (dariKode, lihat PesananPerangkat).
  */
 final class PesananAkun
 {
@@ -41,10 +43,33 @@ final class PesananAkun
             return collect();
         }
 
+        return self::susun(
+            fn ($q) => $q->whereIn('customer_id', $pelanggan),
+            fn ($q) => $q->whereIn('customer_id', $pelanggan),
+            fn ($q) => $q->whereIn('hall_bookings.customer_id', $pelanggan),
+        );
+    }
+
+    /**
+     * Pesanan tertentu menurut kodenya (kode reservasi, kode pesanan makanan/laundry, kode sewa aula), dalam bentuk yang
+     * sama dengan untuk(). Pemanggil yang memastikan pesanan itu boleh dilihat (lihat PesananPerangkat).
+     */
+    public static function dariKode(array $kamar, array $layanan, array $aula): Collection
+    {
+        return self::susun(
+            fn ($q) => $q->whereIn('reservation_code', $kamar),
+            fn ($q) => $q->whereIn('order_code', $layanan),
+            fn ($q) => $q->whereIn('hall_bookings.booking_code', $aula),
+        );
+    }
+
+    /** Gabungan kamar, layanan, dan aula; tiap penyaring diterapkan ke kueri jenisnya. */
+    private static function susun(Closure $kamar, Closure $layanan, Closure $aula): Collection
+    {
         return collect()
-            ->concat(self::kamar($pelanggan))
-            ->concat(self::layanan($pelanggan))
-            ->concat(self::aula($pelanggan))
+            ->concat(self::kamar($kamar))
+            ->concat(self::layanan($layanan))
+            ->concat(self::aula($aula))
             ->sortByDesc('urut')
             // Tanggal dan bulan pemesanan: untuk penyaring periode dan pengelompokan, misalnya "Oktober 2026"
             ->map(function ($p) {
@@ -72,9 +97,9 @@ final class PesananAkun
             ->whereNotNull('access_token')->orderByRaw("FIELD(status, 'checked_in', 'confirmed')")->orderBy('id')->get();
     }
 
-    private static function kamar(Collection $pelanggan): Collection
+    private static function kamar(Closure $saring): Collection
     {
-        $reservasi = DB::table('reservations')->whereIn('customer_id', $pelanggan)->get();
+        $reservasi = DB::table('reservations')->where($saring)->get();
         if ($reservasi->isEmpty()) {
             return collect();
         }
@@ -144,10 +169,10 @@ final class PesananAkun
     }
 
     /** Pesanan makanan dan laundry. Permintaan perlengkapan kamar saja (amenity) tidak ditampilkan. */
-    private static function layanan(Collection $pelanggan): Collection
+    private static function layanan(Closure $saring): Collection
     {
         return ServiceOrder::with(['invoice', 'items.service'])
-            ->whereIn('customer_id', $pelanggan)
+            ->where($saring)
             ->get()
             ->each(fn (ServiceOrder $o) => $o->batalkanBilaKedaluwarsa())
             ->filter(fn (ServiceOrder $o) => $o->items->contains(fn ($i) => in_array($i->service?->category, ['fnb', 'laundry'], true)))
@@ -188,12 +213,12 @@ final class PesananAkun
             ->values();
     }
 
-    private static function aula(Collection $pelanggan): Collection
+    private static function aula(Closure $saring): Collection
     {
         return DB::table('hall_bookings')
             ->join('halls', 'halls.id', '=', 'hall_bookings.hall_id')
             ->leftJoin('invoices', 'invoices.id', '=', 'hall_bookings.invoice_id')
-            ->whereIn('hall_bookings.customer_id', $pelanggan)
+            ->where($saring)
             ->get(['hall_bookings.*', 'halls.name as aula', 'invoices.total_amount as total_nota'])
             ->map(function ($b) {
                 $mulai = CarbonImmutable::parse($b->start_at);

@@ -26,7 +26,9 @@ use App\Http\Controllers\Staf\Maintenance\RiwayatController;
 use App\Http\Controllers\Staf\SegeraController;
 use App\Http\Controllers\Tamu\BuktiInstansiController;
 use App\Http\Controllers\Tamu\CekPesananController;
+use App\Http\Controllers\Tamu\CekPesananLihatController;
 use App\Http\Controllers\Tamu\HomeController;
+use App\Http\Controllers\Tamu\InfoLayananController;
 use App\Http\Controllers\Tamu\LaundryController;
 use App\Http\Controllers\Tamu\NotaController;
 use App\Http\Controllers\Tamu\PengajuanInstansiController;
@@ -72,23 +74,28 @@ Route::get('/', HomeController::class)->name('home');
 
 // Masuk dan daftar tampil sebagai modal di atas beranda
 Route::middleware('guest')->group(function () {
-    Route::get('/masuk', HomeController::class)->name('login')->defaults('authModal', 'masuk');
-    Route::get('/daftar', HomeController::class)->name('register')->defaults('authModal', 'daftar');
-    Route::post('/masuk', [LoginController::class, 'store'])->name('login.store');
-    Route::post('/daftar', [RegisterController::class, 'store'])->name('register.store');
+    Route::get('/login', HomeController::class)->name('login')->defaults('authModal', 'masuk');
+    Route::get('/register', HomeController::class)->name('register')->defaults('authModal', 'daftar');
+    Route::post('/login', [LoginController::class, 'store'])->name('login.store');
+    Route::post('/register', [RegisterController::class, 'store'])->name('register.store');
 
     // Masuk dengan Google; akun baru melengkapi nomor telepon sebelum dibuat
     Route::get('/auth/google', [GoogleController::class, 'redirect'])->name('auth.google');
     Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('auth.google.callback');
-    Route::get('/daftar/google', [GoogleController::class, 'create'])->name('auth.google.lengkapi');
-    Route::post('/daftar/google', [GoogleController::class, 'store'])->name('auth.google.store');
-    Route::post('/daftar/google/batal', [GoogleController::class, 'cancel'])->name('auth.google.batal');
+    // Google One Tap (pop-up "Lanjutkan sebagai ..." di pojok halaman tamu)
+    Route::post('/auth/google/one-tap', [GoogleController::class, 'oneTap'])->middleware('throttle:10,1')->name('auth.google.one-tap');
+    Route::get('/register/google', [GoogleController::class, 'create'])->name('auth.google.lengkapi');
+    Route::post('/register/google', [GoogleController::class, 'store'])->name('auth.google.store');
+    Route::post('/register/google/batal', [GoogleController::class, 'cancel'])->name('auth.google.batal');
 
     // Lupa kata sandi: tautan dikirim ke email, halaman atur ulang tampil sebagai modal di atas beranda
     Route::post('/lupa-sandi', [LupaSandiController::class, 'kirim'])->name('password.email');
     Route::get('/atur-ulang-sandi/{token}', [LupaSandiController::class, 'create'])->name('password.reset');
     Route::post('/atur-ulang-sandi', [LupaSandiController::class, 'update'])->name('password.update');
 });
+// Alamat lama (tautan yang sudah terlanjur dibagikan) diarahkan ke alamat baru
+Route::permanentRedirect('/masuk', '/login');
+Route::permanentRedirect('/daftar', '/register');
 
 Route::post('/keluar', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 
@@ -98,6 +105,8 @@ Route::livewire('/kamar/{kode}', DetailKamar::class)->name('kamar.tipe');
 Route::livewire('/kamar/{kode}/pesan', PesanKamar::class)->name('kamar.pesan');
 Route::get('/reservasi/{kode}', [ReservasiTamuController::class, 'show'])->name('reservasi.status');
 Route::post('/reservasi/{kode}/bayar', [ReservasiTamuController::class, 'bayar'])->middleware('throttle:10,1,bayar-reservasi')->name('reservasi.bayar');
+// Tautan bagikan: URL bertanda tangan tanpa token akses, halaman baca saja
+Route::get('/reservasi/{kode}/lihat', [ReservasiTamuController::class, 'bagikan'])->middleware(['signed', 'throttle:30,1,lihat-reservasi'])->name('reservasi.lihat');
 Route::get('/reservasi/{kode}/cek', [ReservasiTamuController::class, 'cek'])->middleware('throttle:30,1,cek-reservasi')->name('reservasi.cek');
 Route::post('/reservasi/{kode}/batal', [ReservasiTamuController::class, 'batal'])->middleware('throttle:5,1,batal-reservasi')->name('reservasi.batal');
 Route::post('/reservasi/{kode}/ubah-tanggal', [ReservasiTamuController::class, 'ubahTanggal'])->middleware('throttle:5,1,ubah-reservasi')->name('reservasi.ubah');
@@ -112,10 +121,13 @@ Route::get('/pesanan-makanan/{kode}', [PesananMakananController::class, 'show'])
 Route::post('/pesanan-makanan/{kode}/bayar', [PesananMakananController::class, 'bayar'])->middleware('throttle:10,1,bayar-makanan')->name('pesanan.bayar');
 Route::get('/pesanan-makanan/{kode}/cek', [PesananMakananController::class, 'cek'])->middleware('throttle:30,1,cek-bayar')->name('pesanan.cek');
 Route::post('/midtrans/notification', [PesananMakananController::class, 'notifikasi'])->name('midtrans.notifikasi');
-// Laundry kiloan (tamu menginap dan tamu luar); pembayaran setelah ditimbang memakai route pesanan.bayar/cek
-Route::livewire('/laundry', PesanLaundry::class)->name('laundry');
+// Laundry kiloan (tamu menginap dan tamu luar); pembayaran setelah ditimbang memakai route pesanan.bayar/cek.
+// Halaman /laundry dan /aula hanya informasi; formulirnya dibuka lewat tombol di halaman sendiri.
+Route::get('/laundry', [InfoLayananController::class, 'laundry'])->name('laundry');
+Route::livewire('/laundry/pesan', PesanLaundry::class)->name('laundry.pesan');
 Route::get('/laundry/{kode}', [LaundryController::class, 'show'])->name('laundry.status');
-Route::livewire('/aula', SewaAula::class)->name('aula');
+Route::get('/aula', [InfoLayananController::class, 'aula'])->name('aula');
+Route::livewire('/aula/ajukan', SewaAula::class)->name('aula.ajukan');
 Route::view('/kontak', 'tamu.kontak')->name('kontak');
 // Nota PDF lewat tautan bertanda tangan, dikirim ke WhatsApp setelah pembayaran berhasil
 Route::get('/nota/{nota}', [NotaController::class, 'unduh'])->middleware(['signed', 'throttle:30,1,unduh-nota'])->name('nota.unduh');
@@ -125,6 +137,12 @@ Route::get('/tagihan-bulanan/{tagihan}', [DokumenTagihanController::class, 'undu
 Route::get('/bukti-instansi/{kode}', [BuktiInstansiController::class, 'unduh'])->middleware(['signed', 'throttle:30,1,unduh-bukti'])->name('bukti-instansi.unduh');
 Route::get('/cek-pesanan', [CekPesananController::class, 'index'])->name('cek');
 Route::post('/cek-pesanan', [CekPesananController::class, 'cari'])->middleware('throttle:10,1,cek-pesanan')->name('cek.cari');
+Route::post('/cek-pesanan/lupakan', [CekPesananController::class, 'lupakan'])->name('cek.lupakan');
+// Hasil Cek Pesanan: lihat saja dengan izin di session (tanpa token); batal dan ubah tanggal tetap lewat tautan bertoken
+Route::get('/cek-pesanan/perangkat/{jenis}/{kode}', [CekPesananLihatController::class, 'bukaPerangkat'])->where('jenis', 'reservasi|makanan|laundry')->name('cek.perangkat.buka');
+Route::get('/cek-pesanan/{jenis}/{kode}', [CekPesananLihatController::class, 'show'])->where('jenis', 'reservasi|makanan|laundry')->name('cek.lihat');
+Route::post('/cek-pesanan/{jenis}/{kode}/kirim-ulang', [CekPesananLihatController::class, 'kirimUlang'])->where('jenis', 'reservasi|makanan|laundry')
+    ->middleware('throttle:5,1,kirim-ulang-tautan')->name('cek.lihat.kirim');
 Route::get('/instansi', [PengajuanInstansiController::class, 'create'])->name('instansi');
 Route::post('/instansi', [PengajuanInstansiController::class, 'store'])->middleware('throttle:5,1,pengajuan-instansi')->name('instansi.store');
 

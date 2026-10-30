@@ -1,5 +1,6 @@
-@props(['panel' => 'left-0', 'ringkas' => false])
-{{-- ringkas: tanpa tahun dan nama hari pendek, untuk kotak sempit --}}
+@props(['panel' => 'left-0', 'ringkas' => false, 'pilihanCepat' => [[1, '1 malam'], [2, '2 malam'], [3, '3 malam'], [7, '1 minggu']]])
+{{-- ringkas: tanpa tahun dan nama hari pendek, untuk kotak sempit. pilihanCepat: [[malam, label], ...] lama menginap sekali klik.
+     Batas malam diatur lewat wtRentangInap({ maksMalam, pesanMaks }) milik induknya. --}}
 @once
     @push('scripts')
         @include('partials.tamu-rentang-skrip')
@@ -81,7 +82,7 @@
 
         <div class="mt-5 flex flex-wrap items-center gap-2 border-t border-cream-300 pt-4">
             <span class="mr-1 text-xs text-ink-500">Lama menginap</span>
-            <template x-for="[n, label] in [[1, '1 malam'], [2, '2 malam'], [3, '3 malam'], [7, '1 minggu']]" :key="n">
+            <template x-for="[n, label] in @js($pilihanCepat)" :key="n">
                 <button type="button" @click="setDurasi(n)"
                         class="h-8 rounded-full border px-3 text-xs transition"
                         :class="keluar && malam === n ? 'border-brown-800 bg-brown-800 text-cream-50' : 'border-cream-300 bg-cream-50 text-brown-800 hover:bg-cream-200'"

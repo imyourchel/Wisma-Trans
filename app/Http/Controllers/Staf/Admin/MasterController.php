@@ -109,12 +109,18 @@ abstract class MasterController extends Controller
         $hasil = array_slice(array_values(array_unique($hasil)), 0, $this->maksFoto);  // null = tanpa batas
 
         foreach (array_diff($lama, $hasil) as $dibuang) {
-            if (str_contains($dibuang, '/')) {
+            if (str_contains($dibuang, '/') && ! $this->fotoBersama($dibuang)) {
                 Storage::disk('public')->delete($dibuang);
             }
         }
 
         return $hasil;
+    }
+
+    /** Foto yang dipakai bersama beberapa data: hanya dilepas dari galeri, berkasnya tidak dihapus. */
+    protected function fotoBersama(string $path): bool
+    {
+        return false;
     }
 
     /**

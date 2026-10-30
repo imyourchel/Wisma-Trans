@@ -265,6 +265,10 @@ class LayananFnbTest extends TestCase
         // Tamu menginap, tagihan kamar: tanpa nota, langsung masuk dapur
         $kasir = Livewire::actingAs($this->akun('fnb'))->test(Kasir::class);
         $this->assertSame([$this->kamar205->id => '205 · Budi Santoso (RSV-0012)'], $kasir->viewData('kamarTerisi')->all());
+        // Tata letak: pencarian menempel selebar kolom menu; panel Pesanan bertinggi tetap dengan isi bergulir dan kaki Total + tombol
+        $kasir->assertSee('data-cari-kasir', false)->assertDontSee('max-w-[360px]', false)
+            ->assertSee('data-panel-kasir', false)->assertSee('data-isi-panel', false)->assertSee('lg:overflow-y-auto', false)
+            ->assertSee("\$dispatch('kasir-tambah'", false)->assertDontSee('Subtotal');
         $kasir->call('tambah', $this->nasi->id)->call('tambah', $this->nasi->id)
             ->set('keranjang.'.$this->nasi->id.'.catatan', 'tidak pedas')
             ->set('kamar', (string) $this->kamar205->id)->set('penyajian', 'room_service')
@@ -336,9 +340,20 @@ class LayananFnbTest extends TestCase
     public function test_08_ketersediaan_menu(): void
     {
         $halaman = Livewire::actingAs($this->akun('fnb'))->test(KetersediaanMenu::class)
-            ->call('tandaiHabis', $this->nasi->id)->assertDispatched('toast', teks: 'Nasi Goreng ditandai habis.');
+            // Info tanda habis lewat ikon (bisa difokus, ber-aria-label); keterangan panjang di samping pencarian sudah tidak ada
+            ->assertSee('Semua (3)')->assertSee('Sedang habis (0)')->assertDontSee('Habis saja')
+            ->assertSee('placeholder="Cari menu…"', false)
+            ->assertSee('aria-label="Info tanda habis"', false)->assertSee('aria-describedby="info-tanda-habis"', false)
+            ->assertSee('Tanda habis hanya berlaku untuk pesanan baru. Untuk menghapus menu dari daftar, minta Admin menonaktifkannya di Data Master.')
+            ->assertDontSee('Menandai habis tidak memengaruhi pesanan yang sudah masuk.')
+            // Tandai habis lewat dialog konfirmasi dulu
+            ->assertSee('data-konfirmasi-habis', false)->assertSee('Apakah Anda yakin menandai')->assertSee('Ya, tandai habis')
+            ->assertDontSee('wire:click="tandaiHabis(', false)
+            ->call('tandaiHabis', $this->nasi->id)->assertDispatched('toast', teks: 'Nasi Goreng ditandai habis. Pesanan yang sudah masuk tetap diproses.');
         $this->assertSame([true, true], [$this->nasi->fresh()->is_sold_out, $this->nasi->fresh()->is_active]);
-        $halaman->set('saring', 'habis')->assertSee('Nasi Goreng')->assertDontSee('Teh Manis');
+        $halaman->assertSee('Sedang habis (1)')->set('saring', 'habis')->assertSee('Nasi Goreng')->assertDontSee('Teh Manis');
+        $halaman->call('tersediaLagi', $this->nasi->id)->assertDispatched('toast', teks: 'Nasi Goreng tersedia lagi.');
+        $halaman->call('tandaiHabis', $this->nasi->id);
 
         // Papan Pesanan: bagian "Menu sedang habis"
         $papan = $this->papan();

@@ -10,7 +10,10 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Throwable;
 
-/** Kalender Aula: pemesanan per hari dalam satu bulan (menunggu, terkonfirmasi, selesai). Klik untuk membuka detail. */
+/**
+ * Kalender Aula: pemesanan per hari dalam satu bulan (menunggu, terkonfirmasi, selesai). Klik untuk membuka detail.
+ * Pengguna lihat saja (F&B) hanya melihat yang terkonfirmasi dan selesai (PemesananAula::lihatSaja()).
+ */
 class KalenderAula extends Component
 {
     /** Bulan yang ditampilkan, format Y-m; kosong = bulan ini. */
@@ -43,8 +46,9 @@ class KalenderAula extends Component
         $mulaiGrid = $awal->startOfWeek(CarbonImmutable::MONDAY);
         $akhirGrid = $awal->endOfMonth()->endOfWeek(CarbonImmutable::SUNDAY)->startOfDay();
 
+        $lihatSaja = PemesananAula::lihatSaja();
         $pemesanan = HallBooking::with('hall', 'customer')
-            ->whereIn('status', ['pending', 'confirmed', 'completed'])
+            ->whereIn('status', $lihatSaja ? PemesananAula::STATUS_LIHAT_SAJA : ['pending', 'confirmed', 'completed'])
             ->where('start_at', '<', $akhirGrid->addDay())
             ->where('end_at', '>', $mulaiGrid)
             ->orderBy('start_at')->get();
@@ -61,6 +65,7 @@ class KalenderAula extends Component
             'awal' => $awal,
             'hari' => $hari,
             'jumlah' => $pemesanan->filter(fn ($b) => $b->start_at->isSameMonth($awal))->countBy('status'),
+            'lihatSaja' => $lihatSaja,
         ])->layout('components.layouts.staf', ['title' => 'Kalender Aula']);
     }
 }

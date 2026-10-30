@@ -20,7 +20,8 @@
             $beres = in_array($t->status, ['completed', 'verified'], true);
         @endphp
         <div wire:key="tugas-{{ $t->id }}" @class(['wt-card mb-3 p-4', 'opacity-60' => $beres, 'ring-2 ring-[#5B7FA6]' => $t->status === 'in_progress'])>
-            <div class="flex items-start gap-4">
+            {{-- HP: tombol status selebar kartu di bawah info kamar, mudah ditekan dengan satu tangan --}}
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
                 <div class="min-w-0 flex-1">
                     <div class="flex items-baseline gap-2">
                         <span class="font-display text-[34px] font-extrabold leading-none tabular-nums">{{ $room->room_number }}</span>
@@ -41,13 +42,13 @@
                         <div class="mt-2 text-[12px] text-status-available">{{ $t->label() }} {{ $t->completed_at?->format('H.i') }}</div>
                     @endif
                 </div>
-                <div class="flex-none">
+                <div class="sm:flex-none">
                     @if ($t->status === 'assigned')
                         <button type="button" wire:click="mulai({{ $t->id }})" wire:loading.attr="disabled" wire:target="mulai({{ $t->id }})"
-                                class="h-12 min-w-[96px] rounded border-0 bg-clay-500 px-4 font-display text-[14px] font-bold text-cream-50 hover:bg-clay-600 disabled:opacity-70">Mulai</button>
+                                class="h-14 w-full min-w-[96px] rounded border-0 bg-clay-500 px-4 font-display text-[15px] font-bold text-cream-50 hover:bg-clay-600 disabled:opacity-70 sm:h-12 sm:w-auto sm:text-[14px]">Mulai</button>
                     @elseif ($t->status === 'in_progress' && $selesaiId !== $t->id)
                         <button type="button" wire:click="bukaSelesai({{ $t->id }})"
-                                class="h-12 min-w-[96px] rounded border-0 bg-status-available px-4 font-display text-[14px] font-bold text-cream-50">Selesai</button>
+                                class="h-14 w-full min-w-[96px] rounded border-0 bg-status-available px-4 font-display text-[15px] font-bold text-cream-50 sm:h-12 sm:w-auto sm:text-[14px]">Selesai</button>
                     @endif
                 </div>
             </div>
@@ -58,8 +59,8 @@
                         <input type="text" wire:model="catatan" maxlength="255" placeholder="Contoh: handuk diganti, sabun habis" @class(['wt-input h-11', 'is-invalid' => $errors->has('catatan')])>
                     </x-staf.isian>
                     <div class="flex gap-2">
-                        <button type="submit" wire:loading.attr="disabled" wire:target="selesai" class="h-12 flex-1 rounded border-0 bg-status-available font-display text-[14px] font-bold text-cream-50 disabled:opacity-70">Tandai selesai</button>
-                        <button type="button" wire:click="batalSelesai" class="h-12 rounded border border-cream-300 bg-transparent px-5 text-[13px] text-brown-800">Batal</button>
+                        <button type="submit" wire:loading.attr="disabled" wire:target="selesai" class="h-14 flex-1 rounded border-0 bg-status-available font-display text-[15px] font-bold text-cream-50 disabled:opacity-70 sm:h-12 sm:text-[14px]">Tandai selesai</button>
+                        <button type="button" wire:click="batalSelesai" class="h-14 rounded border sm:h-12 border-cream-300 bg-transparent px-5 text-[13px] text-brown-800">Batal</button>
                     </div>
                 </form>
             @endif

@@ -79,7 +79,7 @@ class Kasir extends Component
     public function tambah(int $id): void
     {
         Gate::authorize('take-fnb-order');
-        $m = Service::where('category', 'fnb')->where('is_active', true)->findOrFail($id);
+        $m = Service::menuKafe()->findOrFail($id);
         if ($m->habis()) {
             $this->addError('keranjang', "{$m->name} sedang tidak tersedia.");
 
@@ -211,7 +211,7 @@ class Kasir extends Component
     public function render(): View
     {
         $kata = mb_strtolower(trim($this->cari));
-        $menu = Service::where('category', 'fnb')->where('is_active', true)->orderBy('id')->get();
+        $menu = Service::menuKafe()->orderBy('id')->get();
         $dipilih = $menu->whereIn('id', array_keys($this->keranjang))->keyBy('id');
         $subtotal = collect($this->keranjang)->sum(function ($b, $id) use ($dipilih) {
             $m = $dipilih->get($id);

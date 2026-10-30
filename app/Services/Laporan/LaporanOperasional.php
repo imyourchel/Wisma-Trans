@@ -59,7 +59,8 @@ class LaporanOperasional
 
         $terlaris = DB::table('service_order_items as soi')->join('service_orders as so', 'so.id', '=', 'soi.service_order_id')
             ->join('services as s', 's.id', '=', 'soi.service_id')
-            ->where('s.category', 'fnb')->where('so.status', '!=', 'cancelled')->whereBetween('so.order_date', $rentang)
+            // Tambahan pemesanan kamar (Sarapan tambahan) bukan menu kafe
+            ->where('s.category', 'fnb')->whereNull('so.service_start_date')->where('so.status', '!=', 'cancelled')->whereBetween('so.order_date', $rentang)
             ->groupBy('s.id', 's.name')->selectRaw('s.name, SUM(soi.quantity) AS porsi, SUM(soi.subtotal) AS nilai')
             ->orderByDesc('porsi')->orderByDesc('nilai')->limit(5)->get();
 

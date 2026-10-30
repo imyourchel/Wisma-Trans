@@ -28,7 +28,7 @@ use Livewire\Component;
  * Manager hanya melihat. Pilihan status mengikuti RoomStatus::allowedTransitions() dan peran pengguna;
  * RoomStatusService memeriksanya lagi saat menyimpan.
  * Papan memuat ulang tiap 30 detik (dihentikan selama detail kamar terbuka).
- * Tampilan kalender (menu Kalender Ketersediaan, ?tampilan=kalender) menampilkan pemesanan per kamar selama 14 hari,
+ * Tampilan kalender (tombol Kalender di halaman ini, ?tampilan=kalender) menampilkan pemesanan per kamar selama 14 hari,
  * sisa kamar per tipe per malam (KetersediaanKamar), dan pemesanan yang belum punya nomor kamar. Manager/FO membuka
  * reservasi dari baloknya; FO membuat reservasi langsung dari sel kosong. Housekeeping tidak melihat nama tamu.
  * Jalur cepat: kamar Perbaikan yang tertahan laporan kerusakan bisa dibuka FO/HK dengan email dan kata sandi Manager.

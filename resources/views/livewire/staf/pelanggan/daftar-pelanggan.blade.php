@@ -16,16 +16,16 @@
             <x-staf.ikon nama="cari" ukuran="16" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
             <input type="search" wire:model.live.debounce.400ms="cari" placeholder="Nama, HP, atau email" class="wt-input pl-9">
         </label>
-        <select wire:model.live="segmen" class="wt-input w-[150px]" aria-label="Segmen">
+        <select wire:model.live="segmen" class="wt-input w-full sm:w-[150px]" aria-label="Segmen">
             <option value="">Semua segmen</option><option value="b2b">B2B (instansi)</option><option value="b2c">B2C (perorangan)</option>
         </select>
         @if ($daftarInstansi->isNotEmpty())
-            <select wire:model.live="instansi" class="wt-input w-[190px]" aria-label="Instansi">
+            <select wire:model.live="instansi" class="wt-input w-full sm:w-[190px]" aria-label="Instansi">
                 <option value="">Semua instansi</option>
                 @foreach ($daftarInstansi as $id => $nama)<option value="{{ $id }}">{{ $nama }}</option>@endforeach
             </select>
         @endif
-        <select wire:model.live="status" class="wt-input w-[140px]" aria-label="Status">
+        <select wire:model.live="status" class="wt-input w-full sm:w-[140px]" aria-label="Status">
             <option value="">Semua status</option><option value="aktif">Aktif</option><option value="nonaktif">Nonaktif</option>
         </select>
         <label class="flex h-10 items-center gap-2 text-[13px]">
@@ -66,9 +66,9 @@
 
     {{-- Detail pelanggan --}}
     @if ($c)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="plg-judul" class="relative flex max-h-[94vh] w-[860px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="plg-judul" class="wt-dialog relative flex max-h-[94dvh] w-[860px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="plg-judul" class="flex flex-wrap items-center gap-2 font-display text-[17px] font-extrabold uppercase tracking-[.04em]">
@@ -78,7 +78,7 @@
                         </div>
                         <div class="mt-0.5 truncate text-[13px] text-ink-500" data-segmen-rincian>{{ $profil['segmen']['rincian'] }}</div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
 
                 <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
@@ -91,7 +91,7 @@
                         @if ($ubah)
                             <form wire:submit="simpanUbah" class="grid gap-3 rounded border border-cream-300 p-4 sm:grid-cols-2" novalidate>
                                 <x-staf.isian nama="nama" label="Nama"><input type="text" wire:model="nama" maxlength="100" class="wt-input {{ $galat('nama') }}"></x-staf.isian>
-                                <x-staf.isian nama="hp" label="Nomor HP / WhatsApp"><input type="tel" wire:model="hp" maxlength="20" class="wt-input {{ $galat('hp') }}"></x-staf.isian>
+                                <x-staf.isian nama="hp" label="Nomor HP / WhatsApp"><input type="tel" wire:model="hp" maxlength="20" placeholder="08xxxxxxxxxx" class="wt-input {{ $galat('hp') }}"></x-staf.isian>
                                 <x-staf.isian nama="email" label="Email"><input type="email" wire:model="email" maxlength="150" class="wt-input {{ $galat('email') }}"></x-staf.isian>
                                 <x-staf.isian nama="alamat" label="Alamat"><input type="text" wire:model="alamat" maxlength="500" class="wt-input {{ $galat('alamat') }}"></x-staf.isian>
                                 <div class="flex flex-wrap items-center gap-2 sm:col-span-2">

@@ -22,7 +22,7 @@
         </label>
         <label class="block">
             <span class="sr-only">Tanggal</span>
-            <input type="date" wire:model.live="tanggal" class="wt-input w-[170px]" aria-label="Tanggal pesanan">
+            <x-staf.tanggal wire:model.live="tanggal" :nilai="$tanggal" kosong label="Tanggal pesanan" class="w-[190px]" />
         </label>
         <x-staf.pilih model="$wire.status" x-on:change="$wire.$commit()" label="Saring status" class="w-[160px]" :nilai="$status"
                       :pilihan="['' => 'Semua status'] + PM::STATUS" />
@@ -57,7 +57,7 @@
     </div>
 
     <div class="wt-card overflow-x-auto shadow-wt-xs">
-        <table class="w-full min-w-[960px] border-collapse">
+        <table class="wt-tabel-kartu w-full min-w-[960px] border-collapse">
             <thead>
                 <tr>
                     <th class="wt-th">Kode</th><th class="wt-th">Waktu</th><th class="wt-th">Pemesan</th><th class="wt-th">Menu</th>
@@ -68,13 +68,13 @@
                 @forelse ($daftar as $x)
                     @php [$kunciBayar, $labelBayar] = PM::pembayaran($x); @endphp
                     <tr wire:key="rwy-{{ $x->id }}" wire:click="open({{ $x->id }})" class="cursor-pointer hover:bg-row-hover">
-                        <td class="wt-td font-semibold tabular-nums">{{ $x->order_code }}</td>
-                        <td class="wt-td whitespace-nowrap tabular-nums">{{ $x->order_date->translatedFormat('j M, H.i') }}</td>
-                        <td class="wt-td"><div class="font-semibold">{{ $x->customer?->full_name }}</div><div class="text-[11px] text-ink-500">{{ PM::jenis($x) }}</div></td>
-                        <td class="wt-td text-[13px]">{{ PM::ringkasMenu($x) }}</td>
-                        <td class="wt-td text-right tabular-nums">{{ $rp(PM::total($x)) }}</td>
-                        <td class="wt-td"><span class="wt-lencana {{ GayaPesanan::BAYAR[$kunciBayar] }}">{{ $labelBayar }}</span></td>
-                        <td class="wt-td"><span class="wt-lencana {{ GayaPesanan::TAHAP[$x->status] ?? '' }}">{{ PM::STATUS[$x->status] ?? $x->status }}</span></td>
+                        <td class="wt-kartu-judul wt-td font-semibold tabular-nums">{{ $x->order_code }}</td>
+                        <td class="wt-td whitespace-nowrap tabular-nums" data-label="Waktu">{{ $x->order_date->translatedFormat('j M, H.i') }}</td>
+                        <td class="wt-td" data-label="Pemesan"><div class="font-semibold">{{ $x->customer?->full_name }}</div><div class="text-[11px] text-ink-500">{{ PM::jenis($x) }}</div></td>
+                        <td class="wt-td text-[13px]" data-label="Menu">{{ PM::ringkasMenu($x) }}</td>
+                        <td class="wt-td text-right tabular-nums" data-label="Total">{{ $rp(PM::total($x)) }}</td>
+                        <td class="wt-td" data-label="Pembayaran"><span class="wt-lencana {{ GayaPesanan::BAYAR[$kunciBayar] }}">{{ $labelBayar }}</span></td>
+                        <td class="wt-td" data-label="Status"><span class="wt-lencana {{ GayaPesanan::TAHAP[$x->status] ?? '' }}">{{ PM::STATUS[$x->status] ?? $x->status }}</span></td>
                     </tr>
                 @empty
                     <tr><td colspan="7" class="wt-td py-16 text-center text-sm text-ink-500">Tidak ada pesanan yang cocok dengan saringan.</td></tr>

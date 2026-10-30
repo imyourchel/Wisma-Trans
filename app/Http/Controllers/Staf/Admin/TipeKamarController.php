@@ -25,6 +25,12 @@ class TipeKamarController extends MasterController
 
     private const FOLDER_FOTO = 'room-types';
 
+    /** Foto standar di storage/app/public/kamar dipakai semua tipe kamar dan foto kartu jenis kasur. */
+    protected function fotoBersama(string $path): bool
+    {
+        return str_starts_with($path, RoomType::FOLDER_FOTO_STANDAR.'/');
+    }
+
     public function index(): View
     {
         return view('staf.admin.tipe-kamar', [
@@ -81,7 +87,7 @@ class TipeKamarController extends MasterController
         }
 
         // Berkas dihapus setelah data terhapus, supaya foto tidak hilang bila penghapusan gagal
-        Storage::disk('public')->delete(array_filter($foto, fn ($p) => str_contains($p, '/')));
+        Storage::disk('public')->delete(array_filter($foto, fn ($p) => str_contains($p, '/') && ! $this->fotoBersama($p)));
 
         return back()->with('status', "Tipe kamar {$tipeKamar->name} berhasil dihapus.");
     }

@@ -1,36 +1,36 @@
 @php
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
-    $q = $cari->aktif() ? '?'.http_build_query($cari->query()) : '';
-    $bisaPesan = $ini && in_array($ini['jenis'], ['tersedia', 'kurang', 'sebagian'], true);
-    $tidakMuat = $ini && $ini['jenis'] === 'tidak-muat';
-    $dp = $bisaPesan ? round($ini['total'] * $ketentuan['dpPersen'] / 100) : 0;
-    $urlPesan = $bisaPesan ? route('kamar.pesan', Str::lower($tipe->code)).'?'.http_build_query($cari->query($ini['kamarDipesan'])) : null;
-    $labelPesan = $bisaPesan && $ini['jenis'] !== 'tersedia' ? 'Pesan '.$ini['dipesan'].' kamar' : 'Pesan Sekarang';
+    $q = $queryCari ? '?'.http_build_query($queryCari) : '';
+    $keTanggal = "document.getElementById('pesan').scrollIntoView({ behavior: 'smooth', block: 'start' })";
+    $kePilihKasur = "document.getElementById('pilih-kasur').scrollIntoView({ behavior: 'smooth', block: 'start' })";
+    $adaPilihan = $ringkasan['jumlah'] > 0;
+    $kodeTipe = Str::upper($tipe->code);
+    $penuh = $sisaTipe === 0;
     $adaFoto = $tipe->photoUrls() !== [];
     $hariBatal = (int) \App\Models\Setting::get('cancellation_min_days', 1);
     $persenKembali = (int) \App\Models\Setting::get('cancellation_refund_percent', 50);
     $dendaTelat = $rp(\App\Models\Setting::get('late_checkout_fee', 250000));
     $waTanya = 'https://wa.me/'.$wisma['whatsapp'].'?text='.rawurlencode('Halo Wisma Trans, saya ingin bertanya tentang '.$tipe->name.($cari->aktif() ? ' untuk '.$cari->rentang() : '').'.');
     $sorotan = [
-        ['orang', 'Kapasitas', 'Maks. '.$tipe->max_capacity.' orang'],
-        ['kasur', 'Jenis kasur', $tipe->kasur ? implode(' / ', $tipe->kasur) : '-'],
+        ['orang', 'Kapasitas', 'Maks. '.\App\Models\RoomType::teksBatas($tipe->kapasitas)],
+        ['kasur', 'Pilihan kasur', $tipe->kasur ? count($tipe->kasur).' jenis' : '-'],
         ['gedung', 'Tipe ini', $tipe->rooms->count().' kamar'],
         ['jam', 'Check-in / out', $ketentuan['checkIn'].' / '.$ketentuan['checkOut']],
     ];
     $layanan = [
         ['makanan', 'Restoran', 'Pesan makanan dan minuman, diantar ke kamar atau ditagihkan ke kamar.', route('menu'), 'Lihat menu'],
-        ['laundry', 'Laundry kiloan', 'Cucian dijemput dari kamar dan diantar kembali setelah selesai.', route('laundry'), 'Pesan laundry'],
-        ['gedung', 'Sewa aula', 'Aula untuk rapat, pelatihan, atau acara keluarga.', route('aula'), 'Ajukan sewa'],
+        ['laundry', 'Laundry kiloan', 'Cucian dijemput dari kamar dan diantar kembali setelah selesai.', route('laundry.pesan'), 'Pesan laundry'],
+        ['gedung', 'Sewa aula', 'Aula untuk rapat, pelatihan, atau acara keluarga.', route('aula.ajukan'), 'Ajukan sewa'],
     ];
 @endphp
 
-<div class="animate-wt-masuk pb-28 lg:pb-0"
-     x-data="cariKamar(@js(['hariIni' => today()->toDateString(), 'masuk' => $cari->masuk?->toDateString(), 'keluar' => $cari->keluar?->toDateString(), 'kamar' => $cari->kamar, 'maksTamu' => $tipe->max_capacity]))"
+<div @class(['animate-wt-masuk', 'pb-36 md:pb-28' => $adaPilihan, 'pb-28 lg:pb-0' => ! $adaPilihan])
+     x-data="cariKamar(@js(['hariIni' => today()->toDateString(), 'masuk' => $cari->masuk?->toDateString(), 'keluar' => $cari->keluar?->toDateString(), 'kamar' => $susunanTamu, 'batasTamu' => $batasTamu]))"
      @resize.window.debounce.150ms="lebar = window.innerWidth">
 
     <div class="wt-container pt-5 sm:pt-8">
         <nav class="flex items-center gap-1.5 text-[13px] text-ink-500" aria-label="Lokasi halaman">
-            <a href="{{ route('kamar').$q }}" class="text-ink-500 hover:text-clay-600">Kamar</a>
+            <a href="{{ route('kamar', $queryCari) }}" class="text-ink-500 hover:text-clay-600">Kamar</a>
             <x-tamu.ikon nama="kanan" ukuran="14" />
             <span class="truncate text-ink-900" aria-current="page">{{ $tipe->name }}</span>
         </nav>
@@ -46,6 +46,7 @@
         @if ($tipe->description)
             <p class="mb-0 mt-2 max-w-[640px] whitespace-pre-line text-[15px] leading-relaxed text-ink-500">{{ $tipe->description }}</p>
         @endif
+        <x-tamu.keunggulan :tipe="$tipe" class="mt-3" />
     </header>
 
     {{-- Foto. Bila tipe ini belum punya foto, tampil foto bangunan dengan keterangan yang jujur. --}}
@@ -109,6 +110,84 @@
                 </section>
             @endif
 
+            {{-- Pilih jenis kasur: tombol Pilih menambah satu kamar, lalu stepper − n + (sama dengan bar bawah, ?pilih=), tanpa pindah halaman --}}
+            @if ($kartuKasur)
+                <section id="pilih-kasur" class="mt-10 scroll-mt-24" aria-labelledby="judul-kasur" data-pilih-kasur>
+                    <h2 id="judul-kasur" class="m-0 font-display text-[15px] font-extrabold uppercase tracking-[.08em]">Pilih jenis kasur</h2>
+                    <p class="mb-0 mt-1 text-[13px] text-ink-500">Jenis kasur yang Anda pilih dijamin saat menginap. Tekan Pilih lalu atur jumlah kamarnya; bisa digabung dengan tipe lain.</p>
+                    <div class="mt-4 flex flex-col gap-3">
+                        @foreach ($kartuKasur as $kk)
+                            @php
+                                $habis = $kk['sisa'] === 0;
+                                $dipilih = $kk['jumlah'] > 0;
+                                $kasurTidakMuat = $kk['cocok'] === \App\Models\RoomType::TIDAK_MUAT;
+                            @endphp
+                            <article wire:key="kasur-{{ $kk['kode'] }}" data-kartu-kasur="{{ $kk['kode'] }}"
+                                     @class(['overflow-hidden rounded-lg border transition',
+                                        'border-clay-500 bg-[rgba(181,113,74,.05)] shadow-wt-md ring-1 ring-clay-500' => $dipilih,
+                                        'border-cream-300 bg-cream-50' => ! $dipilih,
+                                        'opacity-60' => $habis || $kasurTidakMuat])>
+                                <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
+                                    @if ($kk['foto'])
+                                        <img src="{{ $kk['foto'] }}" alt="Contoh {{ $kk['nama'] }}" loading="lazy" data-foto-kasur
+                                             @class(['aspect-[3/2] w-full flex-none rounded-md object-cover sm:w-[150px]', 'grayscale' => $habis])>
+                                    @else
+                                        <span @class(['flex h-12 w-12 flex-none items-center justify-center rounded-lg', 'bg-clay-500 text-cream-50' => $dipilih, 'bg-cream-200 text-clay-600' => ! $dipilih]) aria-hidden="true">
+                                            <x-tamu.ikon nama="kasur" ukuran="22" />
+                                        </span>
+                                    @endif
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="m-0 text-base font-semibold text-ink-900">{{ $kk['nama'] }}</h3>
+                                        <p class="mb-0 mt-0.5 text-[13px] text-ink-500">{{ $kk['info'] }}</p>
+                                        <ul class="m-0 mt-2.5 flex list-none flex-wrap gap-x-4 gap-y-1.5 p-0 text-xs text-ink-900">
+                                            <li class="flex items-center gap-1.5"><x-tamu.ikon nama="orang" ukuran="14" class="text-clay-600" /><span data-kapasitas-kasur>Maks. {{ \App\Models\RoomType::teksBatas($kk['kapasitas']) }}</span></li>
+                                            <li class="flex items-center gap-1.5"><x-tamu.ikon nama="makanan" ukuran="14" class="text-clay-600" />Termasuk sarapan {{ $tipe->sarapan() }} orang</li>
+                                            @if ($kk['cocok'] === \App\Models\RoomType::MUAT_EXTRA && ! $kasurTidakMuat)
+                                                <li class="flex items-center gap-1.5 text-ink-500" data-extra-tanpa-sarapan>Extra bed belum termasuk sarapan</li>
+                                            @endif
+                                        </ul>
+                                    </div>
+                                    <div class="flex flex-wrap items-end justify-between gap-3 border-t border-dashed border-cream-300 pt-3 sm:flex-col sm:flex-nowrap sm:items-end sm:border-0 sm:pt-0 sm:text-right">
+                                        <div>
+                                            @if ($kasurTidakMuat)
+                                                <span class="mb-1 inline-block text-xs font-semibold text-ink-500" data-kasur-tidak-muat>Tidak muat untuk {{ $teksTamuTerkecil }}</span>
+                                            @elseif ($habis)
+                                                <span class="mb-1 inline-block text-xs font-semibold text-status-dirty" data-sisa-kasur>Habis untuk tanggal ini</span>
+                                            @elseif ($kk['sisa'] !== null)
+                                                <span class="mb-1 inline-block text-xs font-semibold text-status-available" data-sisa-kasur>Tersedia{{ $kk['cocok'] === \App\Models\RoomType::MUAT_EXTRA ? ' · perlu extra bed' : '' }}</span>
+                                            @endif
+                                            <div><span class="font-display text-lg font-extrabold tabular-nums text-clay-600">{{ $rp($tipe->base_price) }}</span><span class="text-xs text-ink-500"> / malam</span></div>
+                                        </div>
+                                        <div class="flex items-center gap-2.5">
+                                            @if ($kasurTidakMuat && ! $dipilih)
+                                                <button type="button" disabled class="wt-btn-outline h-10 cursor-not-allowed px-4 text-xs tracking-[.06em] opacity-60">Tidak muat</button>
+                                            @elseif ($kk['sisa'] === null)
+                                                <button type="button" @click="{{ $keTanggal }}; setTimeout(() => bukaKalender('masuk'), 350)" class="wt-btn-outline h-10 px-4 text-xs tracking-[.06em]">Pilih tanggal dulu</button>
+                                            @elseif ($dipilih)
+                                                {{-- Stepper: maks = sisa jenis kasur ini (sisa tipe dibagi bersama jenis kasur lain) --}}
+                                                <div class="flex flex-none overflow-hidden rounded-md border border-cream-400" role="group" aria-label="Jumlah kamar {{ $kk['nama'] }}" data-stepper>
+                                                    <button type="button" wire:click="kurangiKasur('{{ $kodeTipe }}', '{{ $kk['kode'] }}')" wire:loading.attr="disabled" wire:target="kurangiKasur,pilihKasur" aria-label="Kurangi {{ $kk['nama'] }}"
+                                                            class="flex h-10 w-10 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center border-0 bg-cream-50 text-lg text-brown-800 hover:bg-cream-200 disabled:opacity-35">−</button>
+                                                    <span class="flex w-10 items-center justify-center border-x border-cream-400 bg-brown-800 font-display text-sm font-bold tabular-nums text-cream-50" aria-live="polite" data-jumlah-kasur>{{ $kk['jumlah'] }}</span>
+                                                    <button type="button" wire:click="pilihKasur('{{ $kodeTipe }}', '{{ $kk['kode'] }}')" wire:loading.attr="disabled" wire:target="kurangiKasur,pilihKasur" @disabled($kk['jumlah'] >= $kk['maks'])
+                                                            @if ($kk['jumlah'] >= $kk['maks']) title="Tinggal {{ $kk['maks'] }} kamar" @endif aria-label="Tambah {{ $kk['nama'] }}"
+                                                            class="flex h-10 w-10 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center border-0 bg-clay-500 text-lg text-cream-50 hover:bg-clay-600 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-clay-500">+</button>
+                                                </div>
+                                            @elseif ($habis || $kk['maks'] === 0)
+                                                <button type="button" disabled class="wt-btn-outline h-10 cursor-not-allowed px-4 text-xs tracking-[.06em] opacity-60">Habis</button>
+                                            @else
+                                                <button type="button" wire:click="pilihKasur('{{ $kodeTipe }}', '{{ $kk['kode'] }}')" wire:loading.attr="disabled" wire:target="pilihKasur"
+                                                        class="wt-btn-primary h-10 px-5 text-xs tracking-[.08em]" data-tombol-pilih>Pilih</button>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
+
             {{-- Layanan selama menginap --}}
             <section class="mt-10" aria-labelledby="judul-layanan">
                 <h2 id="judul-layanan" class="m-0 font-display text-[15px] font-extrabold uppercase tracking-[.08em]">Selama menginap</h2>
@@ -133,7 +212,7 @@
                         ['jam', 'Check-in dan check-out', 'Check-in mulai '.$ketentuan['checkIn'].' WITA, check-out paling lambat '.$ketentuan['checkOut'].' WITA. Terlambat keluar dikenai biaya '.$dendaTelat.'.'],
                         ['dompet', 'Uang muka '.$ketentuan['dpPersen'].'%', 'Dibayar online (QRIS atau virtual account) paling lambat '.$ketentuan['dpJam'].' jam setelah memesan. Sisanya dilunasi saat check-in.'],
                         ['kalender', 'Ubah tanggal dan pembatalan', 'Bisa lebih dari '.$hariBatal.' hari sebelum kedatangan; uang muka kembali '.$persenKembali.'% bila batal. Setelah itu, atau bila tidak datang, uang muka hangus.'],
-                        ['kasur', 'Nomor kamar', 'Ditentukan resepsionis saat check-in sesuai tipe yang Anda pesan.'],
+                        ['kasur', 'Jenis kasur', 'Jenis kasur yang Anda pilih dijamin saat menginap. Nomor kamar dikirim bersama konfirmasi.'],
                     ] as [$ikon, $judul, $teks])
                         <div class="flex gap-3.5 rounded-lg border border-cream-300 bg-cream-50 p-4">
                             <span class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-cream-200 text-clay-600"><x-tamu.ikon :nama="$ikon" ukuran="17" /></span>
@@ -185,8 +264,8 @@
                         <button type="button" @click="buka = !buka" :aria-expanded="buka"
                                 class="flex w-full items-center justify-between gap-3 border-0 bg-transparent px-4 py-3 text-left">
                             <span class="min-w-0">
-                                <span class="wt-micro-label block">Kamar dan tamu</span>
-                                <span class="mt-1 block truncate text-[15px] text-ink-900" x-text="ringkas">{{ $cari->ringkasTamu() }}</span>
+                                <span class="wt-micro-label block">Tamu</span>
+                                <span class="mt-1 block truncate text-[15px] text-ink-900" x-text="ringkasTamu">{{ \App\Support\PilihanKamar::teksTamu($jumlahTamu['dewasa'], $jumlahTamu['anak']) }}</span>
                             </span>
                             <img src="{{ asset('ds/icons/chevron-up.svg') }}" alt="" width="14" height="14" class="flex-none opacity-60 transition-transform" :class="buka ? '' : 'rotate-180'">
                         </button>
@@ -202,40 +281,30 @@
                 {{-- Sedang mengecek --}}
                 <div wire:loading.block wire:target="cek" class="mt-5 hidden animate-pulse" aria-live="polite">
                     <div class="h-6 w-28 rounded-full bg-cream-200"></div>
-                    <div class="mt-4 h-4 w-full rounded bg-cream-200"></div>
-                    <div class="mt-2.5 h-4 w-4/5 rounded bg-cream-200"></div>
-                    <div class="mt-5 h-12 w-full rounded bg-cream-200"></div>
+                    <div class="mt-4 h-12 w-full rounded bg-cream-200"></div>
                     <span class="sr-only">Mengecek ketersediaan…</span>
                 </div>
 
                 <div wire:loading.remove wire:target="cek">
-                    {{-- Belum dicek, atau tanggal di kotak sudah diubah --}}
                     {{-- Kunci berbeda per keadaan: elemen diganti saat dirender ulang, sehingga x-show dibaca ulang Alpine --}}
-                    <div @if ($ini) x-show="berubah || gagal" x-cloak wire:key="cek-ulang" @else wire:key="cek-awal" @endif class="mt-5">
+                    <div @if ($sisaTipe !== null) x-show="berubah || gagal" x-cloak wire:key="cek-ulang" @else wire:key="cek-awal" @endif class="mt-5">
                         <button type="button" @click="cek()" class="wt-btn-primary h-12 w-full text-xs tracking-[.1em]" x-text="gagal ? 'Coba lagi' : 'Cek ketersediaan'">Cek ketersediaan</button>
-                        <p class="mb-0 mt-2.5 text-center text-xs text-ink-500">Pilih tanggal dan jumlah tamu untuk melihat total harga.</p>
+                        <p class="mb-0 mt-2.5 text-center text-xs text-ink-500">Pilih tanggal dan jumlah tamu untuk melihat sisa kamar.</p>
                     </div>
 
-                    @if ($ini)
-                        <div x-show="!berubah && !gagal" x-cloak class="mt-5">
-                            @if ($ini['jenis'] === 'penuh' || $tidakMuat)
-                                @if ($tidakMuat)
-                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-cream-200 px-2.5 py-1 text-xs font-semibold text-ink-900">
-                                        <x-tamu.ikon nama="orang" ukuran="14" class="text-clay-600" />Maks. {{ $tipe->max_capacity }} orang per kamar
-                                    </span>
-                                    <p class="mb-0 mt-3 text-[13px] leading-relaxed text-ink-500">{{ $tipe->name }} tidak muat untuk {{ $cari->tamuTerbanyak() }} orang dalam satu kamar. Tambah kamar untuk membagi tamu.</p>
-                                    <button type="button" @click.stop="buka = true" class="wt-btn-outline mt-3 h-10 w-full text-xs tracking-[.08em]">Ubah susunan tamu</button>
-                                @else
-                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-[rgba(212,81,74,.1)] px-2.5 py-1 text-xs font-semibold text-status-dirty">
-                                        <span class="h-1.5 w-1.5 rounded-full bg-status-dirty"></span>Penuh untuk tanggal ini
-                                    </span>
-                                @endif
-                                @if ($saranLain->isNotEmpty())
-                                    <p class="mb-2 mt-4 text-[13px] text-ink-500">{{ $tidakMuat ? 'Tipe yang muat dan tersedia di tanggal yang sama:' : 'Masih tersedia di tanggal yang sama:' }}</p>
+                    @if ($sisaTipe !== null)
+                        <div x-show="!berubah && !gagal" x-cloak class="mt-5" data-sisa-tipe="{{ $sisaTipe }}">
+                            @if ($penuh)
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-[rgba(212,81,74,.1)] px-2.5 py-1 text-xs font-semibold text-status-dirty">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-status-dirty"></span>Penuh untuk tanggal ini
+                                </span>
+                                @php $tersedia = $lain->filter(fn ($t) => $t->sisaTanggal > 0); @endphp
+                                @if ($tersedia->isNotEmpty())
+                                    <p class="mb-2 mt-4 text-[13px] text-ink-500">Masih tersedia di tanggal yang sama:</p>
                                     <ul class="m-0 flex list-none flex-col gap-2 p-0">
-                                        @foreach ($saranLain as $t)
+                                        @foreach ($tersedia as $t)
                                             <li>
-                                                <a href="{{ route('kamar.tipe', Str::lower($t->code)).$q }}"
+                                                <a href="{{ route('kamar.tipe', ['kode' => Str::lower($t->code)] + $queryCari) }}"
                                                    class="flex items-center justify-between gap-3 rounded-md border border-cream-300 px-3.5 py-2.5 text-sm text-ink-900 hover:border-clay-500 hover:bg-row-hover hover:text-ink-900 hover:no-underline">
                                                     <span class="min-w-0">
                                                         <span class="block truncate font-semibold">{{ $t->name }}</span>
@@ -246,55 +315,15 @@
                                             </li>
                                         @endforeach
                                     </ul>
-                                @elseif (! $tidakMuat)
-                                    <p class="mb-0 mt-3 text-[13px] text-ink-500">Semua tipe kamar penuh untuk tanggal ini. Coba tanggal lain atau hubungi kami.</p>
                                 @endif
                             @else
-                                @if ($ini['jenis'] === 'sebagian')
-                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-[rgba(232,172,69,.18)] px-2.5 py-1 text-xs font-semibold text-[#8A5A0B]">
-                                        <span class="h-1.5 w-1.5 flex-none rounded-full bg-status-maintenance"></span>Muat untuk {{ $ini['muat'] }} dari {{ $cari->jumlah }} kamar
-                                    </span>
-                                    <p class="mb-0 mt-2.5 text-xs leading-relaxed text-ink-500">Kamar lain berisi lebih dari {{ $tipe->max_capacity }} orang. Pesan kamar itu dengan tipe yang lebih besar, atau ubah susunan tamu.</p>
-                                @elseif ($ini['jenis'] === 'kurang')
-                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-[rgba(232,172,69,.18)] px-2.5 py-1 text-xs font-semibold text-[#8A5A0B]">
-                                        <span class="h-1.5 w-1.5 flex-none rounded-full bg-status-maintenance"></span>Hanya tersedia {{ $ini['sisa'] }} kamar untuk tanggal ini
-                                    </span>
-                                @else
-                                    <div class="flex flex-wrap gap-1.5">
-                                        <span class="inline-flex items-center gap-1.5 rounded-full bg-[rgba(92,158,103,.14)] px-2.5 py-1 text-xs font-semibold text-status-available">
-                                            <span class="h-1.5 w-1.5 rounded-full bg-status-available"></span>Tersedia
-                                        </span>
-                                        @if ($ini['sisa'] <= 2)
-                                            <span class="inline-flex items-center rounded-full bg-[rgba(232,172,69,.18)] px-2.5 py-1 text-xs font-semibold text-[#8A5A0B]">Tersisa {{ $ini['sisa'] }} kamar</span>
-                                        @endif
-                                    </div>
-                                @endif
-
-                                <dl class="m-0 mt-4 flex flex-col gap-2 text-sm">
-                                    <div class="flex justify-between gap-3">
-                                        <dt class="text-ink-500">{{ $tipe->name }} × {{ $ini['dipesan'] }} kamar × {{ $cari->malam() }} malam</dt>
-                                        <dd class="m-0 flex-none tabular-nums">{{ $rp($ini['total']) }}</dd>
-                                    </div>
-                                    <div class="flex justify-between gap-3 border-t border-cream-300 pt-2 font-semibold">
-                                        <dt>Total</dt>
-                                        <dd class="m-0 tabular-nums">{{ $rp($ini['total']) }}</dd>
-                                    </div>
-                                    <div class="flex justify-between gap-3">
-                                        <dt>Uang muka {{ $ketentuan['dpPersen'] }}%</dt>
-                                        <dd class="m-0 font-display text-base font-extrabold tabular-nums text-clay-600">{{ $rp($dp) }}</dd>
-                                    </div>
-                                    <div class="flex justify-between gap-3">
-                                        <dt class="text-ink-500">Sisa dibayar saat check-in</dt>
-                                        <dd class="m-0 tabular-nums">{{ $rp($ini['total'] - $dp) }}</dd>
-                                    </div>
-                                </dl>
-
-                                <p class="mb-0 mt-4 flex gap-2 rounded-md bg-cream-200 px-3 py-2.5 text-xs leading-relaxed text-ink-900">
-                                    <x-tamu.ikon nama="jam" ukuran="15" class="mt-px text-clay-600" />
-                                    Uang muka dibayar online paling lambat {{ $ketentuan['dpJam'] }} jam setelah memesan.
-                                </p>
-                                <a href="{{ $urlPesan }}" class="wt-btn-primary mt-4 h-12 w-full text-xs tracking-[.1em]">{{ $labelPesan }}</a>
-                                <p class="mb-0 mt-2.5 text-center text-xs text-ink-500">Belum dikenakan biaya. Pembayaran di langkah berikutnya.</p>
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-[rgba(92,158,103,.14)] px-2.5 py-1 text-xs font-semibold text-status-available">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-current"></span>Tersedia untuk {{ $cari->malam() }} malam
+                                </span>
+                                @unless ($adaPilihan)
+                                    <p class="mb-0 mt-3 text-[13px] text-ink-500">Pilih jenis kasur di bawah. Anda bisa menambah kamar dari tipe lain dalam satu pemesanan.</p>
+                                    <button type="button" @click="{{ $kePilihKasur }}" class="wt-btn-primary mt-4 h-12 w-full text-xs tracking-[.1em]" data-tombol-pilih-kasur>Pilih jenis kasur</button>
+                                @endunless
                             @endif
                         </div>
                     @endif
@@ -326,19 +355,18 @@
             <h2 class="m-0 font-display text-lg font-extrabold uppercase tracking-[.04em]">Tipe kamar lain</h2>
             <div class="mt-5 grid gap-4 sm:grid-cols-3">
                 @foreach ($lain as $t)
-                    @php $st = $status[$t->id] ?? null; $url = route('kamar.tipe', Str::lower($t->code)).$q; @endphp
+                    @php $st = $t->sisaTanggal; $url = route('kamar.tipe', ['kode' => Str::lower($t->code)] + $queryCari); @endphp
                     <a href="{{ $url }}" wire:key="lain-{{ $t->id }}"
                        class="group flex flex-col overflow-hidden rounded-lg border border-cream-300 bg-cream-50 text-ink-900 shadow-wt-xs transition hover:-translate-y-0.5 hover:text-ink-900 hover:no-underline hover:shadow-wt-md">
-                        <x-tamu.galeri :tipe="$t" :redup="$st && in_array($st['jenis'], ['penuh', 'tidak-muat'], true)" class="aspect-[16/10]" />
+                        <x-tamu.galeri :tipe="$t" :redup="$st === 0" class="aspect-[16/10]" />
                         <div class="flex flex-1 flex-col gap-1.5 p-4">
                             <span class="font-display text-[15px] font-bold uppercase tracking-[.04em]">{{ $t->name }}</span>
-                            <span class="text-xs text-ink-500">Maks. {{ $t->max_capacity }} orang{{ $t->kasur ? ' · '.implode(' atau ', $t->kasur) : '' }}</span>
+                            <span class="text-xs text-ink-500">Maks. {{ \App\Models\RoomType::teksBatas($t->kapasitas) }}{{ $t->kasur ? ' · '.implode(' atau ', $t->kasur) : '' }}</span>
                             <div class="mt-auto flex items-center justify-between gap-2 pt-2">
                                 <span class="text-sm"><span class="font-display font-bold tabular-nums text-clay-600">{{ $rp($t->base_price) }}</span><span class="text-xs text-ink-500"> / malam</span></span>
-                                @if ($st)
-                                    <span @class(['whitespace-nowrap text-xs font-semibold',
-                                        'text-status-dirty' => $st['jenis'] === 'penuh', 'text-status-available' => $st['jenis'] === 'tersedia', 'text-[#8A5A0B]' => in_array($st['jenis'], ['kurang', 'sebagian'], true), 'text-ink-500' => $st['jenis'] === 'tidak-muat'])>
-                                        {{ ['penuh' => 'Penuh', 'tersedia' => 'Tersedia', 'kurang' => 'Sisa '.$st['sisa'].' kamar', 'sebagian' => 'Muat '.$st['muat'].' kamar', 'tidak-muat' => 'Tidak muat'][$st['jenis']] }}
+                                @if ($st !== null)
+                                    <span @class(['whitespace-nowrap text-xs font-semibold', 'text-status-dirty' => $st === 0, 'text-status-available' => $st > 0])>
+                                        {{ $st === 0 ? 'Penuh' : 'Tersedia' }}
                                     </span>
                                 @endif
                             </div>
@@ -349,37 +377,24 @@
         </section>
     @endif
 
-    {{-- Bilah pemesanan menempel di bawah layar ponsel --}}
-    <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_28px_-14px_rgba(62,42,28,.35)] lg:hidden">
-        <div class="flex items-center gap-3">
-            <div class="min-w-0 flex-1 leading-tight">
-                @if ($bisaPesan)
-                    <div x-show="!berubah && !gagal">
-                        <div class="font-display text-lg font-extrabold tabular-nums">{{ $rp($ini['total']) }}</div>
-                        <div class="text-xs text-ink-500">{{ $ini['dipesan'] }} kamar · {{ $cari->malam() }} malam · DP {{ $rp($dp) }}</div>
-                    </div>
-                @elseif ($tidakMuat)
-                    <div x-show="!berubah && !gagal" class="text-sm font-semibold text-ink-900">Maks. {{ $tipe->max_capacity }} orang per kamar</div>
-                @elseif ($ini)
-                    <div x-show="!berubah && !gagal" class="text-sm font-semibold text-status-dirty">Penuh untuk tanggal ini</div>
-                @endif
-                <div @if ($bisaPesan) x-show="berubah || gagal" x-cloak wire:key="bilah-ulang" @else wire:key="bilah-awal" @endif>
-                    @unless ($ini && ! $bisaPesan)
-                        <div class="text-[11px] uppercase tracking-[.12em] text-ink-500">Mulai dari</div>
-                        <div class="text-sm"><span class="font-display text-base font-extrabold tabular-nums text-clay-600">{{ $rp($tipe->base_price) }}</span> <span class="text-xs text-ink-500">/ malam</span></div>
-                    @endunless
+    @if ($adaPilihan)
+        @include('livewire.tamu.partials.bar-pilihan', ['r' => $ringkasan, 'urlKamar' => $urlKamar])
+    @else
+        {{-- Belum ada pilihan: bilah ringkas di bawah layar ponsel --}}
+        <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_28px_-14px_rgba(62,42,28,.35)] lg:hidden">
+            <div class="flex items-center gap-3">
+                <div class="min-w-0 flex-1 leading-tight">
+                    <div class="text-[11px] uppercase tracking-[.12em] text-ink-500">{{ $penuh ? 'Penuh untuk tanggal ini' : 'Mulai dari' }}</div>
+                    <div class="text-sm"><span class="font-display text-base font-extrabold tabular-nums text-clay-600">{{ $rp($tipe->base_price) }}</span> <span class="text-xs text-ink-500">/ malam</span></div>
                 </div>
+                @if ($sisaTipe === null || $penuh)
+                    <button type="button" @click="{{ $keTanggal }}" class="h-12 flex-none rounded border-0 bg-brown-800 px-5 font-display text-xs font-semibold uppercase tracking-[.1em] text-cream-50">{{ $penuh ? 'Ubah tanggal' : 'Cek tanggal' }}</button>
+                @else
+                    <button type="button" @click="{{ $kePilihKasur }}" class="wt-btn-primary h-12 flex-none px-5 text-xs tracking-[.08em]">Pilih kasur</button>
+                @endif
             </div>
-            @if ($bisaPesan)
-                <a x-show="!berubah && !gagal" href="{{ $urlPesan }}" class="wt-btn-primary h-12 flex-none px-6 text-xs tracking-[.1em]">{{ $labelPesan === 'Pesan Sekarang' ? 'Pesan' : $labelPesan }}</a>
-            @endif
-            <button type="button" @if ($bisaPesan) x-show="berubah || gagal" x-cloak wire:key="tombol-ulang" @else wire:key="tombol-awal" @endif
-                    @click.stop="document.getElementById('pesan').scrollIntoView({ behavior: 'smooth', block: 'start' }); {{ $tidakMuat ? 'buka = true' : '' }}"
-                    class="h-12 flex-none rounded border-0 bg-brown-800 px-5 font-display text-xs font-semibold uppercase tracking-[.1em] text-cream-50">
-                {{ $tidakMuat ? 'Ubah tamu' : ($ini && $ini['jenis'] === 'penuh' ? 'Ubah tanggal' : 'Cek tanggal') }}
-            </button>
         </div>
-    </div>
+    @endif
 
     @include('livewire.tamu.skrip-cari-kamar')
 </div>

@@ -3,7 +3,7 @@
     <div class="pointer-events-none absolute inset-x-0 top-1/2 -z-10 -translate-y-1/2 select-none text-center font-display text-[42vw] font-extrabold leading-none tracking-[-.04em] text-[rgba(181,113,74,.06)] sm:text-[300px] lg:text-[380px]" aria-hidden="true">{{ $kode }}</div>
 
     <div @class(['wt-container flex flex-col items-center justify-center py-20 text-center sm:py-28',
-                 'min-h-[calc(100vh-64px)]' => $polos ?? false, 'min-h-[calc(100vh-72px-220px)]' => ! ($polos ?? false)])>
+                 'min-h-[calc(100dvh-64px)]' => $polos ?? false, 'min-h-[calc(100dvh-72px-220px)]' => ! ($polos ?? false)])>
         <div class="flex items-center gap-3 font-display text-[11px] font-semibold uppercase tracking-[.32em] text-clay-500">
             <span class="h-px w-8 bg-clay-500/50"></span>Error {{ $kode }}<span class="h-px w-8 bg-clay-500/50"></span>
         </div>

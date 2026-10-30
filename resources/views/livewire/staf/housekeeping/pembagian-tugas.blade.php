@@ -22,7 +22,7 @@
                         <span class="font-display font-extrabold tabular-nums">{{ $t->room->room_number }}</span>
                         <span class="text-ink-500">{{ $t->namaStaf() ?: 'Tanpa staf' }}</span>
                         <span class="text-[11px] text-ink-500">· tugas {{ $t->task_date->translatedFormat('j M') }}, dimulai {{ $t->started_at?->translatedFormat('j M H.i') ?? '—' }}</span>
-                        <span class="wt-lencana {{ $gayaStatus['in_progress'] }}">{{ $t->room->status->label() }}</span>
+                        <span class="wt-lencana wt-st-lencana" style="{{ $t->room->status->gaya() }}">{{ $t->room->status->label() }}</span>
                     </li>
                 @endforeach
             </ul>

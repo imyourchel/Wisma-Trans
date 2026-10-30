@@ -33,12 +33,22 @@
             @if (! $tanggalValid)
                 <p class="m-0 mt-3 text-[13px] text-ink-500">Pilih tanggal check-in dan check-out yang benar untuk melihat kamar kosong.</p>
             @else
+                @if ($jenisKasur->count() > 1)
+                    <div class="mt-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="Saring jenis kasur" data-saring-kasur>
+                        <span class="mr-1 text-[12px] text-ink-500">Jenis kasur:</span>
+                        @foreach (['' => 'Semua'] + $jenisKasur->mapWithKeys(fn ($b) => [$b => \App\Models\Room::labelKasur($b)])->all() as $v => $l)
+                            <button type="button" wire:click="$set('saringKasur', '{{ $v }}')" aria-pressed="{{ $saringKasur === $v ? 'true' : 'false' }}"
+                                    @class(['h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors',
+                                        'border-brown-800 bg-brown-800 text-cream-50' => $saringKasur === $v, 'border-cream-300 bg-cream-50 text-ink-500 hover:text-ink-900' => $saringKasur !== $v])>{{ $l }}</button>
+                        @endforeach
+                    </div>
+                @endif
                 <div class="mt-3 flex flex-col gap-4">
                     @foreach ($tipe as $t)
                         @php $kamarTipe = $perTipe->get($t->id, collect()); @endphp
                         <div wire:key="tipe-{{ $t->id }}">
                             <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
-                                <span class="font-semibold">{{ $t->name }} <span class="font-normal text-ink-500">· {{ $rp($t->base_price) }}/malam · maks {{ $t->max_capacity }} orang</span></span>
+                                <span class="font-semibold">{{ $t->name }} <span class="font-normal text-ink-500">· {{ $rp($t->base_price) }}/malam · hingga {{ \App\Models\RoomType::teksBatas($t->kapasitasTerbesar()) }}</span></span>
                                 <span class="text-[12px] text-ink-500">{{ $sisa[$t->id] ?? 0 }} kamar bisa dijual</span>
                             </div>
                             @if ($kamarTipe->isEmpty())
@@ -47,16 +57,53 @@
                                 <div class="flex flex-wrap gap-2">
                                     @foreach ($kamarTipe as $k)
                                         @php $siap = $k->status === 'available'; @endphp
-                                        <label wire:key="kmr-{{ $k->id }}" class="relative flex h-11 min-w-[74px] cursor-pointer items-center justify-center gap-1.5 rounded border border-cream-300 bg-cream-50 px-3 text-[13px] font-semibold tabular-nums transition hover:border-brown-800 has-[:checked]:border-brown-800 has-[:checked]:bg-brown-800 has-[:checked]:text-cream-50"
-                                               title="{{ RoomStatus::from($k->status)->label() }}">
+                                        <label wire:key="kmr-{{ $k->id }}" class="group relative flex min-h-11 min-w-[96px] cursor-pointer flex-col items-center justify-center rounded border border-cream-300 bg-cream-50 px-3 py-1.5 text-[13px] font-semibold tabular-nums transition hover:border-brown-800 has-[:checked]:border-brown-800 has-[:checked]:bg-brown-800 has-[:checked]:text-cream-50"
+                                               title="{{ RoomStatus::from($k->status)->label() }} · {{ \App\Models\Room::labelKasur($k->bed_type) }}" data-kasur="{{ $k->bed_type }}">
                                             <input type="checkbox" wire:model.live="kamar" value="{{ $k->id }}" class="sr-only">
-                                            <span class="h-2 w-2 rounded-full" style="background: {{ RoomStatus::from($k->status)->color() }}"></span>{{ $k->room_number }}
+                                            <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full" style="background: {{ RoomStatus::from($k->status)->color() }}"></span>{{ $k->room_number }}</span>
+                                            <span class="text-[10px] font-medium leading-tight text-ink-500 group-has-[:checked]:text-sand-300">{{ \App\Models\Room::labelKasur($k->bed_type) }}</span>
                                         </label>
                                     @endforeach
                                 </div>
                             @endif
                         </div>
                     @endforeach
+                </div>
+            @endif
+
+            {{-- Jumlah tamu per kamar terpilih: hanya untuk memeriksa kapasitas kasur, tidak disimpan --}}
+            @if ($dipilih->isNotEmpty())
+                <div class="mt-5 border-t border-cream-300 pt-4" data-tamu-kamar>
+                    <span class="text-[13px] font-semibold">Jumlah tamu per kamar <span class="font-normal text-ink-500">(untuk cek kapasitas, tidak disimpan)</span></span>
+                    <div class="mt-2 flex flex-col gap-2.5">
+                        @foreach ($dipilih as $k)
+                            <div wire:key="tamu-{{ $k->id }}" class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
+                                <span class="min-w-[220px]"><span class="font-semibold">Kamar {{ $k->room_number }} · {{ \App\Models\Room::labelKasur($k->bed_type) }}</span>
+                                    <span class="block text-xs text-ink-500">maks {{ $tipe[$k->room_type_id]->teksKapasitas($k->bed_type) }}</span></span>
+                                <label class="flex items-center gap-1.5">Dewasa <input type="number" min="0" max="10" inputmode="numeric" wire:model.live.debounce.300ms="tamuKamar.{{ $k->id }}.dewasa" class="wt-input h-9 w-16"></label>
+                                <label class="flex items-center gap-1.5">Anak <span class="text-xs text-ink-500">(&lt; 8 th)</span> <input type="number" min="0" max="10" inputmode="numeric" wire:model.live.debounce.300ms="tamuKamar.{{ $k->id }}.anak" class="wt-input h-9 w-16"></label>
+                                @if ($peringatanKapasitas[$k->id])
+                                    <span class="basis-full rounded bg-[rgba(212,81,74,.1)] px-2.5 py-1.5 text-xs font-medium text-status-dirty" role="status" data-peringatan-kapasitas>{{ $peringatanKapasitas[$k->id] }}</span>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            {{-- Tambahan per kamar terpilih: aturan sama dengan pemesanan online (Sarapan tambahan hanya bersama Extra bed) --}}
+            @if ($layananTambahan['extra'] && $dipilih->isNotEmpty())
+                <div class="mt-5 border-t border-cream-300 pt-4" data-bagian-tambahan>
+                    <div class="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
+                        <span class="text-[13px] font-semibold">Tambahan <span class="font-normal text-ink-500">(opsional)</span></span>
+                        @error('tambahan')<span class="text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror
+                    </div>
+                    <div class="grid gap-3 lg:grid-cols-2">
+                        @foreach ($dipilih as $k)
+                            <x-tambahan-kamar :kunci="$k->id" :judul="'Kamar '.$k->room_number.' · '.$tipe[$k->room_type_id]->name.' · '.\App\Models\Room::labelKasur($k->bed_type)" :tipe="$tipe[$k->room_type_id]"
+                                              :pilih="$pilihan[$k->id]" :kasur="$k->bed_type" :layanan="$layananTambahan" :subjudul="'maks '.$tipe[$k->room_type_id]->teksKapasitas($k->bed_type)" wire:key="tambahan-{{ $k->id }}" />
+                        @endforeach
+                    </div>
                 </div>
             @endif
         </section>
@@ -93,6 +140,11 @@
                 <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
                     @foreach ($dipilih as $k)
                         <li class="flex justify-between gap-3"><span>Kamar {{ $k->room_number }} · {{ $tipe[$k->room_type_id]->code }}</span><span class="tabular-nums">{{ $rp((float) $tipe[$k->room_type_id]->base_price * $malam) }}</span></li>
+                        @foreach ($rincianTambahan[$k->id] ?? [] as $t)
+                            <li class="flex justify-between gap-3 pl-3 text-ink-500" data-ringkasan-tambahan>
+                                <span>{{ $t['teks'] }}</span><span class="tabular-nums">{{ $rp($t['subtotal']) }}</span>
+                            </li>
+                        @endforeach
                     @endforeach
                 </ul>
                 <div class="mt-3 flex items-baseline justify-between border-t border-cream-300 pt-3">

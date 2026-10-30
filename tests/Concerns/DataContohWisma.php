@@ -67,10 +67,10 @@ trait DataContohWisma
         ]);
 
         DB::table('room_types')->insert([
-            ['id' => 1, 'code' => 'STD', 'name' => 'Standard Room', 'description' => 'Kamar standar dengan satu tempat tidur ganda atau dua tempat tidur tunggal', 'base_price' => 360000, 'max_capacity' => 2, 'photos' => '["std-1.jpg","std-2.jpg"]'],
-            ['id' => 2, 'code' => 'DLX', 'name' => 'Deluxe Room', 'description' => 'Kamar lebih luas dengan pemanas air', 'base_price' => 460000, 'max_capacity' => 2, 'photos' => '["dlx-1.jpg","dlx-2.jpg","dlx-3.jpg"]'],
-            ['id' => 3, 'code' => 'FAM', 'name' => 'Family Room', 'description' => 'Kamar keluarga untuk empat orang', 'base_price' => 550000, 'max_capacity' => 4, 'photos' => '["fam-1.jpg","fam-2.jpg"]'],
-            ['id' => 4, 'code' => 'VIP', 'name' => 'VIP Room / Suite', 'description' => 'Suite dengan ruang duduk terpisah', 'base_price' => 650000, 'max_capacity' => 2, 'photos' => '["vip-1.jpg","vip-2.jpg"]'],
+            ['id' => 1, 'code' => 'STD', 'name' => 'Standard Room', 'description' => 'Kamar nyaman dan bersih untuk istirahat setelah perjalanan dinas atau liburan singkat. Pilihan tepat dengan harga terbaik.', 'base_price' => 360000, 'max_capacity' => 2, 'photos' => '["std-1.jpg","std-2.jpg"]'],
+            ['id' => 2, 'code' => 'DLX', 'name' => 'Deluxe Room', 'description' => 'Kamar lebih lapang dengan sentuhan kayu hangat dan pencahayaan lembut. Cocok untuk menginap lebih lama dengan lebih leluasa.', 'base_price' => 460000, 'max_capacity' => 2, 'photos' => '["dlx-1.jpg","dlx-2.jpg","dlx-3.jpg"]'],
+            ['id' => 3, 'code' => 'FAM', 'name' => 'Family Room', 'description' => 'Kamar luas untuk keluarga atau rombongan kecil, dengan pilihan kasur yang fleksibel. Semua bisa beristirahat dengan nyaman di satu kamar.', 'base_price' => 550000, 'max_capacity' => 4, 'photos' => '["fam-1.jpg","fam-2.jpg"]'],
+            ['id' => 4, 'code' => 'VIP', 'name' => 'VIP Room / Suite', 'description' => 'Suite paling lapang dengan King Bed dan ruang duduk terpisah. Pengalaman menginap terbaik di Wisma Trans.', 'base_price' => 650000, 'max_capacity' => 2, 'photos' => '["vip-1.jpg","vip-2.jpg"]'],
         ]);
         foreach ([1 => [1, 2, 3, 4], 2 => [1, 2, 3, 4, 5], 3 => [1, 2, 3, 4, 5], 4 => [1, 2, 3, 4, 5]] as $tipe => $fasilitas) {
             foreach ($fasilitas as $f) {
@@ -92,9 +92,10 @@ trait DataContohWisma
         $nomor = [...range(101, 116), ...range(201, 216)];
         foreach ($nomor as $i => $n) {
             [$tipe, $kasur] = match (true) {
-                $n <= 110 => [1, 'twin'],
-                $n <= 209 => [2, 'double'],
-                $n <= 214 => [3, 'king'],
+                // Jenis kasur sama dengan ta_3: Standard tiga jenis, Deluxe dua, Family tiga, VIP king
+                $n <= 110 => [1, [2 => 'twin_single', 0 => 'double', 1 => 'queen'][$n % 3]],
+                $n <= 209 => [2, $n % 2 ? 'twin_double' : 'king'],
+                $n <= 214 => [3, [210 => 'king', 213 => 'king', 211 => 'twin_queen', 214 => 'twin_queen', 212 => 'triple_single'][$n]],
                 default => [4, 'king'],
             };
             [$status, $kotor] = $keadaan[(string) $n] ?? ['available', null];

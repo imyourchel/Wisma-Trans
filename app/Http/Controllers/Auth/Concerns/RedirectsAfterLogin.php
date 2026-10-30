@@ -13,7 +13,7 @@ trait RedirectsAfterLogin
     private static string $kunciKembali = 'kembali_tamu';
 
     /** Halaman yang tidak dituju lagi: halaman masuk/daftar itu sendiri dan alur Google. */
-    private static array $bukanTujuan = ['masuk', 'daftar', 'auth', 'keluar', 'lupa-sandi', 'atur-ulang-sandi'];
+    private static array $bukanTujuan = ['login', 'register', 'masuk', 'daftar', 'auth', 'keluar', 'lupa-sandi', 'atur-ulang-sandi'];
 
     /**
      * Simpan alamat halaman asal dari isian/parameter "kembali". Hanya jalur di situs ini yang diterima

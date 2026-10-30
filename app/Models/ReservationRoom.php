@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -58,6 +59,13 @@ class ReservationRoom extends Model
         return $this->belongsTo(self::class, 'moved_from_id');
     }
 
+    /** Extra bed dan Sarapan tambahan kamar ini (App\Services\Reservasi\TambahanKamar); null bila tidak ada. */
+    public function tambahan(): HasOne
+    {
+        return $this->hasOne(ServiceOrder::class)->withoutGlobalScope(ServiceOrder::LINGKUP_LAYANAN)
+            ->whereNotNull('service_start_date')->where('status', '!=', 'cancelled');
+    }
+
     public function malam(): int
     {
         return (int) $this->check_in_date->diffInDays($this->check_out_date);
@@ -73,6 +81,26 @@ class ReservationRoom extends Model
             $masuk->isSameYear($keluar) => $masuk->translatedFormat('j M').' – '.$keluar->translatedFormat('j M Y'),
             default => $masuk->translatedFormat('j M Y').' – '.$keluar->translatedFormat('j M Y'),
         };
+    }
+
+    /** "Kamar 102 · Double Bed" bila nomor kamar sudah ada, selain itu nama tipe ("Deluxe Room"). Dipakai nota dan folio. */
+    public function labelKamar(): string
+    {
+        return $this->room ? 'Kamar '.$this->room->room_number.' · '.$this->room->bedTypeLabel() : (string) $this->roomType?->name;
+    }
+
+    /** "Kamar 102 · Standard Room · Double Bed", atau nama tipe bila nomor kamar belum ditetapkan. Untuk staf dan notifikasi. */
+    public function labelLengkap(): string
+    {
+        return $this->room
+            ? 'Kamar '.$this->room->room_number.' · '.$this->roomType?->name.' · '.$this->room->bedTypeLabel()
+            : (string) $this->roomType?->name;
+    }
+
+    /** Jenis kasur yang dijamin untuk baris ini (dari kamar yang ditetapkan), atau null. */
+    public function kasur(): ?string
+    {
+        return $this->room?->bed_type;
     }
 
     /** "6–8 Okt 2026 (RSV-0008)", untuk pesan penolakan dan peringatan. */

@@ -171,9 +171,13 @@ class Nota extends Component
     public function kirimUlang(NotifikasiReservasi $notifikasi): void
     {
         Gate::authorize('record-payment');
-        $kanal = $notifikasi->kirimNota($this->terpilih());
-        $this->dispatch('toast', teks: $kanal === [] ? 'Pelanggan tidak punya WhatsApp atau email yang bisa dihubungi.' : 'Nota dikirim lewat '.implode(' dan ', array_map(fn ($k) => $k === 'whatsapp' ? 'WhatsApp' : 'email', $kanal)).'.',
-            peringatan: $kanal === []);
+        $n = $this->terpilih();
+        $hasil = $notifikasi->kirimNota($n);
+        $gagal = $hasil['kanal'] === [];
+        $this->dispatch('toast', teks: $gagal
+            ? ($n->institution_id ? 'Instansi dan narahubungnya tidak punya WhatsApp atau email yang bisa dihubungi.' : 'Pelanggan tidak punya WhatsApp atau email yang bisa dihubungi.')
+            : 'Nota dikirim ke '.$hasil['tujuan'].'.',
+            peringatan: $gagal);
     }
 
     public function simpanDiskon(KoreksiNota $koreksi): void

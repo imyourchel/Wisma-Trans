@@ -4,17 +4,19 @@ namespace Tests\Feature;
 
 use App\Livewire\Tamu\DaftarKamar;
 use App\Livewire\Tamu\DetailKamar;
+use App\Models\RoomType;
 use App\Services\Kamar\KetersediaanKamar;
 use App\Support\PencarianInap;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\Concerns\DataContohWisma;
 use Tests\TestCase;
 
 /**
- * Halaman Kamar untuk tamu: daftar tipe, detail, dan cek ketersediaan.
+ * Halaman Kamar untuk tamu: daftar tipe dengan baris per jenis kasur, detail, cek ketersediaan, dan isi otomatis termurah.
  * Data contoh: STD 10 kamar, DLX 15, FAM 5, VIP 2; hari ini 6 Okt 2026.
  */
 class HalamanKamarTamuTest extends TestCase
@@ -84,37 +86,64 @@ class HalamanKamarTamuTest extends TestCase
         $this->assertSame(1, $this->sisa('VIP', '2026-10-06', '2026-10-07'));
     }
 
-    public function test_DK01_tanpa_tanggal_tampil_harga_mulai_dari_urut_termurah(): void
+    public function test_DK01_tanpa_tanggal_tampil_harga_dan_stepper_nonaktif_urut_termurah(): void
     {
         Livewire::test(DaftarKamar::class)
-            ->assertViewHas('status', [])
             ->assertViewHas('tipe', fn ($t) => $t->pluck('code')->all() === ['STD', 'DLX', 'FAM', 'VIP'])
-            ->assertSee('Mulai dari')
+            ->assertSee('Pilih tanggal dulu')
             ->assertSee('Rp360.000')
-            ->assertSee('Maks. 4 orang')
-            ->assertDontSee('Tersedia');
+            ->assertSee('Maks. 4 dewasa + 2 anak')->assertSee('Maks. 2 dewasa + 1 anak')->assertSee('Mulai dari')
+            ->assertDontSee('Sisa ')->assertDontSee('data-isi-otomatis', false);
     }
 
-    public function test_DK02_setelah_cek_tampil_tersedia_kurang_dan_penuh(): void
+    public function test_DK02_setelah_cek_tampil_sisa_per_jenis_kasur_dan_tipe_habis_paling_bawah(): void
     {
         $this->pesanan('VIP', '2026-10-06', '2026-10-09', 2);
         $this->pesanan('FAM', '2026-10-06', '2026-10-09', 4);
         $this->pesanan('DLX', '2026-10-07', '2026-10-08', 13);
 
-        Livewire::test(DaftarKamar::class)
+        $lw = Livewire::test(DaftarKamar::class)
             ->call('cek', '2026-10-06', '2026-10-09', '2-0_2-0')
-            ->assertSet('masuk', '2026-10-06')
-            ->assertViewHas('status', fn ($s) => $s[$this->tipe('STD')->id]['jenis'] === 'tersedia'
-                && $s[$this->tipe('DLX')->id] === ['jenis' => 'tersedia', 'sisa' => 2, 'muat' => 2, 'dipesan' => 2, 'kamarDipesan' => [0, 1], 'total' => 2760000.0]
-                && $s[$this->tipe('FAM')->id]['jenis'] === 'kurang' && $s[$this->tipe('FAM')->id]['dipesan'] === 1
-                && $s[$this->tipe('VIP')->id]['jenis'] === 'penuh')
-            ->assertSee('Rp2.760.000')
-            ->assertSee('untuk 2 kamar · 3 malam')
-            ->assertSee('Tersisa 2 kamar')
-            ->assertSee('Hanya tersedia 1 kamar untuk tanggal ini')
-            ->assertSee('Pesan 1 kamar')
-            ->assertSee('Penuh untuk tanggal ini')
+            ->assertSet('masuk', '2026-10-06')->assertSet('tamu', '2-0_2-0')
+            ->assertViewHas('tipe', fn ($t) => $t->pluck('code')->all() === ['STD', 'DLX', 'FAM', 'VIP'] && $t->last()->habis)
+            // Sisa per jenis kasur di kolom kanan kartu: FAM tinggal 1 (ditonjolkan), VIP habis dan tombolnya Penuh
+            ->assertSee('Tinggal 1 kamar!')->assertSee('data-sisa-kasur="0"', false)->assertSee('data-tipe-penuh', false)
+            ->assertSee('Paling hemat')->assertSee('Terbaik kami')
             ->assertDontSee('Semua kamar penuh');
+        // Sisa tipe dibagi bersama antar jenis kasurnya: FAM tinggal 1 kamar untuk ketiga kasur
+        $fam = collect($lw->viewData('tipe'))->firstWhere('code', 'FAM')->barisKasur;
+        $this->assertSame([1, 1, 1], array_column($fam, 'maks'));
+        $lw->call('aturKamar', 'FAM', 'king', 1)->call('aturKamar', 'FAM', 'twin_queen', 1)->assertSet('pilih', 'FAM.king:1');
+        $this->assertSame([1, 0, 0], array_column(collect($lw->viewData('tipe'))->firstWhere('code', 'FAM')->barisKasur, 'maks'));
+    }
+
+    public function test_DK06_ketentuan_dari_pengaturan_dan_detail_menampilkan_deskripsi_keunggulan(): void
+    {
+        Livewire::test(DaftarKamar::class)
+            ->assertSee('Kamar nyaman dan bersih untuk istirahat setelah perjalanan dinas atau liburan singkat. Pilihan tepat dengan harga terbaik.')
+            ->assertSeeInOrder(['Standard Room', 'Sarapan 2 orang', 'Air panas', 'Kulkas mini', 'Family Room', 'Sarapan hingga 4 orang', '3 pilihan kasur', 'Kulkas mini'])
+            ->assertSee('Harga per kamar per malam, termasuk pajak &amp; sarapan', false)->assertDontSee('data-pita-info', false)->assertDontSee('data-poin-kamar', false)
+            ->assertSee('Uang muka 50% dibayar online')->assertSee('Check-in mulai 14.00 WITA, check-out paling lambat 12.00 WITA')
+            ->assertSee('Pilih tanggal untuk cek ketersediaan')->assertDontSee('data-sisa-kamar', false);
+
+        // Tipe tanpa entri keunggulan tidak menampilkan barisnya
+        $this->assertSame([], RoomType::make(['code' => 'SUP'])->keunggulan());
+
+        // Persentase uang muka dan jam mengikuti pengaturan
+        DB::table('settings')->insert([
+            ['setting_key' => 'dp_min_percent', 'value' => '30', 'type' => 'integer', 'description' => 'Uang muka minimum'],
+            ['setting_key' => 'check_in_time', 'value' => '13:00', 'type' => 'time', 'description' => 'Jam check-in'],
+            ['setting_key' => 'check_out_time', 'value' => '11:00', 'type' => 'time', 'description' => 'Jam check-out'],
+        ]);
+        Cache::forget('settings.all');
+        Livewire::test(DaftarKamar::class)->assertSee('Uang muka 30% dibayar online')->assertSee('Check-in mulai 13.00 WITA, check-out paling lambat 11.00 WITA')
+            ->assertDontSee('Uang muka 50%');
+
+        // Halaman detail: deskripsi lengkap dan keunggulan
+        Livewire::test(DetailKamar::class, ['kode' => 'fam'])
+            ->assertSee('Kamar luas untuk keluarga atau rombongan kecil, dengan pilihan kasur yang fleksibel. Semua bisa beristirahat dengan nyaman di satu kamar.')
+            ->assertSeeInOrder(['Family Room', 'Sarapan hingga 4 orang', '3 pilihan kasur', 'Kulkas mini'])
+            ->assertSee('data-keunggulan', false);
     }
 
     public function test_DK03_semua_penuh_menampilkan_pesan_dan_whatsapp(): void
@@ -134,7 +163,7 @@ class HalamanKamarTamuTest extends TestCase
     {
         Livewire::test(DaftarKamar::class)
             ->call('cek', '2026-10-09', '2026-10-06', '')
-            ->assertViewHas('status', [])
+            ->assertViewHas('ringkasan', fn ($r) => $r['aktif'] === false)
             ->assertSee('Tanggal check-out harus setelah check-in.')
             ->call('cek', '2026-10-01', '2026-10-03', '')
             ->assertSee('Tanggal check-in tidak boleh sebelum hari ini.')
@@ -142,36 +171,33 @@ class HalamanKamarTamuTest extends TestCase
             ->assertSee('Maksimal 30 malam per pemesanan.');
     }
 
-    public function test_DK05_pencarian_dari_beranda_membawa_susunan_tamu(): void
+    public function test_DK05_pencarian_dari_beranda_membawa_jumlah_tamu(): void
     {
+        // Tautan lama dengan susunan per kamar dijumlahkan
         $this->get('/kamar?masuk=2026-10-06&keluar=2026-10-08&tamu=2-0_1-1')
             ->assertOk()
-            ->assertSee('2 malam · 2 kamar · 3 dewasa, 1 anak')
-            ->assertSee('Rp1.440.000'); // STD 360.000 × 2 malam × 2 kamar
+            ->assertSee('2 kamar · 3 dewasa · 1 anak')->assertSee('2 malam');
+        $this->get('/kamar?masuk=2026-10-06&keluar=2026-10-08&tamu=4-2')->assertOk()->assertSee('4 dewasa · 2 anak');
+        $this->assertSame(['dewasa' => 2, 'anak' => 0], PencarianInap::total('rusak'));
+        $this->assertSame(['dewasa' => 40, 'anak' => 0], PencarianInap::total('40-9'));
     }
 
-    public function test_DK06_tautan_pesan_membawa_tanggal_dan_susunan_tamu(): void
+    public function test_DK06_tautan_detail_membawa_tanggal_tamu_dan_pilihan(): void
     {
-        $this->pesanan('FAM', '2026-10-06', '2026-10-09', 4);
-
-        // FAM tinggal 1 kamar: tautan pesan hanya membawa kamar pertama (2 dewasa = susunan bawaan)
         Livewire::test(DaftarKamar::class, ['masuk' => '2026-10-06', 'keluar' => '2026-10-09', 'tamu' => '2-0_1-1_2-0'])
-            ->assertSeeHtml(e(route('kamar.pesan', 'std').'?masuk=2026-10-06&keluar=2026-10-09&tamu=2-0_1-1_2-0'))
-            ->assertSeeHtml(e(route('kamar.pesan', 'fam').'?masuk=2026-10-06&keluar=2026-10-09').'"')
-            ->assertSeeHtml(e(route('kamar.tipe', 'dlx').'?masuk=2026-10-06&keluar=2026-10-09&tamu=2-0_1-1_2-0'));
+            ->call('aturKamar', 'STD', 'double', 1)
+            ->assertSeeHtml(e(route('kamar.tipe', ['kode' => 'dlx', 'masuk' => '2026-10-06', 'keluar' => '2026-10-09', 'tamu' => '2-0_1-1_2-0', 'pilih' => 'STD.double:1'])));
     }
 
-    public function test_DT01_detail_menampilkan_ringkasan_harga_dan_uang_muka(): void
+    public function test_DT01_detail_pilih_kasur_mengisi_bar_ringkasan(): void
     {
-        Livewire::test(DetailKamar::class, ['kode' => 'dlx', 'masuk' => '2026-10-06', 'keluar' => '2026-10-09', 'tamu' => '2-0_2-0'])
-            ->assertSee('Deluxe Room × 2 kamar × 3 malam')
-            ->assertSee('Rp2.760.000')
-            ->assertSee('Uang muka 50%')
-            ->assertSee('Rp1.380.000')
-            ->assertSee('Sisa dibayar saat check-in')
-            ->assertSee('Pesan Sekarang')
-            ->assertSee('Belum dikenakan biaya. Pembayaran di langkah berikutnya.')
+        $d = Livewire::test(DetailKamar::class, ['kode' => 'dlx', 'masuk' => '2026-10-06', 'keluar' => '2026-10-09', 'tamu' => '2-0_2-0'])
+            ->assertSee('Tersedia untuk 3 malam')->assertDontSee('Sisa 15 kamar')->assertDontSee('data-bar-pilihan', false)
+            ->call('pilihKasur', 'DLX', 'twin_double')->call('pilihKasur', 'DLX', 'king')
+            ->assertSee('Deluxe · Twin Double × 1')->assertSee('Deluxe · King Bed × 1')
+            ->assertSee('Rp2.760.000')->assertSee('Lihat kamar lain')
             ->assertSee('Check-in mulai 14.00 WITA');
+        $this->assertStringContainsString('kasur=twin_double%2Cking', $d->viewData('ringkasan')['urlLanjut']);
     }
 
     public function test_DT02_detail_penuh_menyarankan_tipe_lain_yang_tersedia(): void
@@ -180,76 +206,53 @@ class HalamanKamarTamuTest extends TestCase
         $this->pesanan('FAM', '2026-10-06', '2026-10-09', 5);
 
         Livewire::test(DetailKamar::class, ['kode' => 'VIP', 'masuk' => '2026-10-06', 'keluar' => '2026-10-09'])
-            ->assertSee('Penuh untuk tanggal ini')
-            ->assertDontSee('Pesan Sekarang')
-            ->assertViewHas('saranLain', fn ($s) => $s->pluck('code')->all() === ['STD', 'DLX'])
+            ->assertSee('Penuh untuk tanggal ini')->assertSee('Masih tersedia di tanggal yang sama:')
+            ->assertDontSee('data-tombol-pilih', false)
             ->assertViewHas('lain', fn ($l) => $l->pluck('code')->all() === ['STD', 'DLX', 'FAM']);
     }
 
-    public function test_TM01_satu_kamar_empat_orang_hanya_menampilkan_tipe_yang_muat(): void
+    public function test_TM01_isi_otomatis_memilih_kombinasi_termurah_yang_muat(): void
     {
-        // Hanya FAM berkapasitas 4; tipe lain disembunyikan (bisa ditampilkan lagi) dan FAM tampil paling atas
-        Livewire::test(DaftarKamar::class)
-            ->call('cek', '2026-10-06', '2026-10-09', '4-0')
-            ->assertViewHas('status', fn ($s) => collect($s)->where('jenis', 'tidak-muat')->count() === 3
-                && $s[$this->tipe('FAM')->id]['jenis'] === 'tersedia')
-            ->assertViewHas('tipe', fn ($t) => $t->first()->code === 'FAM')
-            ->assertViewHas('tersembunyi', 3)
-            ->assertViewHas('kombinasi', null)
-            ->assertSee('3 tipe kamar disembunyikan karena tidak muat untuk 4 orang dalam satu kamar.')
-            ->assertSee('x-show="lihatSemua"', false)
-            ->assertDontSeeHtml(e(route('kamar.pesan', 'std')));
+        // 4 dewasa: satu Family Twin Queen (550.000) lebih murah dari dua Standard (720.000)
+        $lw = Livewire::test(DaftarKamar::class)->call('cek', '2026-10-06', '2026-10-09', '4-0')->call('isiOtomatis')
+            ->assertSet('pilih', 'FAM.twin_queen:1');
+        $this->assertSame(1650000.0, $lw->viewData('ringkasan')['total']);
+        $this->assertTrue($lw->viewData('ringkasan')['status']['lengkap']);
     }
 
-    public function test_TM04_beberapa_kamar_berbeda_isi_mendapat_rekomendasi_kombinasi(): void
+    public function test_TM04_beberapa_tipe_dalam_satu_pemesanan(): void
     {
-        // Kamar 1: 2 orang, kamar 2: 3 orang. STD hanya muat kamar 1; kombinasi termurah FAM + STD
-        Livewire::test(DaftarKamar::class)
-            ->call('cek', '2026-10-06', '2026-10-09', '2-0_2-1')
-            ->assertSet('tamu', '2-0_2-1')
-            ->assertViewHas('status', fn ($s) => $s[$this->tipe('STD')->id]['jenis'] === 'sebagian'
-                && $s[$this->tipe('STD')->id]['kamarDipesan'] === [0]
-                && $s[$this->tipe('FAM')->id]['jenis'] === 'tersedia')
-            ->assertViewHas('kombinasi', fn ($k) => $k['lengkap'] && $k['total'] === 2730000.0 // (360.000 + 550.000) × 3 malam
-                && collect($k['kamar'])->map(fn ($r) => $r['tipe']->code)->all() === ['STD', 'FAM'])
-            ->assertSee('Rekomendasi untuk 2 kamar')
-            ->assertSee('1 Standard Room + 1 Family Room')
-            ->assertSee('Rp2.730.000')
-            ->assertSee('Muat untuk 1 dari 2 kamar')
-            ->assertSee('Kamar 2 (3 orang) butuh tipe berkapasitas lebih besar.')
-            ->assertSeeHtml(e(route('kamar.pesan', 'std').'?masuk=2026-10-06&keluar=2026-10-09').'"')
-            ->assertSeeHtml(e(route('kamar.pesan', 'fam').'?masuk=2026-10-06&keluar=2026-10-09&tamu=2-0_2-1'));
+        // 4 dewasa 1 anak (2-0 dan 2-1): Standard muat 2 dewasa + 1 anak, jadi termurah 2 Standard, 360.000 × 2 × 3 malam
+        $lw = Livewire::test(DaftarKamar::class)->call('cek', '2026-10-06', '2026-10-09', '2-0_2-1')->assertSet('tamu', '2-0_2-1')->call('isiOtomatis');
+        $r = $lw->viewData('ringkasan');
+        $this->assertSame(2160000.0, $r['total']);
+        $this->assertSame(['STD'], collect($r['kamar'])->map(fn ($k) => $k['tipe']->code)->unique()->sort()->values()->all());
+        $this->assertTrue($r['status']['lengkap']);
+        $this->assertNotNull($r['urlLanjut']);
+        $lw->assertSee('Rp2.160.000');
     }
 
-    public function test_TM05_rombongan_tersebar_ke_beberapa_tipe_dan_kamar_kurang(): void
+    public function test_TM05_kamar_tidak_cukup_untuk_rombongan(): void
     {
-        // 9 kamar berisi 2 orang: STD cukup (10 kamar, kamar 103 sedang diperbaiki jadi tidak dijual);
-        // setelah STD tinggal 2 kamar, sisanya ke DLX (termurah berikutnya)
-        $dua = implode('_', array_fill(0, 9, '2-0'));
-        Livewire::test(DaftarKamar::class, ['masuk' => '2026-10-06', 'keluar' => '2026-10-07', 'tamu' => $dua])
-            ->assertViewHas('kombinasi', fn ($k) => $k === null)
-            ->assertSee('Memesan 9 kamar untuk rombongan atau instansi?');
-
-        $this->pesanan('STD', '2026-10-06', '2026-10-07', 7);
-        Livewire::test(DaftarKamar::class, ['masuk' => '2026-10-06', 'keluar' => '2026-10-07', 'tamu' => $dua])
-            ->assertViewHas('kombinasi', fn ($k) => $k['lengkap'] && collect($k['kelompok'])->map(fn ($g) => $g['tipe']->code.':'.$g['jumlah'])->all() === ['STD:2', 'DLX:7'])
-            ->assertSee('2 Standard Room + 7 Deluxe Room');
-
-        // Empat orang per kamar untuk 7 kamar: FAM hanya 5 kamar
-        $empat = implode('_', array_fill(0, 7, '4-0'));
-        Livewire::test(DaftarKamar::class, ['masuk' => '2026-10-06', 'keluar' => '2026-10-07', 'tamu' => $empat])
-            ->assertViewHas('kombinasi', fn ($k) => ! $k['lengkap'] && $k['kurang'] === 2)
-            ->assertSee('Kamar yang tersedia belum cukup untuk 7 kamar.')
-            ->assertSee('Paling banyak 5 kamar bisa dipesan untuk susunan tamu ini.')
-            ->assertSee('Ajukan pemesanan rombongan');
+        foreach (['STD' => 10, 'DLX' => 15, 'VIP' => 2] as $tipe => $n) {
+            $this->pesanan($tipe, '2026-10-06', '2026-10-07', $n);
+        }
+        // Tinggal 5 kamar Family (paling banyak 15 dewasa)
+        Livewire::test(DaftarKamar::class, ['masuk' => '2026-10-06', 'keluar' => '2026-10-07', 'tamu' => '20-0'])
+            ->call('isiOtomatis')->assertSet('pilih', '')
+            ->assertDispatched('toast', teks: 'Kamar yang tersedia belum cukup untuk 20 dewasa. Coba tanggal lain atau ajukan pemesanan rombongan.')
+            ->assertSee('Ajukan pemesanan instansi');
     }
 
-    public function test_TM02_detail_tidak_muat_menyarankan_tipe_yang_muat(): void
+    public function test_TM02_tamu_melebihi_kamar_terpilih_ditandai_di_rincian(): void
     {
-        Livewire::test(DetailKamar::class, ['kode' => 'std', 'masuk' => '2026-10-06', 'keluar' => '2026-10-09', 'tamu' => '4-0'])
-            ->assertSee('Standard Room tidak muat untuk 4 orang dalam satu kamar.')
-            ->assertDontSee('Pesan Sekarang')
-            ->assertViewHas('saranLain', fn ($s) => $s->pluck('code')->all() === ['FAM']);
+        // 2 kamar × 2 dewasa: satu Standard belum cukup
+        $d = Livewire::test(DetailKamar::class, ['kode' => 'std', 'masuk' => '2026-10-06', 'keluar' => '2026-10-09', 'tamu' => '2-0_2-0'])
+            ->call('pilihKasur', 'STD', 'double')
+            ->assertSee('Masih ada 2 dewasa tanpa kamar. Silakan tambah kamar.');
+        $this->assertNull($d->viewData('ringkasan')['urlLanjut']);
+        $d->call('pilihKasur', 'STD', 'twin_single');
+        $this->assertNotNull($d->viewData('ringkasan')['urlLanjut']);
     }
 
     public function test_TM03_susunan_tamu_dirapikan(): void
@@ -258,7 +261,7 @@ class HalamanKamarTamuTest extends TestCase
         $this->assertSame([['dewasa' => 1, 'anak' => 0], ['dewasa' => 10, 'anak' => 0]], PencarianInap::susunan('0-0_12-5'));
         $this->assertCount(PencarianInap::MAKS_KAMAR, PencarianInap::susunan(implode('_', array_fill(0, 15, '1-0'))));
 
-        // Susunan bawaan tidak ditulis ke URL
+        // Jumlah tamu bawaan (2 dewasa) tidak ditulis ke URL
         Livewire::test(DaftarKamar::class)->call('cek', '2026-10-06', '2026-10-09', '2-0')->assertSet('tamu', '');
     }
 

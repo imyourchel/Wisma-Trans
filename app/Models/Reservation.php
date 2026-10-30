@@ -19,6 +19,12 @@ use Illuminate\Support\Collection;
  */
 class Reservation extends Model implements BayarOnline
 {
+    /** Awalan catatan log pembuatan yang berisi pembagian tamu per kamar (reservasi online). */
+    public const AWALAN_PEMBAGIAN = 'Pembagian tamu: ';
+
+    /** Pilihan kebutuhan di formulir pengajuan instansi; masing-masing satu baris di catatan, ditampilkan sebagai lencana. */
+    public const KEBUTUHAN_INSTANSI = ['Butuh aula', 'Butuh konsumsi', 'Butuh laundry', 'Kamar berdekatan', 'Pisah kamar laki-laki/perempuan'];
+
     public const STATUS = [
         'pending_payment' => 'Menunggu uang muka',
         'waiting_approval' => 'Menunggu persetujuan',
@@ -155,13 +161,52 @@ class Reservation extends Model implements BayarOnline
     /** Tautan Laundry yang langsung mencocokkan kode kamar. */
     public function urlPesanLaundry(): string
     {
-        return route('laundry', ['t' => $this->access_token]);
+        return route('laundry.pesan', ['t' => $this->access_token]);
     }
 
     /** Alamat cek pesanan yang dikirim lewat WhatsApp dan email (berisi token akses). */
     public function urlStatus(): string
     {
         return route('reservasi.status', ['kode' => $this->reservation_code, 't' => $this->access_token]);
+    }
+
+    /**
+     * Jumlah peserta pengajuan instansi. Tanpa kolom baru: disimpan sebagai baris pertama special_request
+     * ("Jumlah peserta: 10 orang"), sebelum "Instansi: …" dan catatan tamu.
+     */
+    public function pesertaInstansi(): ?int
+    {
+        return preg_match('/^Jumlah peserta: (\d+) orang$/m', (string) $this->special_request, $m) ? (int) $m[1] : null;
+    }
+
+    /**
+     * Catatan tamu tanpa baris jumlah peserta (ditampilkan terpisah). $tanpaInstansi: buang juga "Instansi: …" (nama tulisan
+     * pemohon) bila tampilan sudah menyebut instansinya sendiri.
+     */
+    public function catatanTamu(bool $tanpaInstansi = true): string
+    {
+        $pola = $tanpaInstansi ? '/^(Jumlah peserta: \d+ orang|Instansi: .+)\R?/m' : '/^Jumlah peserta: \d+ orang\R?/m';
+
+        return trim((string) preg_replace($pola, '', (string) $this->special_request));
+    }
+
+    /** Nama instansi yang ditulis pemohon di situs ("Instansi: …" di catatan), bila belum tertaut saat diajukan. */
+    public function instansiTulis(): ?string
+    {
+        return preg_match('/^Instansi: (.+)$/m', (string) $this->special_request, $m) ? trim($m[1]) : null;
+    }
+
+    /**
+     * Catatan tamu dipilah: baris pilihan kebutuhan (KEBUTUHAN_INSTANSI) menjadi lencana, sisanya teks bebas.
+     *
+     * @return array{kebutuhan: list<string>, teks: string}
+     */
+    public function catatanTerpilah(): array
+    {
+        $baris = collect(preg_split('/\R/', $this->catatanTamu()))->map(fn ($b) => trim($b))->filter();
+        [$kebutuhan, $teks] = $baris->partition(fn ($b) => in_array($b, self::KEBUTUHAN_INSTANSI, true));
+
+        return ['kebutuhan' => $kebutuhan->unique()->values()->all(), 'teks' => $teks->join("\n")];
     }
 
     /**
@@ -238,5 +283,32 @@ class Reservation extends Model implements BayarOnline
         return (float) Payment::whereIn('invoice_id', $this->invoices()->select('id'))
             ->where('payment_purpose', 'down_payment')->where('transaction_type', 'payment')->where('status', 'success')
             ->sum('amount');
+    }
+
+    /** Teks pembagian tamu tanpa awalan ("Kamar 1 Family Room · King Bed: 2 dewasa 2 anak; ..."), untuk staf. */
+    public function catatanPembagian(): ?string
+    {
+        $catatan = $this->relationLoaded('logs')
+            ? $this->logs->first(fn ($l) => str_starts_with((string) $l->note, self::AWALAN_PEMBAGIAN))?->note
+            : $this->logs()->where('note', 'like', self::AWALAN_PEMBAGIAN.'%')->value('note');
+
+        return $catatan ? substr($catatan, strlen(self::AWALAN_PEMBAGIAN)) : null;
+    }
+
+    /**
+     * Pembagian tamu per kamar, urut baris kamar ("2 dewasa · 2 anak"), dari catatan log pembuatan reservasi online
+     * ("Pembagian tamu: Kamar 1 Family Room · King Bed: 2 dewasa 2 anak; ..."). Kosong bila tidak tercatat.
+     *
+     * @return list<string>
+     */
+    public function pembagianTamu(): array
+    {
+        $catatan = $this->catatanPembagian();
+        if (! $catatan) {
+            return [];
+        }
+        preg_match_all('/Kamar \d+ [^:;]+: (\d+) dewasa(?: (\d+) anak)?/u', $catatan, $m, PREG_SET_ORDER);
+
+        return array_map(fn ($x) => $x[1].' dewasa'.(! empty($x[2]) ? ' · '.$x[2].' anak' : ''), $m);
     }
 }

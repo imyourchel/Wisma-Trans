@@ -208,10 +208,21 @@ class DaftarReservasi extends Component
         $r = $this->selectedId ? $this->terpilih() : null;
         $bolehKelola = Gate::allows('manage-reservations');
         $kamarPindah = collect();
+        $kasurPindah = null;
+        $kurangPindah = [];
         if ($r && $this->aksi === 'pindah' && $this->barisId) {
             $b = $r->rooms->firstWhere('id', $this->barisId);
+            // Kamar dengan tipe dan jenis kasur yang sama didahulukan
+            $kasurPindah = $b->room?->bed_type;
             $kamarPindah = app(KetersediaanKamar::class)->kamarBebas(today(), CarbonImmutable::parse($b->check_out_date), null, $r->id)
-                ->where('status', 'available');
+                ->where('status', 'available')
+                ->sortBy(fn ($k) => [$k->room_type_id === $b->room_type_id ? 0 : 1, $k->bed_type === $kasurPindah ? 0 : 1, strlen($k->room_number), $k->room_number])->values();
+            // Kamar tujuan yang menampung lebih sedikit tamu daripada kasur pesanan (tipe bisa berbeda)
+            if ($kasurPindah) {
+                $tipePindah = RoomType::whereIn('id', $kamarPindah->pluck('room_type_id')->unique())->get()->keyBy('id');
+                $pesanan = $b->roomType->kapasitasKasur($kasurPindah);
+                $kurangPindah = $kamarPindah->mapWithKeys(fn ($k) => [$k->id => $tipePindah[$k->room_type_id]->kurangDari($k->bed_type, $pesanan)])->all();
+            }
         }
 
         return view('livewire.staf.reservasi.daftar-reservasi', [
@@ -222,6 +233,8 @@ class DaftarReservasi extends Component
             'bolehBatal' => $r && in_array($r->status, ['pending_payment', 'waiting_approval', 'confirmed'], true) && ! $r->rooms->contains('status', 'checked_in'),
             'pengembalian' => $r ? $layanan->pengembalian($r) : 0,
             'kamarPindah' => $kamarPindah,
+            'kasurPindah' => $kasurPindah,
+            'kurangPindah' => $kurangPindah,
             // Kartu profil CRM: segmen, kunjungan ke-berapa, dan rekomendasi (bila minimal 2 kunjungan)
             'profilPemesan' => $r && $r->customer && ProfilPelanggan::pribadi($r) ? [
                 'profil' => $p = app(ProfilPelanggan::class)->untuk($r->customer),

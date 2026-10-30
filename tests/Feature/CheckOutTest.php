@@ -249,7 +249,7 @@ class CheckOutTest extends TestCase
         $nota = $r->stayInvoice;
         $this->assertSame('checked_out', $r->status);
         $this->assertSame('2026-10-07', $r->rooms->first()->check_out_date->toDateString());
-        $this->assertSame(['Kamar 106, 1 malam'], $nota->items()->where('item_type', 'room')->pluck('description')->all());
+        $this->assertSame(['Kamar 106 · Queen Bed, 1 malam'], $nota->items()->where('item_type', 'room')->pluck('description')->all());
         $this->assertSame(360000.0, (float) $nota->total_amount);
 
         $layar->set('metode', 'cash')->call('kembalikan', 'stay')->assertHasNoErrors();

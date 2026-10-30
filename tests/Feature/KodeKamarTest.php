@@ -43,6 +43,9 @@ class KodeKamarTest extends TestCase
 
     private const SARAN = 'Sudah punya akun?';
 
+    /** Judul pop-up x-tawaran-akun (Resto, Laundry, Aula). */
+    private const POPUP = 'Pesan lebih praktis dengan akun Anda';
+
     private const AJAKAN = 'Ingin memantau pesanan ini dari akun?';
 
     private Service $nasi;
@@ -284,7 +287,7 @@ class KodeKamarTest extends TestCase
     public function test_04_aula_tanpa_kode_kamar_dan_tetap_bisa_diajukan_tanpa_login(): void
     {
         Hall::create(['name' => 'Aula Utama', 'capacity' => 150, 'description' => 'Aula serbaguna', 'is_active' => true]);
-        $this->get(route('aula'))->assertOk()->assertDontSee('Kode kamar')->assertDontSee('kodeKamar')
+        $this->get(route('aula.ajukan'))->assertOk()->assertDontSee('Kode kamar')->assertDontSee('kodeKamar')
             ->assertDontSee('Tagihkan ke kamar')->assertDontSee('Nomor kamar');
 
         Livewire::test(SewaAula::class)->set('tanggal', '2026-10-17')->set('jamMulai', '08:00')->set('jamSelesai', '12:00')
@@ -301,19 +304,20 @@ class KodeKamarTest extends TestCase
         $kamar = fn () => Livewire::withQueryParams(['masuk' => '2026-10-10', 'keluar' => '2026-10-13', 'tamu' => '2-0'])->test(PesanKamar::class, ['kode' => 'dlx']);
 
         $kamar()->assertSee(self::SARAN);
-        $this->get(route('menu'))->assertOk()->assertSee(self::SARAN)->assertSee('data pemesan terisi otomatis dan pesanan tersimpan di Pesanan saya')
-            ->assertSee('kamar Anda langsung tampil tanpa kode kamar dan pesanan tersimpan di Pesanan saya');
-        Livewire::test(PesanLaundry::class)->assertSee(self::SARAN)->assertSee('kamar Anda langsung tampil tanpa kode kamar')
-            ->set('jenis', 'luar')->assertSee(self::SARAN)->assertSee('status laundry tampil di Pesanan saya');
-        $this->get(route('aula'))->assertOk()->assertSee(self::SARAN);
+        // Resto, Laundry, Aula: pop-up x-tawaran-akun berisi daftar manfaat akun
+        $this->get(route('menu'))->assertOk()->assertSee(self::POPUP)->assertSee('Data pemesan terisi otomatis')
+            ->assertSee('Masuk dengan akun yang dipakai saat memesan kamar, tanpa kode kamar.');
+        Livewire::test(PesanLaundry::class)->assertSee(self::POPUP)->assertSee('Kamar Anda tampil otomatis, tanpa perlu memasukkan kode kamar.')
+            ->set('jenis', 'luar')->assertSee(self::POPUP)->assertSee('Status laundry terpantau');
+        $this->get(route('aula.ajukan'))->assertOk()->assertSee(self::POPUP);
         $this->get(route('instansi'))->assertOk()->assertSee(self::SARAN);
 
         // Sudah masuk: tidak ditawari
         $this->actingAs($this->akun('customer'));
         $kamar()->assertDontSee(self::SARAN);
-        $this->get(route('menu'))->assertOk()->assertDontSee(self::SARAN);
-        Livewire::test(PesanLaundry::class)->assertDontSee(self::SARAN)->set('jenis', 'luar')->assertDontSee(self::SARAN);
-        $this->get(route('aula'))->assertOk()->assertDontSee(self::SARAN);
+        $this->get(route('menu'))->assertOk()->assertDontSee(self::POPUP);
+        Livewire::test(PesanLaundry::class)->assertDontSee(self::POPUP)->set('jenis', 'luar')->assertDontSee(self::POPUP);
+        $this->get(route('aula.ajukan'))->assertOk()->assertDontSee(self::POPUP);
         $this->get(route('instansi'))->assertOk()->assertDontSee(self::SARAN);
     }
 
@@ -355,7 +359,7 @@ class KodeKamarTest extends TestCase
             ->assertSee('DDDD-5555')->assertDontSee('EEEE-6666')->assertDontSee('FFFF-7777')
             ->assertSee('Kode kamar Wisma Trans: ', false)->assertSee("'Makanan: '", false)->assertSee("' · Laundry: '", false)
             ->assertSee('navigator.share', false)->assertSee('https://wa.me/?text=', false)->assertSee('Kode kamar disalin', false)
-            ->assertSee(e(route('menu', ['t' => 'LK7Q2M9X'])), false)->assertSee(e(route('laundry', ['t' => 'LK7Q2M9X'])), false);
+            ->assertSee(e(route('menu', ['t' => 'LK7Q2M9X'])), false)->assertSee(e(route('laundry.pesan', ['t' => 'LK7Q2M9X'])), false);
 
         // Halaman reservasi: label Kode kamar, Salin/Bagikan, Pesan makanan dan laundry saat menginap
         auth()->logout();
@@ -380,7 +384,7 @@ class KodeKamarTest extends TestCase
         $r->refresh();
         Http::assertSent(fn (Request $q) => (string) $q['message'] === 'Selamat datang di Wisma Trans. Kamar Anda: 104. '
             .'Pesan makanan dan laundry ke kamar dengan kode kamar '.$r->kodeKamar().'. '
-            .'Makanan: '.route('menu', ['t' => $r->access_token]).' · Laundry: '.route('laundry', ['t' => $r->access_token]));
+            .'Makanan: '.route('menu', ['t' => $r->access_token]).' · Laundry: '.route('laundry.pesan', ['t' => $r->access_token]));
     }
 
     public function test_07b_gagal_kirim_whatsapp_tidak_membatalkan_check_in(): void

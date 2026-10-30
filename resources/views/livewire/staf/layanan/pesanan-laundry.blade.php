@@ -48,7 +48,7 @@
     </div>
 
     <div class="mb-4 flex flex-wrap items-center gap-3">
-        <div class="inline-flex rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Saring laundry">
+        <div class="wt-geser inline-flex max-w-full rounded-lg border border-cream-300 bg-cream-50 p-0.5" role="tablist" aria-label="Saring laundry">
             @foreach (['aktif' => 'Aktif', 'selesai' => 'Selesai', 'batal' => 'Dibatalkan'] as $v => $l)
                 <button type="button" wire:click="$set('tab', '{{ $v }}')" role="tab" aria-selected="{{ $tab === $v ? 'true' : 'false' }}"
                         @class(['h-8 rounded-md border-0 px-3.5 text-[13px] font-semibold transition-colors',
@@ -64,7 +64,7 @@
             <div class="flex items-center gap-2">
                 <label class="block">
                     <span class="sr-only">Tanggal masuk</span>
-                    <input type="date" wire:model.live="tanggal" max="{{ today()->toDateString() }}" class="wt-input w-[170px]" aria-label="Tanggal masuk cucian" title="Tanggal cucian diterima">
+                    <input type="date" wire:model.live="tanggal" max="{{ today()->toDateString() }}" class="wt-input w-full sm:w-[170px]" aria-label="Tanggal masuk cucian" title="Tanggal cucian diterima">
                 </label>
                 @if ($tanggalDipilih)
                     <button type="button" wire:click="$set('tanggal', '')" class="h-10 whitespace-nowrap rounded border border-cream-300 bg-cream-50 px-3 text-[12px] font-semibold text-brown-800 hover:bg-cream-200">Semua tanggal</button>
@@ -81,10 +81,10 @@
 
     @if ($tab === 'aktif')
         {{-- Papan per tahap: cucian bergerak dari kiri ke kanan --}}
-        <div class="grid gap-4 lg:grid-cols-3">
+        <div class="wt-geser -mx-4 flex gap-4 px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
             @foreach ($ringkasan->except('delivered') as $s => [$l, $ket, $warna])
                 @php $kolom = $daftar->where('status', $s); @endphp
-                <section wire:key="kolom-{{ $s }}" class="flex min-h-[220px] flex-col rounded-md border border-cream-300 bg-cream-150/60 lg:min-h-[calc(100vh-400px)]" aria-label="{{ $l }}">
+                <section wire:key="kolom-{{ $s }}" class="flex min-h-[220px] w-[min(86%,360px)] flex-col max-lg:scroll-ml-4 lg:w-auto rounded-md border border-cream-300 bg-cream-150/60 lg:min-h-[calc(100dvh-400px)]" aria-label="{{ $l }}">
                     <header class="flex items-center gap-2.5 border-b border-cream-300 px-4 py-3">
                         <span class="h-2.5 w-2.5 rounded-full" style="background-color: {{ $warna }}"></span>
                         <h2 class="m-0 flex-1 font-display text-[12px] font-bold uppercase tracking-[.08em]">{{ $l }}</h2>
@@ -124,19 +124,19 @@
         </div>
     @else
     <div class="wt-card overflow-x-auto shadow-wt-xs">
-        <table class="w-full min-w-[860px] border-collapse">
+        <table class="wt-tabel-kartu w-full min-w-[860px] border-collapse">
             <thead><tr><th class="wt-th">Kode</th><th class="wt-th">Tamu</th><th class="wt-th">Masuk</th><th class="wt-th">Berat</th><th class="wt-th">Tahap</th><th class="wt-th">Pembayaran</th><th class="wt-th text-right">Tagihan</th></tr></thead>
             <tbody>
                 @forelse ($daftar as $x)
                     @php $item = $x->items->first(); @endphp
                     <tr wire:key="ldr-{{ $x->id }}" wire:click="open({{ $x->id }})" class="cursor-pointer hover:bg-row-hover">
-                        <td class="wt-td font-semibold tabular-nums">{{ $x->order_code }}</td>
-                        <td class="wt-td"><div class="font-semibold">{{ $siapa($x) }}</div><div class="text-[11px] text-ink-500">{{ $x->customer?->full_name }}</div></td>
-                        <td class="wt-td whitespace-nowrap">{{ $x->order_date->translatedFormat('j M, H.i') }}</td>
-                        <td class="wt-td text-[12px]">{{ $x->status === 'pending' ? 'belum ditimbang' : $item?->note }}</td>
-                        <td class="wt-td"><span class="wt-lencana {{ $tahap[$x->status][1] }}">{{ $tahap[$x->status][0] }}</span></td>
-                        <td class="wt-td text-[12px]">{{ $bayarLabel($x) }}</td>
-                        <td class="wt-td text-right tabular-nums">{{ $x->status === 'pending' ? '—' : $rp($item?->subtotal) }}</td>
+                        <td class="wt-kartu-judul wt-td font-semibold tabular-nums">{{ $x->order_code }}</td>
+                        <td class="wt-td" data-label="Tamu"><div class="font-semibold">{{ $siapa($x) }}</div><div class="text-[11px] text-ink-500">{{ $x->customer?->full_name }}</div></td>
+                        <td class="wt-td whitespace-nowrap" data-label="Masuk">{{ $x->order_date->translatedFormat('j M, H.i') }}</td>
+                        <td class="wt-td text-[12px]" data-label="Berat">{{ $x->status === 'pending' ? 'belum ditimbang' : $item?->note }}</td>
+                        <td class="wt-td" data-label="Tahap"><span class="wt-lencana {{ $tahap[$x->status][1] }}">{{ $tahap[$x->status][0] }}</span></td>
+                        <td class="wt-td text-[12px]" data-label="Pembayaran">{{ $bayarLabel($x) }}</td>
+                        <td class="wt-td text-right tabular-nums" data-label="Tagihan">{{ $x->status === 'pending' ? '—' : $rp($item?->subtotal) }}</td>
                     </tr>
                 @empty
                     <tr><td colspan="7" class="wt-td py-16 text-center text-sm text-ink-500">@if ($tanggalDipilih)
@@ -153,15 +153,15 @@
     {{-- Detail pesanan --}}
     @if ($o)
         @php $item = $o->items->first(); $lunas = $o->invoice?->payments->firstWhere('status', 'success'); @endphp
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="ldr-judul" class="relative flex max-h-[92vh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="ldr-judul" class="wt-dialog relative flex max-h-[92dvh] w-[560px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="ldr-judul" class="flex flex-wrap items-center gap-2.5"><span class="font-display text-[17px] font-extrabold uppercase tracking-[.04em]">{{ $o->order_code }}</span><span class="wt-lencana {{ $tahap[$o->status][1] }}">{{ $tahap[$o->status][0] }}</span></div>
                         <div class="mt-1 text-[13px] text-ink-500">{{ $siapa($o) }} · {{ $o->customer?->full_name }} · {{ $o->customer?->phone }}</div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
                 <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                     <dl class="m-0 grid grid-cols-2 gap-x-6 gap-y-3 text-[13px]">
@@ -216,15 +216,15 @@
 
     {{-- Terima laundry langsung di resepsionis atau dari kamar --}}
     @if ($formTerima)
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.set('formTerima', false)">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.set('formTerima', false)">
             <div wire:click="$set('formTerima', false)" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <form wire:submit="terima" role="dialog" aria-modal="true" aria-labelledby="terima-judul" novalidate class="relative flex max-h-[92vh] w-[520px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <form wire:submit="terima" role="dialog" aria-modal="true" aria-labelledby="terima-judul" novalidate class="wt-dialog relative flex max-h-[92dvh] w-[520px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div id="terima-judul" class="flex-1 font-display text-[17px] font-extrabold uppercase tracking-[.04em]">Terima laundry</div>
-                    <button type="button" wire:click="$set('formTerima', false)" class="flex h-8 w-8 items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
+                    <button type="button" wire:click="$set('formTerima', false)" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup"><x-staf.ikon nama="tutup" ukuran="16" /></button>
                 </div>
                 <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
-                    <div class="inline-flex self-start rounded-lg border border-cream-300 bg-cream-50 p-0.5">
+                    <div class="wt-geser inline-flex max-w-full self-start rounded-lg border border-cream-300 bg-cream-50 p-0.5">
                         @foreach (['kamar' => 'Tamu menginap', 'luar' => 'Tamu luar'] as $v => $l)
                             <button type="button" wire:click="$set('jenisBaru', '{{ $v }}')" @class(['h-8 rounded-md border-0 px-3.5 text-[13px] font-semibold', 'bg-brown-800 text-cream-50' => $jenisBaru === $v, 'bg-transparent text-ink-500' => $jenisBaru !== $v])>{{ $l }}</button>
                         @endforeach

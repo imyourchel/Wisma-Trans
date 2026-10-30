@@ -18,7 +18,8 @@
 
     window.wtGabung = (...bagian) => Object.defineProperties({}, Object.assign({}, ...bagian.map((b) => Object.getOwnPropertyDescriptors(b))));
 
-    window.wtRentangInap = ({ hariIni, masuk = null, keluar = null, maksMalam = 30 }) => {
+    // maksMalam: 30 untuk reservasi umum (ReservasiService::MAKS_MALAM); pengajuan instansi memberi batasnya sendiri dan pesanMaks
+    window.wtRentangInap = ({ hariIni, masuk = null, keluar = null, maksMalam = 30, pesanMaks = null }) => {
         const T = window.wtTanggal;
         const awal = masuk && masuk >= hariIni ? masuk : hariIni;
         return {
@@ -100,7 +101,7 @@
                     return;
                 }
                 if (T.selisih(this.masuk, iso) > maksMalam) {
-                    Alpine.store('toasts').tampil('Maksimal ' + maksMalam + ' malam per pemesanan. Hubungi kami untuk menginap lebih lama.', '#E8AC45');
+                    Alpine.store('toasts').tampil(pesanMaks ?? 'Maksimal ' + maksMalam + ' malam per pemesanan. Hubungi kami untuk menginap lebih lama.', '#E8AC45');
                     return;
                 }
                 this.keluar = iso;

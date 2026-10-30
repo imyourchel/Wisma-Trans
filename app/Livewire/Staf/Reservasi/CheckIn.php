@@ -2,9 +2,10 @@
 
 namespace App\Livewire\Staf\Reservasi;
 
+use App\Enums\RoomStatus;
 use App\Models\Reservation;
+use App\Models\Room;
 use App\Models\RoomType;
-use App\Models\Setting;
 use App\Services\Kamar\KetersediaanKamar;
 use App\Services\Notifikasi\NotifikasiReservasi;
 use App\Services\Pelanggan\ProfilPelanggan;
@@ -23,6 +24,7 @@ use Throwable;
 /**
  * Check-in: reservasi terkonfirmasi yang tiba hari ini (dan yang terlambat datang tetapi belum lewat tanggal keluar).
  * FO menetapkan nomor kamar yang berstatus Siap dan mencatat KTP yang ditahan. Manager hanya melihat.
+ * Sebelum jam check-in (mulai early_check_in_from) tamu yang tiba hari ini bisa early check-in: hanya kamar Siap yang ditawarkan.
  * Reservasi instansi hanya bisa check-in setelah kode bukti (token akses reservasi) yang disebutkan tamu diverifikasi.
  */
 class CheckIn extends Component
@@ -133,7 +135,7 @@ class CheckIn extends Component
     public function open(int $id): void
     {
         Gate::authorize('manage-reservations');
-        $r = Reservation::with('rooms', 'customer')->where('status', 'confirmed')->findOrFail($id);
+        $r = Reservation::with('rooms.room', 'customer')->where('status', 'confirmed')->findOrFail($id);
         if ($r->instansi() && $this->buktiUntuk !== $r->id) {
             $this->tujuVerifikasi($r);
 
@@ -141,9 +143,18 @@ class CheckIn extends Component
         }
         $this->resetValidation();
         $this->selectedId = $r->id;
-        $this->penempatan = $r->rooms->where('status', 'booked')->mapWithKeys(fn ($b) => [$b->id => (string) ($b->room_id ?? '')])->all();
+        // Early check-in: kamar yang ditetapkan tetapi belum Siap dikosongkan supaya FO memilih kamar yang Siap
+        $early = self::early($r);
+        $this->penempatan = $r->rooms->where('status', 'booked')
+            ->mapWithKeys(fn ($b) => [$b->id => $early && $b->room?->status !== RoomStatus::Available ? '' : (string) ($b->room_id ?? '')])->all();
         $this->ktpDitahan = true;
         $this->namaKtp = (string) $r->customer?->full_name;
+    }
+
+    /** Tamu tiba hari ini sebelum jam check-in normal, dalam masa early check-in. */
+    private static function early(Reservation $r): bool
+    {
+        return ReservasiService::masaCheckIn() === 'early' && (bool) $r->masuk()?->isSameDay(today());
     }
 
     public function close(): void
@@ -178,7 +189,7 @@ class CheckIn extends Component
     {
         $kata = trim($this->cari);
         $daftar = Reservation::query()
-            ->with(['customer', 'institution', 'request', 'rooms.roomType', 'rooms.room', 'stayInvoice'])
+            ->with(['customer', 'institution', 'request', 'rooms.roomType', 'rooms.room', 'stayInvoice', 'logs'])
             ->menungguCheckIn()
             ->when($kata !== '', fn ($q) => $q->where(fn ($q) => $q->where('reservation_code', 'like', "%{$kata}%")
                 ->orWhereHas('customer', fn ($c) => $c->where('full_name', 'like', "%{$kata}%"))))
@@ -188,20 +199,40 @@ class CheckIn extends Component
         $r = $this->selectedId ? Reservation::with('rooms.roomType', 'rooms.room', 'customer')->find($this->selectedId) : null;
         $pilihanKamar = [];
         $usulan = [];
+        $kasurKamar = [];
+        $mauKasur = [];
+        $kurangMuat = [];
+        $early = $r && self::early($r);
         if ($r) {
             // Kamar favorit pelanggan (CRM) hanya diusulkan, FO tetap memilih sendiri
             $favorit = $r->customer ? app(ProfilPelanggan::class)->untuk($r->customer)['kamar']['favorit'] : null;
             // Kamar siap yang tidak dipakai reservasi lain, per tipe; kamar yang sudah ditetapkan tetap ditawarkan
             foreach ($r->rooms->where('status', 'booked') as $b) {
-                $bebas = $ketersediaan->kamarBebas($b->check_in_date, $b->check_out_date, [$b->room_type_id], $r->id);
+                // Jenis kasur pilihan tamu = jenis kasur kamar yang ditetapkan saat memesan; kamar berjenis sama didahulukan
+                $mau = $b->room?->bed_type;
+                $mauKasur[$b->id] = $mau;
+                $bebas = $ketersediaan->kamarBebas($b->check_in_date, $b->check_out_date, [$b->room_type_id], $r->id)
+                    // Early check-in hanya untuk kamar berstatus Siap; yang belum siap tidak ditawarkan
+                    ->when($early, fn ($k) => $k->where('status', 'available'))
+                    ->sortBy(fn ($k) => [$mau && $k->bed_type !== $mau ? 1 : 0, $k->status === 'available' ? 0 : 1, strlen($k->room_number), $k->room_number]);
                 $pilihanKamar[$b->id] = $bebas
-                    ->mapWithKeys(fn ($k) => [$k->id => ['label' => 'Kamar '.$k->room_number.($k->status === 'available' ? '' : ' (belum siap)'),
+                    ->mapWithKeys(fn ($k) => [$k->id => ['label' => 'Kamar '.$k->room_number.' · '.Room::labelKasur($k->bed_type).($k->status === 'available' ? '' : ' (belum siap)'),
                         'warna' => $k->status === 'available' ? '#5C9E67' : '#D4514A']])
                     ->all();
+                $kasurKamar[$b->id] = $bebas->mapWithKeys(fn ($k) => [$k->id => $k->bed_type])->all();
+                // Kamar yang menampung lebih sedikit tamu daripada kasur pesanan (RoomType::kapasitasKasur)
+                $kurangMuat[$b->id] = $mau ? $bebas->mapWithKeys(fn ($k) => [$k->id => $b->roomType->kurangDari($k->bed_type, $b->roomType->kapasitasKasur($mau))])->all() : [];
+                // Kamar yang ditetapkan belum siap: usulkan kamar siap berjenis kasur sama
+                if ($mau && $b->room->status !== RoomStatus::Available) {
+                    $sama = $bebas->first(fn ($k) => $k->status === 'available' && $k->bed_type === $mau);
+                    if ($sama) {
+                        $usulan[$b->id] = ['id' => $sama->id, 'nomor' => $sama->room_number, 'alasan' => 'siap, jenis kasur sama dengan pesanan'];
+                    }
+                }
                 // Diusulkan bila bebas, berstatus Siap, dan tipenya sama dengan yang dipesan; cukup di satu baris
                 $siap = $favorit && (int) $b->room_type_id === $favorit['tipe'] ? $bebas->firstWhere('id', $favorit['id']) : null;
                 if ($siap && $siap->status === 'available' && $usulan === []) {
-                    $usulan[$b->id] = $favorit;
+                    $usulan[$b->id] = $favorit + ['alasan' => 'kamar favorit tamu'];
                 }
             }
         }
@@ -211,8 +242,13 @@ class CheckIn extends Component
             'r' => $r,
             'pilihanKamar' => $pilihanKamar,
             'usulan' => $usulan,
+            'kasurKamar' => $kasurKamar,
+            'mauKasur' => $mauKasur,
+            'kurangMuat' => $kurangMuat,
             'bolehKelola' => Gate::allows('manage-reservations'),
-            'belumWaktunya' => now()->format('H:i') < substr((string) Setting::get('check_in_time', '14:00'), 0, 5),
+            // Banner hanya antara early_check_in_from dan check_in_time
+            'masaEarly' => ReservasiService::masaCheckIn() === 'early',
+            'early' => $early,
             'jamCheckIn' => ReservasiService::jamCheckIn(),
             'namaTipe' => RoomType::pluck('name', 'id'),
         ])->layout('components.layouts.staf', ['title' => 'Check-in']);

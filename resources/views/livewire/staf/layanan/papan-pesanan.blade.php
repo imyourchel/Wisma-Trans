@@ -41,10 +41,10 @@
         @endunless
     </div>
 
-    {{-- Kolom dapur --}}
-    <div class="grid gap-4 lg:grid-cols-3">
+    {{-- Kolom dapur. Di bawah lg kolom berjajar dan digeser horizontal di dalam wadahnya. --}}
+    <div class="wt-geser -mx-4 flex gap-4 px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
         @foreach ($kolom as $s => $daftar)
-            <section wire:key="kolom-{{ $s }}" class="flex min-h-[220px] flex-col rounded-md border border-cream-300 bg-cream-150/60 lg:min-h-[calc(100vh-420px)]" aria-label="{{ $judulKolom[$s] }}">
+            <section wire:key="kolom-{{ $s }}" class="flex min-h-[220px] w-[min(86%,360px)] flex-col max-lg:scroll-ml-4 lg:w-auto rounded-md border border-cream-300 bg-cream-150/60 lg:min-h-[calc(100dvh-420px)]" aria-label="{{ $judulKolom[$s] }}">
                 <header class="flex items-center gap-2.5 border-b border-cream-300 px-4 py-3">
                     <span class="h-2.5 w-2.5 rounded-full" style="background-color: {{ GayaPesanan::AKSEN[$s] }}"></span>
                     <h2 class="m-0 flex-1 font-display text-[12px] font-bold uppercase tracking-[.08em]">{{ $judulKolom[$s] }}</h2>

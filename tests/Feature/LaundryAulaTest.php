@@ -15,6 +15,7 @@ use App\Models\Institution;
 use App\Models\Reservation;
 use App\Models\Service;
 use App\Models\ServiceOrder;
+use App\Models\User;
 use App\Services\Keuangan\PembayaranMidtrans;
 use App\Services\Reservasi\ReservasiService;
 use Carbon\CarbonImmutable;
@@ -22,13 +23,15 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Concerns\DataContohWisma;
 use Tests\TestCase;
 
-/** Laundry (tamu menginap dan tamu luar), sewa aula, dan halaman kontak. */
+/** Laundry (tamu menginap dan tamu luar), sewa aula (F&B hanya melihat jadwal terkonfirmasi), dan halaman kontak. */
 class LaundryAulaTest extends TestCase
 {
     use DataContohWisma, RefreshDatabase;
@@ -197,7 +200,7 @@ class LaundryAulaTest extends TestCase
         $this->ajukan('2026-10-17', '18:00', '22:00');
         $b = HallBooking::sole();
 
-        Livewire::actingAs($this->akun('fnb'))->test(PemesananAula::class)
+        Livewire::actingAs($this->akun('fo'))->test(PemesananAula::class)
             ->call('open', $b->id)->call('mulai', 'harga')->set('harga', '1200000')->call('simpanHarga')->assertHasNoErrors()
             ->call('mulai', 'setuju')->assertForbidden();
         $this->assertSame(1200000.0, (float) $b->fresh()->rental_price);
@@ -238,7 +241,7 @@ class LaundryAulaTest extends TestCase
     {
         Livewire::actingAs($this->akun('customer'))->test(SewaAula::class)
             ->assertSet('nama', '')->assertSet('email', '')->assertSet('hp', '')
-            ->assertSee('Orang yang dihubungi staf soal acara')->assertSee('Bila staf perlu menghubungi lewat email');
+            ->assertSee('Nama yang akan kami hubungi')->assertSee('Untuk salinan konfirmasi');
     }
 
     public function test_A04_kalender_kontak_dan_akses(): void
@@ -250,7 +253,206 @@ class LaundryAulaTest extends TestCase
         $this->get(route('kontak'))->assertOk()->assertSee('Pertanyaan umum')
             ->assertSee('Check-in mulai pukul 14.00 WITA')->assertSee('Tanya lewat WhatsApp');
         // Jadwal pemesanan lain tidak ditampilkan ke tamu
-        $this->get(route('aula'))->assertOk()->assertSee('Sesuai kesepakatan')->assertDontSee('18.00–22.00');
+        $this->get(route('aula'))->assertOk()->assertSee('Rp1.000.000')->assertDontSee('18.00–22.00');
         $this->get(route('laundry'))->assertOk()->assertSee('Rp15.000');
+    }
+
+    public function test_A08_halaman_aula_dan_laundry_hanya_informasi_formulir_di_halaman_sendiri(): void
+    {
+        // Halaman informasi: tanpa formulir, tombol menuju halaman formulir
+        $this->get(route('aula'))->assertOk()->assertSee(route('aula.ajukan'))
+            ->assertDontSee('wire:submit="kirim"', false)->assertDontSee('Nama atau jenis acara')->assertDontSee('data-tawar-akun', false);
+        $this->get(route('laundry'))->assertOk()->assertSee(route('laundry.pesan'))->assertSee('Minimal 2 kg per pesanan')
+            ->assertDontSee('wire:submit="kirim"', false)->assertDontSee('Kode kamar');
+
+        // Halaman formulir: formulir, ringkasan singkat, dan tautan kembali ke informasi
+        $this->get(route('aula.ajukan'))->assertOk()->assertSee('wire:submit="kirim"', false)->assertSee('Nama atau jenis acara')
+            ->assertSee('data-ringkasan-aula', false)->assertSee('75+ orang · mulai Rp1.000.000 / hari')->assertSee(route('aula'))
+            ->assertDontSee('data-galeri-aula', false);
+        $this->get(route('laundry.pesan'))->assertOk()->assertSee('wire:submit="kirim"', false)->assertSee('data-ringkasan-laundry', false)
+            ->assertSee('Rp15.000/kg')->assertSee(route('laundry'));
+
+        // Tautan lama dari WhatsApp (/laundry?t=…) diteruskan ke formulir
+        $this->get(route('laundry', ['t' => 'LK7Q2M9X']))->assertRedirect(route('laundry.pesan', ['t' => 'LK7Q2M9X']));
+    }
+
+    public function test_A09_deskripsi_dari_database_dan_tiga_langkah_cara_sewa(): void
+    {
+        // Deskripsi kartu aula dibaca dari halls.description
+        $this->aula->update(['description' => 'Ruang serbaguna untuk rapat, seminar, dan acara keluarga di jantung Malili.']);
+
+        $this->get(route('aula'))->assertOk()
+            ->assertSee('Ruang serbaguna untuk rapat, seminar, dan acara keluarga di jantung Malili.')->assertDontSee('Aula serbaguna')
+            ->assertSee('data-cara-sewa', false)
+            ->assertSeeInOrder(['Cara sewa aula', '3 langkah mudah, tanpa bayar di muka',
+                'Langkah 1', 'Isi formulir', 'Pilih tanggal, jam, dan jumlah peserta. Gratis, tanpa bayar di muka.',
+                'Langkah 2', 'Kami hubungi Anda', 'Staf menghubungi lewat WhatsApp untuk membahas kebutuhan acara dan harga.',
+                'Langkah 3', 'Jadwal dikunci', 'Setelah harga disepakati, nota dan konfirmasi jadwal dikirim ke WhatsApp Anda.',
+                'Mulai ajukan sewa', 'Ada pertanyaan? Tanya via WhatsApp'])
+            ->assertSee('href="'.route('aula.ajukan').'#ajukan-aula" class="wt-btn-primary h-12 px-8 text-xs tracking-[.1em] max-sm:w-full" data-mulai-ajukan', false)
+            ->assertSee('https://wa.me/6282292224111?text=', false)
+            ->assertDontSee('Ajukan jadwal')->assertDontSee('Dihubungi staf')->assertDontSee('Jadwal terkonfirmasi');
+
+        // Formulir: "tidak ada pembayaran sekarang" cukup sekali, dan anchor #ajukan-aula ada
+        $form = $this->get(route('aula.ajukan'))->assertOk()->assertSee('id="ajukan-aula"', false)->getContent();
+        $this->assertSame(1, substr_count($form, 'Tidak ada pembayaran sekarang'));
+    }
+
+    public function test_A05_fnb_hanya_melihat_jadwal_aula_terkonfirmasi(): void
+    {
+        $this->ajukan('2026-10-17', '18:00', '22:00');
+        $menunggu = HallBooking::sole();
+        $this->ajukan('2026-10-24', '09:00', '12:00', '082199887766');
+        $jadi = HallBooking::latest('id')->first();
+        Livewire::actingAs($this->akun('manager'))->test(PemesananAula::class)
+            ->call('open', $jadi->id)->call('mulai', 'setuju')->set('harga', '1500000')->call('setujui')->assertHasNoErrors();
+
+        // F&B: bisa membuka halaman, hanya tab Terkonfirmasi dan Riwayat, tanpa nomor, harga, dan aksi
+        $this->actingAs($this->akun('fnb'))->get(route('staf.aula-pemesanan'))->assertOk();
+        $this->actingAs($this->akun('fnb'))->get(route('staf.aula-kalender'))->assertOk();
+        Livewire::actingAs($this->akun('fnb'))->test(PemesananAula::class)
+            ->assertSet('tab', 'terkonfirmasi')
+            ->assertSee('Jadwal acara yang sudah terkonfirmasi, untuk persiapan konsumsi.')->assertDontSee('Rundingkan harga')
+            ->assertDontSee('Menunggu (')->assertDontSee('Catat pemesanan')
+            ->assertSee($jadi->booking_code)->assertDontSee($menunggu->booking_code)
+            ->assertSee('Syukuran keluarga · 120 peserta')->assertSee('Abdul Rahman')
+            ->assertDontSee('Rp1.500.000')->assertDontSee('082199887766')
+            ->set('tab', 'menunggu')->assertSet('tab', 'terkonfirmasi')
+            ->call('open', $jadi->id)->assertSee('120 orang')
+            ->assertDontSee('Batalkan')->assertDontSee('Kabari penyewa (WhatsApp)')->assertDontSee('Nota PDF')->assertDontSee('Isi harga usulan')
+            ->assertDontSee('Harga sewa')->assertDontSee('082199887766')->assertDontSee('Rp1.500.000');
+
+        // Aksi ubah ditolak di server, bukan hanya disembunyikan
+        foreach ([['bukaBaru'], ['simpanBaru'], ['mulai', 'harga'], ['mulai', 'batal'], ['simpanHarga'], ['batalkan'], ['tandaiSelesai'], ['mulai', 'setuju']] as $aksi) {
+            Livewire::actingAs($this->akun('fnb'))->test(PemesananAula::class)->call('open', $jadi->id)->call(...$aksi)->assertForbidden();
+        }
+        $this->assertSame(['pending', 'confirmed'], [$menunggu->fresh()->status, $jadi->fresh()->status]);
+
+        // Pemesanan yang belum disepakati tidak bisa dibuka lewat tautan
+        $this->assertNull(Livewire::actingAs($this->akun('fnb'))->withQueryParams(['buka' => $menunggu->id])->test(PemesananAula::class)->get('selectedId'));
+
+        // Kalender: hanya terkonfirmasi dan selesai
+        Livewire::actingAs($this->akun('fnb'))->test(KalenderAula::class)
+            ->assertSee('09.00 · Syukuran keluarga')->assertDontSee('18.00 · Syukuran keluarga')->assertDontSee('Menunggu persetujuan');
+
+        // FO tetap lengkap; staf FO + F&B tetap bisa mengubah
+        Livewire::actingAs($this->akun('fo'))->test(PemesananAula::class)
+            ->assertSet('tab', 'menunggu')->assertSee('Menunggu (1)')->assertSee('Catat pemesanan')->assertSee($menunggu->booking_code)
+            ->call('open', $menunggu->id)->assertSee('081244556677')->assertSee('Isi harga usulan')->assertSee('Batalkan');
+        Livewire::actingAs($this->akun('fo'))->test(KalenderAula::class)->assertSee('18.00 · Syukuran keluarga')->assertSee('Menunggu persetujuan');
+        $foFnb = User::where('email', 'sari@wismatrans.id')->firstOrFail();
+        Livewire::actingAs($foFnb)->test(PemesananAula::class)->assertSee('Catat pemesanan')
+            ->call('bukaBaru')->assertSet('formBaru', true)
+            ->call('open', $menunggu->id)->call('mulai', 'harga')->set('harga', '900000')->call('simpanHarga')->assertHasNoErrors();
+        $this->assertSame(900000.0, (float) $menunggu->fresh()->rental_price);
+    }
+
+    public function test_A06_tarif_aula_per_hari_di_beranda_halaman_aula_dan_form_staf(): void
+    {
+        // Tanpa baris pengaturan: kisaran bawaan Rp1.000.000–Rp2.500.000
+        $this->get(route('home'))->assertOk()
+            ->assertSee('data-promo-aula', false)->assertSee('data-pengumuman-aula', false)
+            ->assertSee('Aula 75+ orang')->assertSee('Mulai dari')->assertSee('Rp1.000.000')->assertSee('/ hari · harga menyesuaikan acara')->assertDontSee('full day')
+            ->assertSee('Sound system')->assertSee('Proyektor')->assertSee('Konsumsi bisa dipesan terpisah, harganya menyesuaikan menu dan jumlah peserta.')->assertSee('Belum termasuk dekorasi')
+            ->assertDontSee('Aula 150 orang')->assertDontSee('Rp2.500.000');
+
+        $this->get(route('aula'))->assertOk()
+            ->assertSeeInOrder(['Kapasitas', '75+', 'orang', 'Rapat · Seminar · Syukuran', 'Mulai', 'Rp1.000.000', '/ hari · harga menyesuaikan acara'])
+            ->assertDontSee('Maks. 150 orang')->assertDontSee('Rp2.500.000')->assertDontSee('Full day')->assertDontSee('Bisa dipadukan dengan menginap')
+            ->assertSee('Kursi dan meja')->assertSee('Belum termasuk dekorasi')->assertSee('Konsumsi bisa dipesan terpisah, harganya menyesuaikan menu dan jumlah peserta.')
+            ->assertDontSee('meja, dan konsumsi')->assertDontSee('Sesuai kesepakatan');
+        Livewire::test(SewaAula::class)->assertSet('jamMulai', '08:00')->assertSet('jamSelesai', '17:00');
+        $this->get(route('aula.ajukan'))->assertOk()->assertSee('75+ orang · mulai Rp1.000.000 / hari')->assertDontSee('Rp2.500.000');
+
+        // Harga dibaca dari Pengaturan, bukan tertulis di tampilan
+        DB::table('settings')->insert([
+            ['setting_key' => 'hall_price_min', 'value' => '1200000', 'type' => 'decimal', 'description' => 'Harga sewa aula terendah per hari'],
+            ['setting_key' => 'hall_price_max', 'value' => '2000000', 'type' => 'decimal', 'description' => 'Harga sewa aula tertinggi per hari'],
+        ]);
+        Cache::forget('settings.all');
+        $this->get(route('home'))->assertSee('Rp1.200.000')->assertDontSee('Rp1.000.000');
+        $this->get(route('aula'))->assertSee('Rp1.200.000')->assertDontSee('Rp2.000.000');
+        $this->get(route('aula.ajukan'))->assertSee('75+ orang · mulai Rp1.200.000 / hari')->assertDontSee('Rp2.000.000');
+
+        // Staf FO melihat patokan tarif saat mengisi harga usulan
+        $this->ajukan('2026-10-17', '08:00', '17:00');
+        Livewire::actingAs($this->akun('fo'))->test(PemesananAula::class)
+            ->call('open', HallBooking::sole()->id)->call('mulai', 'harga')
+            ->assertSee('Tarif: Rp1.200.000–Rp2.000.000 per hari (full day)');
+    }
+
+    public function test_A07_semua_foto_aula_tampil_di_galeri_dan_foto_pertama_di_beranda(): void
+    {
+        // Tanpa foto unggahan: gambar gedung, tanpa galeri
+        $this->get(route('aula'))->assertOk()->assertDontSee('data-galeri-aula', false)->assertSee('ds/img/bangunan_depan.png');
+
+        Storage::fake('public');
+        $foto = ['aula/kelas.png', 'aula/teater.png', 'aula/meja_bundar.png'];
+        foreach ($foto as $p) {
+            Storage::disk('public')->put($p, 'isi');
+        }
+        $this->aula->update(['photos' => $foto]);
+
+        $this->get(route('aula'))->assertOk()->assertSee('data-galeri-aula', false)
+            ->assertSee('storage/aula/kelas.png')->assertSee('storage/aula/teater.png')->assertSee('storage/aula/meja_bundar.png')
+            ->assertSee('Foto Aula Utama 3')->assertSee('data-otomatis', false);
+        $this->get(route('home'))->assertSee('storage/aula/kelas.png')->assertDontSee('storage/aula/teater.png');
+    }
+
+    public function test_A10_label_placeholder_dan_pesan_validasi_formulir_aula(): void
+    {
+        $this->aula->update(['description' => 'Ruang serbaguna untuk rapat, seminar, dan acara keluarga di jantung Malili.']);
+
+        $this->get(route('aula.ajukan'))->assertOk()
+            ->assertSee('Isi data acara Anda. Tidak ada pembayaran sekarang. Staf kami akan menghubungi Anda lewat WhatsApp untuk membahas kebutuhan dan harga.')
+            ->assertSee('Ruang serbaguna untuk rapat, seminar, dan acara keluarga di jantung Malili.')
+            ->assertSeeInOrder(['Tanggal mulai', 'Jam mulai', 'Jam selesai', 'Acara lebih dari satu hari', 'Tanggal berakhir',
+                'Perkiraan jumlah peserta', 'Contoh: 50', 'Nama atau jenis acara', 'Contoh: Rapat kerja, syukuran, pelatihan',
+                'Nama kontak', 'Nama yang akan kami hubungi', 'Nomor WhatsApp', '08xxxxxxxxxx',
+                'Email (opsional)', 'Untuk salinan konfirmasi', 'Instansi/perusahaan (opsional)', 'Isi bila acara atas nama instansi',
+                'Catatan tambahan (opsional)', 'Contoh: Susunan kursi, konsumsi, jam coffee break, perlengkapan lain', 'Kirim pengajuan'])
+            ->assertDontSee('Tanggal acara')->assertDontSee('Acara selesai di hari lain')->assertDontSee('Nama penanggung jawab')
+            ->assertDontSee('Kebutuhan lain')->assertDontSee('Isi jadwal dan kebutuhan acara Anda');
+
+        // Pesan validasi memakai nama isian yang sama dengan label
+        Livewire::test(SewaAula::class)->set('jamMulai', '')->set('jamSelesai', '')->call('kirim')
+            ->assertSee('Tanggal mulai wajib diisi.')->assertSee('Jam mulai wajib diisi.')->assertSee('Jam selesai wajib diisi.')
+            ->assertSee('Perkiraan jumlah peserta wajib diisi.')->assertSee('Nama atau jenis acara wajib diisi.')
+            ->assertSee('Nama kontak wajib diisi.')->assertSee('Nomor WhatsApp wajib diisi.');
+        Livewire::test(SewaAula::class)->set('tanggal', '2026-10-17')->set('tanggalSelesai', '2026-10-16')->call('kirim')
+            ->assertHasErrors(['tanggalSelesai'])->assertSee('Tanggal berakhir tidak boleh sebelum tanggal mulai.');
+        $this->assertSame(0, HallBooking::count());
+    }
+
+    public function test_A11_halaman_laundry_berisi_cara_pesan_kalkulator_jenis_jam_tanya_jawab_dan_ajakan(): void
+    {
+        $halaman = $this->get(route('laundry'))->assertOk();
+
+        // Cara pesan: empat langkah berikon
+        $halaman->assertSee('data-cara-pesan', false)
+            ->assertSeeInOrder(['Cara pesan laundry', '4 langkah mudah',
+                'Langkah 1', 'Pesan', 'Isi formulir. Tamu menginap cukup pilih kamar; tamu luar isi nama dan WhatsApp.',
+                'Langkah 2', 'Serahkan cucian', 'Kami ambil ke kamar Anda, atau antar sendiri ke resepsionis.',
+                'Langkah 3', 'Ditimbang', 'Tagihan dihitung dari berat dan dikirim ke WhatsApp Anda.',
+                'Langkah 4', 'Selesai', 'Diantar ke kamar, atau diambil di resepsionis.']);
+
+        // Kalkulator: harga dari layanan laundry (Rp15.000/kg) dan berat minimal LaundryService::MIN_KG (2 kg)
+        $halaman->assertSee('data-kalkulator-laundry', false)->assertSee('Hitung perkiraan biaya')
+            ->assertSee('harga: 15000, min: 2, berat: 2', false)->assertSee('Rp30.000')
+            ->assertSee('Minimal 2 kg per pesanan. Total akhir mengikuti hasil timbang di wisma.')
+            ->assertSee('type="range" min="1" max="15" step="0.5"', false);
+
+        // Jenis cucian, jam layanan, tanya jawab, dan ajakan penutup
+        $halaman->assertSeeInOrder(['Yang kami terima', 'Diterima', 'Kaos dan kemeja', 'Handuk dan sarung pribadi',
+            'Tidak diterima', 'Jas, blazer, dan pakaian dry clean', 'Selimut atau bed cover tebal', 'Ragu dengan pakaian Anda? Tanyakan dulu ke resepsionis.'])
+            ->assertSee('Penerimaan cucian')->assertSee('07.00–20.00 WITA')->assertSee('Pengantaran ke kamar')->assertSee('08.00–21.00 WITA')
+            ->assertSee('data-tanya-laundry', false)->assertSee('Berapa lama cucian selesai?')->assertSee('Apakah bisa layanan kilat?')
+            ->assertSee('aria-controls="jawab-laundry-1"', false)
+            ->assertSee('tunai di resepsionis sebelum cucian diambil')
+            ->assertSee('data-ajakan-laundry', false)->assertSee('Tinggal pesan, kami yang urus.')->assertSee('Pakaian bersih dan rapi untuk perjalanan Anda.')
+            ->assertSee('Tanya via WhatsApp')->assertSee('https://wa.me/6282292224111?text=', false);
+
+        // Semua tombol pesan menuju formulir laundry
+        $this->assertGreaterThanOrEqual(4, substr_count($halaman->getContent(), 'href="'.route('laundry.pesan').'"'));
     }
 }

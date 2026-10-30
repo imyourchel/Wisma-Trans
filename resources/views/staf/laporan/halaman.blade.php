@@ -10,16 +10,16 @@
 <div class="flex flex-col gap-5">
     {{-- Penyaring periode (GET, sehingga tautan CSV/PDF memakai penyaring yang sama) --}}
     <form method="GET" action="{{ route('staf.laporan.'.$jenis) }}" class="flex flex-wrap items-end gap-3" x-data="{ periode: @js($p->preset) }">
-        <label class="block">
+        <label class="block max-sm:w-full">
             <span class="wt-field-label mb-1.5 block">Periode</span>
-            <select name="periode" x-model="periode" @change="periode !== 'rentang' && $el.form.submit()" class="wt-input w-[170px]">
+            <select name="periode" x-model="periode" @change="periode !== 'rentang' && $el.form.submit()" class="wt-input w-full sm:w-[170px]">
                 @foreach (Periode::PRESET as $v => $l)<option value="{{ $v }}" @selected($p->preset === $v)>{{ $l }}</option>@endforeach
             </select>
         </label>
         <template x-if="periode === 'rentang'">
-            <div class="flex items-end gap-2">
-                <label class="block"><span class="wt-field-label mb-1.5 block">Dari</span><input type="date" name="dari" value="{{ $p->mulai->toDateString() }}" class="wt-input w-[150px]"></label>
-                <label class="block"><span class="wt-field-label mb-1.5 block">Sampai</span><input type="date" name="sampai" value="{{ $p->akhir->toDateString() }}" class="wt-input w-[150px]"></label>
+            <div class="flex flex-wrap items-end gap-2">
+                <label class="block"><span class="wt-field-label mb-1.5 block">Dari</span><input type="date" name="dari" value="{{ $p->mulai->toDateString() }}" class="wt-input w-full sm:w-[150px]"></label>
+                <label class="block"><span class="wt-field-label mb-1.5 block">Sampai</span><input type="date" name="sampai" value="{{ $p->akhir->toDateString() }}" class="wt-input w-full sm:w-[150px]"></label>
                 <button class="h-10 rounded border-0 bg-brown-800 px-4 text-xs font-bold text-cream-50 hover:bg-brown-900">Terapkan</button>
             </div>
         </template>
@@ -34,12 +34,12 @@
     </form>
 
     {{-- Ringkasan dengan pembanding --}}
-    <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+    <div class="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         @foreach ($d['ringkasan'] as $k)
             @php $u = Format::perubahan($k['nilai'], $k['sebelum']); $teks = Format::teksPerubahan($k['nilai'], $k['sebelum']); @endphp
-            <div class="wt-card px-5 py-4 shadow-wt-xs" data-kartu="{{ $k['label'] }}">
+            <div class="wt-card min-w-0 px-5 py-4 shadow-wt-xs" data-kartu="{{ $k['label'] }}">
                 <div class="text-[11px] font-semibold uppercase tracking-widest text-ink-500">{{ $k['label'] }}</div>
-                <div class="mt-1.5 font-display text-[22px] font-extrabold leading-none tabular-nums">{{ Format::tampil($k['nilai'], $k['format']) }}</div>
+                <div class="mt-1.5 break-words font-display text-[22px] font-extrabold leading-none tabular-nums">{{ Format::tampil($k['nilai'], $k['format']) }}</div>
                 <div class="mt-2 flex flex-wrap items-baseline gap-x-2 text-[12px]">
                     @if ($teks)
                         <span @class(['font-semibold', 'text-status-available' => $u['arah'] === 'naik', 'text-status-dirty' => $u['arah'] === 'turun', 'text-ink-500' => $u['arah'] === 'tetap'])

@@ -2,6 +2,8 @@
     use App\Models\Payment;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
+    // Dari Cek Pesanan: lihat saja, token tidak boleh muncul di halaman ini
+    $hanyaLihat ??= false;
     $item = $order->items->first();
     $menginap = $order->order_type === 'in_house';
     $kamar = $order->reservationRoom?->room?->room_number;
@@ -40,9 +42,14 @@
         @endif
     </div>
 
+    @if ($hanyaLihat)
+        <x-tamu.mode-lihat jenis="laundry" :kode="$order->kodeUrl()" :hp="$order->customer?->phone" :telepon="$wisma['telepon'] ?? '0822-9222-4111'" />
+    @endif
+
     @if ($bayar)
-        <x-bayar-online :url-bayar="route('pesanan.bayar', ['kode' => $order->kodeUrl(), 't' => $order->access_token])"
-                        :url-cek="route('pesanan.cek', ['kode' => $order->kodeUrl(), 't' => $order->access_token])"
+        {{-- Lihat saja: tanpa token, endpoint bayar dan cek memeriksa izin di session --}}
+        <x-bayar-online :url-bayar="route('pesanan.bayar', array_filter(['kode' => $order->kodeUrl(), 't' => $hanyaLihat ? null : $order->access_token]))"
+                        :url-cek="route('pesanan.cek', array_filter(['kode' => $order->kodeUrl(), 't' => $hanyaLihat ? null : $order->access_token]))"
                         :jumlah="(int) $order->invoice->total_amount" :batas="$order->batasBayar()" :tagihan="$tagihan"
                         judul="Bayar laundry" label-jumlah="Tagihan laundry"
                         keterangan="Atau bayar tunai saat {{ $menginap ? 'cucian diantar' : 'mengambil cucian' }}.">
@@ -128,6 +135,6 @@
 
     <x-ajakan-akun :hp="$order->customer?->phone" class="mt-8" />
 
-    <p class="mt-8 text-center text-xs text-ink-500">Simpan tautan halaman ini untuk memantau cucian. Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.</p>
+    <p class="mt-8 text-center text-xs text-ink-500">{{ $hanyaLihat ? 'Halaman ini dibuka dari Cek pesanan dan berlaku sementara.' : 'Simpan tautan halaman ini untuk memantau cucian.' }} Ada kendala? Hubungi {{ $wisma['telepon'] ?? 'resepsionis' }}.</p>
 </div>
 </x-layouts.guest>

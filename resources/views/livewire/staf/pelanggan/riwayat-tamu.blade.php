@@ -9,24 +9,24 @@
 <div>
     {{-- Penyaring --}}
     <div class="mb-4 flex flex-wrap items-end gap-3">
-        <label class="block">
+        <label class="block max-sm:w-full">
             <span class="wt-field-label mb-1.5 block">Tanggal masuk</span>
-            <span class="flex items-center gap-1.5">
-                <input type="date" wire:model.live="dari" class="wt-input w-[150px]" aria-label="Dari">
+            <span class="flex items-center gap-1.5 max-sm:w-full">
+                <input type="date" wire:model.live="dari" class="wt-input w-full min-w-0 flex-1 sm:w-[150px] sm:flex-none" aria-label="Dari">
                 <span class="text-ink-500">–</span>
-                <input type="date" wire:model.live="sampai" class="wt-input w-[150px]" aria-label="Sampai">
+                <input type="date" wire:model.live="sampai" class="wt-input w-full min-w-0 flex-1 sm:w-[150px] sm:flex-none" aria-label="Sampai">
             </span>
         </label>
-        <select wire:model.live="segmen" class="wt-input w-[150px]" aria-label="Segmen">
+        <select wire:model.live="segmen" class="wt-input w-full sm:w-[150px]" aria-label="Segmen">
             <option value="">Semua segmen</option><option value="b2b">B2B (instansi)</option><option value="b2c">B2C (perorangan)</option>
         </select>
         @if ($daftarInstansi->isNotEmpty())
-            <select wire:model.live="instansi" class="wt-input w-[190px]" aria-label="Instansi">
+            <select wire:model.live="instansi" class="wt-input w-full sm:w-[190px]" aria-label="Instansi">
                 <option value="">Semua instansi</option>
                 @foreach ($daftarInstansi as $id => $nama)<option value="{{ $id }}">{{ $nama }}</option>@endforeach
             </select>
         @endif
-        <select wire:model.live="tipe" class="wt-input w-[150px]" aria-label="Tipe kamar">
+        <select wire:model.live="tipe" class="wt-input w-full sm:w-[150px]" aria-label="Tipe kamar">
             <option value="">Semua tipe</option>
             @foreach ($daftarTipe as $id => $nama)<option value="{{ $id }}">{{ $nama }}</option>@endforeach
         </select>

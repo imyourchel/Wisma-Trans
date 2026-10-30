@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Enums\RoomStatus;
 use App\Livewire\Staf\Kamar\RiwayatStatus;
 use App\Livewire\Staf\Kamar\RoomStatusBoard;
 use App\Livewire\Staf\Reservasi\DaftarReservasi;
 use App\Livewire\Staf\Reservasi\ReservasiLangsung;
 use App\Services\Kamar\KetersediaanKamar;
+use App\Support\MenuStaf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -119,21 +121,53 @@ class KalenderRiwayatStatusTest extends TestCase
 
     /* ---------------- 2. Menu ---------------- */
 
-    public function test_KK05_menu_kalender_aktif_dan_judul_sesuai_tampilan(): void
+    public function test_KK05_satu_menu_papan_dan_kalender_judul_sesuai_tampilan(): void
     {
         $aktif = fn (string $html, string $label) => (bool) preg_match('/aria-current="page"\s*>'.preg_quote($label, '/').'</', $html);
+        $menu = fn (string $peran) => collect(MenuStaf::untuk($this->akun($peran)));
+
+        // Papan dan kalender satu menu di grup Kamar; grup Operasional dan menu Kalender Ketersediaan tidak ada lagi
+        foreach (['fo', 'manager', 'hk'] as $peran) {
+            $this->assertFalse($menu($peran)->contains('label', 'Operasional'));
+            $this->assertSame(['Papan Status Kamar'], $menu($peran)->flatMap(fn ($g) => $g['anak'])->where('url', route('staf.papan-status'))->pluck('label')->all());
+            $this->assertFalse($menu($peran)->flatMap(fn ($g) => $g['anak'])->contains('label', 'Kalender Ketersediaan'));
+        }
 
         $kal = $this->actingAs($this->akun('fo'))->get(route('staf.papan-status', ['tampilan' => 'kalender']))->assertOk()
-            ->assertSee('Kalender Ketersediaan · Panel Staf Wisma Trans', false)->assertSee('Reservasi · Kalender Ketersediaan')->getContent();
-        $this->assertTrue($aktif($kal, 'Kalender Ketersediaan'));
-        $this->assertFalse($aktif($kal, 'Papan Status Kamar'));
+            ->assertSee('Kalender Ketersediaan · Panel Staf Wisma Trans', false)->assertSeeInOrder(['aria-label="Jejak halaman"', 'Kamar', 'Kalender Ketersediaan</h1>'], false)->getContent();
+        $this->assertTrue($aktif($kal, 'Papan Status Kamar'));
 
         $papan = $this->actingAs($this->akun('fo'))->get(route('staf.papan-status'))->assertOk()
-            ->assertSee('Operasional · Papan Status Kamar')->getContent();
+            ->assertSeeInOrder(['aria-label="Jejak halaman"', 'Kamar', 'Papan Status Kamar</h1>'], false)->getContent();
         $this->assertTrue($aktif($papan, 'Papan Status Kamar'));
-        $this->assertFalse($aktif($papan, 'Kalender Ketersediaan'));
         // Tombol Papan/Kalender berupa tautan, supaya sidebar dan judul ikut berganti
         $this->assertStringContainsString('href="'.e(route('staf.papan-status', ['tampilan' => 'kalender'])).'"', $papan);
+    }
+
+    public function test_KK06_warna_status_satu_sumber_dan_kontras_cukup(): void
+    {
+        $luminans = function (string $hex): float {
+            $c = array_map(fn ($i) => hexdec(substr($hex, $i, 2)) / 255, [1, 3, 5]);
+            $c = array_map(fn ($v) => $v <= 0.03928 ? $v / 12.92 : (($v + 0.055) / 1.055) ** 2.4, $c);
+
+            return 0.2126 * $c[0] + 0.7152 * $c[1] + 0.0722 * $c[2];
+        };
+        $kontras = fn (string $a, string $b) => (max($luminans($a), $luminans($b)) + 0.05) / (min($luminans($a), $luminans($b)) + 0.05);
+
+        $this->assertSame(['utama' => '#2E9E55', 'latar' => '#E6F5EB', 'teks' => '#1F6B3A', 'badge' => '#C8EBD3'], RoomStatus::Available->warna());
+        $this->assertSame('#6A7587', RoomStatus::Maintenance->color());
+        foreach (RoomStatus::cases() as $s) {
+            $w = $s->warna();
+            $this->assertGreaterThanOrEqual(4.5, $kontras($w['teks'], $w['latar']), $s->value.': teks di atas latar');
+            $this->assertGreaterThanOrEqual(4.5, $kontras($w['teks'], $w['badge']), $s->value.': label di atas badge');
+            $this->assertGreaterThanOrEqual(3, $kontras($w['utama'], $w['latar']), $s->value.': angka besar di atas latar');
+        }
+
+        // Papan: kartu kamar dan ringkasan memakai variabel warna status; ringkasan aktif saat disaring
+        Livewire::actingAs($this->akun('fo'))->test(RoomStatusBoard::class)
+            ->assertSee('--st: #2E9E55; --st-bg: #E6F5EB;', false)->assertSee('wt-st-kartu', false)->assertSee('wt-st-badge', false)
+            ->call('filterBy', 'available')->assertSeeHtml('wt-st-ringkasan flex items-center gap-3 rounded-lg px-4 py-3 text-left shadow-wt-xs transition-shadow hover:shadow-wt-md is-aktif')
+            ->call('filterBy', 'available')->assertSet('filter', '');
     }
 
     /* ---------------- 3. Riwayat Status ---------------- */

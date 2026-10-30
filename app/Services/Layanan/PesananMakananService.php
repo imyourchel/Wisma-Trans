@@ -124,7 +124,7 @@ class PesananMakananService
     /** Tandai menu F&B aktif habis atau tersedia lagi. Hanya is_sold_out yang berubah; pesanan yang sudah masuk tidak terpengaruh. */
     public function aturKetersediaan(Service $menu, bool $habis): void
     {
-        if ($menu->category !== 'fnb' || ! $menu->is_active) {
+        if ($menu->category !== 'fnb' || ! $menu->is_active || in_array($menu->code, Service::KODE_TAMBAHAN_KAMAR, true)) {
             throw ValidationException::withMessages(['menu' => 'Hanya menu F&B aktif yang bisa diubah ketersediaannya.']);
         }
         Service::whereKey($menu->id)->update(['is_sold_out' => $habis, 'updated_at' => now()]);
@@ -152,12 +152,13 @@ class PesananMakananService
             throw ValidationException::withMessages(['metode' => 'Pilih metode pembayaran.']);
         }
 
-        $menu = Service::whereIn('id', array_column($baris, 'id'))->where('category', 'fnb')->where('is_active', true)->get()->keyBy('id');
+        // Tambahan pemesanan kamar (Sarapan tambahan) bukan menu kafe: ditolak seperti menu yang tidak tersedia
+        $menu = Service::whereIn('id', array_column($baris, 'id'))->menuKafe()->get()->keyBy('id');
         $rinci = [];
         foreach ($baris as $b) {
             $m = $menu->get((int) $b['id']);
             if (! $m || $m->habis()) {
-                throw ValidationException::withMessages(['keranjang' => ($m?->name ?? 'Sebagian menu').' sedang tidak tersedia.']);
+                throw ValidationException::withMessages(['keranjang' => ($m?->name ?? Service::whereKey((int) $b['id'])->value('name') ?? 'Sebagian menu').' sedang tidak tersedia.']);
             }
             // Harga tetap dari basis data; menu harga pasar diisi kasir sesuai ukuran
             $harga = $m->price !== null ? (float) $m->price : (float) ($b['harga'] ?? 0);

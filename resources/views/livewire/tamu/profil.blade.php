@@ -69,7 +69,7 @@
                     </label>
                     <label class="block">
                         <span class="wt-field-label">Nomor WhatsApp</span>
-                        <input type="tel" wire:model="phone" class="wt-input {{ $galat('phone') }}" autocomplete="tel" inputmode="tel" placeholder="0812xxxxxxxx">
+                        <input type="tel" wire:model="phone" class="wt-input {{ $galat('phone') }}" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx">
                         @error('phone')<span class="mt-1 block text-xs text-status-dirty">{{ $message }}</span>@enderror
                     </label>
                     <label class="block">

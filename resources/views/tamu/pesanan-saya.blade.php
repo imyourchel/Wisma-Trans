@@ -1,14 +1,6 @@
 @php
     use App\Support\PesananAkun;
 
-    $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
-    $gayaKeadaan = [
-        'belum-bayar' => 'bg-[rgba(232,172,69,.16)] text-[#8A5A0B] ring-[rgba(232,172,69,.35)]',
-        'diproses' => 'bg-[rgba(108,149,196,.12)] text-[#3F6B9C] ring-[rgba(108,149,196,.3)]',
-        'selesai' => 'bg-[rgba(92,158,103,.12)] text-status-available ring-[rgba(92,158,103,.3)]',
-        'batal' => 'bg-[rgba(212,81,74,.08)] text-status-dirty ring-[rgba(212,81,74,.25)]',
-    ];
-    $titik = ['belum-bayar' => 'bg-status-maintenance', 'diproses' => 'bg-status-reserved', 'selesai' => 'bg-status-available', 'batal' => 'bg-status-dirty'];
     $ikonJenis = ['kamar' => 'kasur', 'makanan' => 'makanan', 'laundry' => 'laundry', 'aula' => 'gedung'];
     $pesanan = $pesanan->values();
     // Data ringkas tiap pesanan untuk penyaring di peramban (urutan sama dengan kartu)
@@ -17,8 +9,8 @@
         'semua' => [['Pesan kamar', route('kamar'), true], ['Lihat menu Resto', route('menu'), false]],
         'kamar' => [['Pesan kamar', route('kamar'), true]],
         'makanan' => [['Lihat menu Resto', route('menu'), true]],
-        'laundry' => [['Layanan laundry', route('laundry'), true]],
-        'aula' => [['Ajukan sewa aula', route('aula'), true]],
+        'laundry' => [['Pesan laundry', route('laundry.pesan'), true]],
+        'aula' => [['Ajukan sewa aula', route('aula.ajukan'), true]],
     ];
 @endphp
 
@@ -89,7 +81,7 @@
                 <div class="inline-flex gap-1 rounded-full bg-cream-200 p-1" role="tablist" aria-label="Jenis pesanan">
                     @foreach (['semua' => 'Semua'] + PesananAkun::JENIS as $kunci => $nama)
                         <button type="button" role="tab" @click="jenis = '{{ $kunci }}'" :aria-selected="jenis === '{{ $kunci }}'"
-                                class="inline-flex h-9 flex-none items-center gap-1.5 whitespace-nowrap rounded-full border-0 px-3.5 text-[13px] font-semibold transition"
+                                class="inline-flex h-9 pointer-coarse:h-11 flex-none items-center gap-1.5 whitespace-nowrap rounded-full border-0 px-3.5 text-[13px] font-semibold transition"
                                 :class="jenis === '{{ $kunci }}' ? 'bg-cream-50 text-ink-900 shadow-wt-xs' : 'bg-transparent text-ink-500 hover:text-ink-900'">
                             @if ($kunci !== 'semua')
                                 <x-tamu.ikon :nama="$ikonJenis[$kunci]" ukuran="15" />
@@ -101,11 +93,11 @@
                 </div>
             </div>
 
-            <div class="flex flex-none items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
                 {{-- Periode --}}
                 <div class="relative" @click.outside="bukaPeriode = false" @keydown.escape.window="bukaPeriode = false">
                     <button type="button" @click="togglePeriode()" :aria-expanded="bukaPeriode"
-                            class="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-full border bg-cream-50 px-3.5 text-[13px] font-semibold transition hover:bg-white"
+                            class="inline-flex h-9 pointer-coarse:h-11 items-center gap-2 whitespace-nowrap rounded-full border bg-cream-50 px-3.5 text-[13px] font-semibold transition hover:bg-white"
                             :class="dari ? 'border-clay-500 text-clay-600' : 'border-cream-300 text-ink-900'">
                         <x-tamu.ikon nama="kalender" ukuran="15" />
                         <span class="max-w-[170px] truncate" x-text="labelPeriode">Semua waktu</span>
@@ -127,9 +119,9 @@
                         {{-- Rentang sendiri --}}
                         <div class="min-w-0 flex-1 p-4">
                             <div class="flex items-center justify-between">
-                                <button type="button" @click="geser(-1)" class="flex h-8 w-8 items-center justify-center rounded-full border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Bulan sebelumnya"><x-tamu.ikon nama="kiri" ukuran="16" /></button>
+                                <button type="button" @click="geser(-1)" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-full border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Bulan sebelumnya"><x-tamu.ikon nama="kiri" ukuran="16" /></button>
                                 <span class="font-display text-sm font-bold capitalize" x-text="judulBulan"></span>
-                                <button type="button" @click="geser(1)" :disabled="!bisaMaju" class="flex h-8 w-8 items-center justify-center rounded-full border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200 disabled:opacity-30" aria-label="Bulan berikutnya"><x-tamu.ikon nama="kanan" ukuran="16" /></button>
+                                <button type="button" @click="geser(1)" :disabled="!bisaMaju" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-full border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200 disabled:opacity-30" aria-label="Bulan berikutnya"><x-tamu.ikon nama="kanan" ukuran="16" /></button>
                             </div>
                             <div class="mt-3 grid grid-cols-7 text-center text-[11px] font-semibold uppercase tracking-[.06em] text-ink-500">
                                 <template x-for="h in ['Sen','Sel','Rab','Kam','Jum','Sab','Min']" :key="h"><span class="py-1" x-text="h"></span></template>
@@ -160,7 +152,7 @@
                 {{-- Status: menu sendiri agar serasi dengan panel periode --}}
                 <div class="relative" @click.outside="bukaStatus = false" @keydown.escape.window="bukaStatus = false">
                     <button type="button" @click="bukaStatus = !bukaStatus; bukaPeriode = false" :aria-expanded="bukaStatus" aria-haspopup="listbox"
-                            class="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-full border bg-cream-50 px-3.5 text-[13px] font-semibold transition hover:bg-white"
+                            class="inline-flex h-9 pointer-coarse:h-11 items-center gap-2 whitespace-nowrap rounded-full border bg-cream-50 px-3.5 text-[13px] font-semibold transition hover:bg-white"
                             :class="saring !== 'semua' ? 'border-clay-500 text-clay-600' : 'border-cream-300 text-ink-900'">
                         <span class="h-2 w-2 flex-none rounded-full" :class="warnaStatus[saring]"></span>
                         <span x-text="saring === 'semua' ? 'Semua status' : namaKeadaan[saring]">Semua status</span>
@@ -169,7 +161,7 @@
                     </button>
 
                     <div x-show="bukaStatus" x-cloak x-transition.opacity.duration.150ms role="listbox" aria-label="Status pesanan"
-                         class="absolute right-0 top-[calc(100%+8px)] z-30 w-[250px] overflow-hidden rounded-xl border border-cream-300 bg-cream-50 p-1.5 shadow-wt-lg">
+                         class="absolute right-0 top-[calc(100%+8px)] z-30 w-[250px] overflow-hidden rounded-xl max-sm:left-0 max-sm:right-auto border border-cream-300 bg-cream-50 p-1.5 shadow-wt-lg">
                         <div class="px-2.5 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[.12em] text-ink-500">Status pesanan</div>
                         <template x-for="(nama, kunci) in namaKeadaan" :key="kunci">
                             <button type="button" role="option" :aria-selected="saring === kunci" @click="saring = kunci; bukaStatus = false"
@@ -212,42 +204,7 @@
                 </h2>
                 <div class="flex flex-col gap-3">
                     @foreach ($isi as $i => $p)
-                        <article x-show="tampil({{ $i }})" x-transition.opacity.duration.200ms data-jenis="{{ $p['jenis'] }}" data-keadaan="{{ $p['keadaan'] }}"
-                                 class="group relative flex gap-4 overflow-hidden rounded-xl border border-cream-300 bg-cream-50 p-4 shadow-wt-xs transition hover:-translate-y-0.5 hover:border-cream-400 hover:shadow-wt-md sm:p-5">
-                            <span class="absolute inset-y-0 left-0 w-1 {{ $titik[$p['keadaan']] }} opacity-70" aria-hidden="true"></span>
-                            <span class="hidden h-12 w-12 flex-none items-center justify-center rounded-xl bg-cream-200 text-clay-600 transition group-hover:bg-clay-500 group-hover:text-cream-50 sm:flex" aria-hidden="true">
-                                <x-tamu.ikon :nama="$ikonJenis[$p['jenis']]" ukuran="20" />
-                            </span>
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center justify-between gap-3">
-                                    <div class="flex min-w-0 items-center gap-2 text-xs text-ink-500">
-                                        <x-tamu.ikon :nama="$ikonJenis[$p['jenis']]" ukuran="14" class="text-clay-600 sm:hidden" />
-                                        <span class="font-semibold uppercase tracking-[.12em] text-clay-600">{{ PesananAkun::JENIS[$p['jenis']] }}</span>
-                                        <span class="h-1 w-1 flex-none rounded-full bg-cream-400"></span>
-                                        <span class="truncate tabular-nums">{{ $p['kode'] }}</span>
-                                    </div>
-                                    <span class="inline-flex flex-none items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset {{ $gayaKeadaan[$p['keadaan']] }}">
-                                        <span class="h-1.5 w-1.5 rounded-full {{ $titik[$p['keadaan']] }}"></span>{{ $p['label'] }}
-                                    </span>
-                                </div>
-                                <h3 class="mb-0 mt-2 line-clamp-2 text-[15px] font-semibold leading-snug text-ink-900">{{ $p['judul'] }}</h3>
-                                @if ($p['waktu'])
-                                    <p class="mb-0 mt-1 text-[13px] text-ink-500">{{ $p['waktu'] }}</p>
-                                @endif
-
-                                <div class="mt-3.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-t border-dashed border-cream-300 pt-3">
-                                    <span @class(['min-w-0 text-xs', 'inline-flex items-center gap-1.5 font-semibold text-[#8A5A0B]' => $p['keadaan'] === 'belum-bayar', 'text-ink-500' => $p['keadaan'] !== 'belum-bayar'])>
-                                        @if ($p['keadaan'] === 'belum-bayar')<x-tamu.ikon nama="jam" ukuran="13" />@endif{{ $p['catatan'] }}
-                                    </span>
-                                    <div class="ml-auto flex items-center gap-3">
-                                        <span class="font-display text-base font-extrabold tabular-nums text-ink-900">{{ $rp($p['total']) }}</span>
-                                        @foreach ($p['aksi'] as [$teks, $url, $utama])
-                                            <a href="{{ $url }}" @class(['h-9 px-4 text-[11px] tracking-[.08em]', 'wt-btn-primary' => $utama, 'wt-btn-outline' => ! $utama])>{{ $teks }}</a>
-                                        @endforeach
-                                    </div>
-                                </div>
-                            </div>
-                        </article>
+                        <x-tamu.kartu-pesanan :p="$p" x-show="tampil({{ $i }})" x-transition.opacity.duration.200ms />
                     @endforeach
                 </div>
             </section>

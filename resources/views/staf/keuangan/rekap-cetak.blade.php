@@ -29,6 +29,14 @@
         .alat { margin-bottom: 20px; }
         .alat button { padding: 8px 16px; border: 0; border-radius: 4px; background: #4A3426; color: #fff; font-weight: 600; cursor: pointer; }
         @media print { .alat { display: none; } body { padding: 0; } }
+        /* Dibuka di HP sebelum dicetak: tabel lebar digeser di tempatnya, ringkasan dua kolom */
+        @media screen and (max-width: 640px) {
+            body { padding: 16px; }
+            table { display: block; overflow-x: auto; white-space: nowrap; }
+            .ringkas { grid-template-columns: 1fr 1fr; }
+            .ttd { gap: 16px; }
+            .alat button { min-height: 44px; }
+        }
     </style>
 </head>
 <body>

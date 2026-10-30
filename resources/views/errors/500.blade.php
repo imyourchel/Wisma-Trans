@@ -10,10 +10,10 @@
     <title>Terjadi kesalahan · Wisma Trans</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; }
-        body { margin: 0; min-height: 100vh; background: #F6F0E6; color: #2E2218; font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+        body { margin: 0; min-height: 100vh; min-height: 100dvh; background: #F6F0E6; color: #2E2218; font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
         header { background: #4E3423; min-height: 64px; display: flex; align-items: center; padding: 8px 24px; }
         header a { color: #F6F0E6; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; text-decoration: none; font-size: 15px; }
-        main { position: relative; overflow: hidden; isolation: isolate; min-height: calc(100vh - 64px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 16px; text-align: center; }
+        main { position: relative; overflow: hidden; isolation: isolate; min-height: calc(100dvh - 64px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 16px; text-align: center; }
         .latar { position: absolute; inset: 50% 0 auto; transform: translateY(-50%); z-index: -1; font-size: min(42vw, 380px); font-weight: 800; line-height: 1; letter-spacing: -.04em; color: rgba(181, 113, 74, .06); user-select: none; pointer-events: none; }
         .alis { display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; color: #B5714A; }
         .alis span { display: block; width: 32px; height: 1px; background: rgba(181, 113, 74, .5); }

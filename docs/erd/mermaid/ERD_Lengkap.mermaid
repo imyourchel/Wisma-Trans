@@ -163,7 +163,7 @@ erDiagram
         varchar room_number UK
         bigint room_type_id FK
         tinyint floor
-        enum bed_type "single, twin, double, king"
+        enum bed_type "twin_single, double, queen, twin_double, king, twin_queen, triple_single"
         enum status "available, occupied_clean, occupied_dirty, vacant_dirty, cleaning, maintenance"
         datetime dirty_since "nullable"
         boolean is_active

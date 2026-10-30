@@ -63,7 +63,7 @@ class DashboardController extends Controller
                     'tipe kamar belum punya foto', 'staf.tipe-kamar.index'),
                 $this->butir(Hall::where('is_active', true)->get()->filter(fn ($h) => ! collect(MasterController::daftarFoto($h->photos))->contains(fn ($f) => $f['url']))->count(),
                     'aula belum punya foto', 'staf.aula.index'),
-                $this->butir(Service::where('is_active', true)->where('category', 'fnb')->whereNull('photo')->count(),
+                $this->butir(Service::menuKafe()->whereNull('photo')->count(),
                     'menu aktif belum punya foto', 'staf.layanan.index'),
                 $this->butir(FacilityUnit::where('is_active', true)->whereNull('installed_at')->count(),
                     'unit fasilitas belum punya tanggal pasang', 'staf.unit-fasilitas.index'),
@@ -114,7 +114,7 @@ class DashboardController extends Controller
         $terlambat = $dapur->filter(fn ($o) => PesananMakananService::terlambat($o))->count();
         $menungguBayar = PesananMakananService::query()->where('status', 'pending')->where('payment_mode', 'pay_now')
             ->whereHas('invoice', fn ($q) => $q->whereNotIn('status', ['paid', 'cancelled']))->where('order_date', '>=', now()->subDay())->count();
-        $habis = Service::where('category', 'fnb')->where('is_active', true)->where('is_sold_out', true)->count();
+        $habis = Service::menuKafe()->where('is_sold_out', true)->count();
 
         return [
             ['label' => 'Pesanan aktif', 'nilai' => $dapur->count(), 'url' => route('staf.fnb.papan'), 'awas' => false],

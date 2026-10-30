@@ -77,6 +77,18 @@
         @case('kalender')
             <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
             @break
+        @case('formulir')
+            <rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 2h6v4H9zM9 11h6M9 15h6M9 19h3"/>
+            @break
+        @case('tas')
+            <path d="M5 8h14l-1 13H6Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>
+            @break
+        @case('timbangan')
+            <path d="M12 3v18M5 21h14M5 7h14"/><path d="m5 7-3 7a3 3 0 0 0 6 0Zm14 0-3 7a3 3 0 0 0 6 0Z"/>
+            @break
+        @case('antar')
+            <circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>
+            @break
         @default
             <path d="M20 6 9 17l-5-5"/>
     @endswitch

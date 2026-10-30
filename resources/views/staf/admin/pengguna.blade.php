@@ -94,7 +94,7 @@
             <input type="email" name="email" x-model="isi.email" @input="hapus('email')" maxlength="150" autocomplete="off" placeholder="nama@wismatrans.id" class="wt-input" :class="pesan('email') && 'is-invalid'">
         </x-staf.field>
         <x-staf.field nama="phone" label="Nomor telepon (opsional)">
-            <input type="tel" name="phone" x-model="isi.phone" @input="hapus('phone')" autocomplete="off" placeholder="Contoh: 081234567890" class="wt-input" :class="pesan('phone') && 'is-invalid'">
+            <input type="tel" name="phone" x-model="isi.phone" @input="hapus('phone')" autocomplete="off" placeholder="08xxxxxxxxxx" class="wt-input" :class="pesan('phone') && 'is-invalid'">
         </x-staf.field>
         <x-staf.field nama="peran" label="Peran (boleh lebih dari satu)" tag="div" bantuan="Staf yang merangkap peran melihat gabungan menu dari semua perannya.">
             <div class="flex flex-wrap gap-2">

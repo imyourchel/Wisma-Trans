@@ -201,12 +201,17 @@ class TagihanBulananService
         return URL::temporarySignedRoute('tagihan-bulanan.unduh', now()->addDays(self::MASA_BERLAKU_HARI), ['tagihan' => $s->id]);
     }
 
-    /** Penerima bawaan: narahubung utama, atau kontak instansi. */
+    /**
+     * Penerima bawaan. Email: email kantor instansi dengan tembusan (cc) ke narahubung utama; bila email kantor kosong,
+     * langsung ke narahubung utama. WhatsApp: narahubung utama, atau telepon instansi.
+     */
     public static function penerima(Institution $i): array
     {
         $c = $i->primaryContact;
+        $email = $i->email ?: $c?->email;
+        $cc = $i->email && $c?->email && Str::lower($c->email) !== Str::lower($i->email) ? $c->email : null;
 
-        return ['nama' => $c?->full_name ?? $i->name, 'email' => $c?->email ?: $i->email, 'hp' => $c?->phone ?: $i->phone];
+        return ['nama' => $c?->full_name ?? $i->name, 'email' => $email, 'cc' => $cc, 'hp' => $c?->phone ?: $i->phone];
     }
 
     /** Kirim PDF tagihan bulanan ke narahubung (WhatsApp berisi tautan, email dengan lampiran). Mengembalikan kanal yang berhasil. */
@@ -230,7 +235,7 @@ class TagihanBulananService
                     'Tagihan bulanan '.$s->statement_number.' Wisma Trans', 'Yth. '.Str::before($tujuan['nama'], ','),
                     ['Berikut tagihan bulanan '.$s->institution->name.' periode '.$s->rentang().' sebesar '.FolioService::rp($s->total_amount).'.',
                         'Jatuh tempo '.$s->due_date->translatedFormat('j F Y').'. Rincian nota kami lampirkan dalam bentuk PDF.'],
-                    'Unduh tagihan', $this->tautan($s), [$this->pdf($s), $this->namaBerkas($s)],
+                    'Unduh tagihan', $this->tautan($s), [$this->pdf($s), $this->namaBerkas($s)], array_filter([$tujuan['cc']]),
                 ));
                 $kanal[] = 'email';
             } catch (Throwable $e) {

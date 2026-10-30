@@ -40,26 +40,26 @@
             <x-staf.ikon nama="cari" ukuran="16" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" />
             <input type="search" wire:model.live.debounce.400ms="cari" placeholder="Nomor nota, kode, nama, atau HP" class="wt-input pl-9">
         </label>
-        <select wire:model.live="jenis" class="wt-input w-[140px]" aria-label="Jenis nota">
+        <select wire:model.live="jenis" class="wt-input w-full sm:w-[140px]" aria-label="Jenis nota">
             <option value="">Semua jenis</option><option value="stay">Menginap</option><option value="service">Layanan</option><option value="hall">Aula</option>
         </select>
-        <select wire:model.live="status" class="wt-input w-[160px]" aria-label="Status nota">
+        <select wire:model.live="status" class="wt-input w-full sm:w-[160px]" aria-label="Status nota">
             <option value="">Semua status</option><option value="belum">Belum lunas</option><option value="lewat">Lewat jatuh tempo</option>
             <option value="lunas">Lunas</option><option value="batal">Dibatalkan</option>
         </select>
-        <select wire:model.live="termin" class="wt-input w-[140px]" aria-label="Termin">
+        <select wire:model.live="termin" class="wt-input w-full sm:w-[140px]" aria-label="Termin">
             <option value="">Semua termin</option><option value="immediate">Langsung</option><option value="credit">Kredit</option>
         </select>
         @if ($daftarInstansi->isNotEmpty())
-            <select wire:model.live="instansi" class="wt-input w-[180px]" aria-label="Instansi">
+            <select wire:model.live="instansi" class="wt-input w-full sm:w-[180px]" aria-label="Instansi">
                 <option value="">Semua instansi</option>
                 @foreach ($daftarInstansi as $id => $nama)<option value="{{ $id }}">{{ $nama }}</option>@endforeach
             </select>
         @endif
-        <div class="flex items-center gap-1.5">
-            <input type="date" wire:model.live="dari" class="wt-input w-[150px]" aria-label="Terbit dari">
+        <div class="flex items-center gap-1.5 max-sm:w-full">
+            <input type="date" wire:model.live="dari" class="wt-input w-full min-w-0 flex-1 sm:w-[150px] sm:flex-none" aria-label="Terbit dari">
             <span class="text-ink-500">–</span>
-            <input type="date" wire:model.live="sampai" class="wt-input w-[150px]" aria-label="Terbit sampai">
+            <input type="date" wire:model.live="sampai" class="wt-input w-full min-w-0 flex-1 sm:w-[150px] sm:flex-none" aria-label="Terbit sampai">
         </div>
         @if ($jenis.$status.$termin.$instansi.$dari.$sampai.$cari !== '')
             <button type="button" wire:click="resetSaringan" class="wt-btn-sm h-10">Hapus saringan</button>
@@ -99,9 +99,9 @@
     {{-- Detail nota --}}
     @if ($n)
         @php [$l, $w] = $lencana($n); @endphp
-        <div class="fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
+        <div class="wt-modal fixed inset-0 z-[340] flex items-center justify-center p-4" x-on:keydown.escape.window="$wire.close()">
             <div wire:click="close" class="absolute inset-0 bg-[rgba(62,42,28,.44)]"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="nota-judul" class="relative flex max-h-[94vh] w-[780px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
+            <div role="dialog" aria-modal="true" aria-labelledby="nota-judul" class="wt-dialog relative flex max-h-[94dvh] w-[780px] max-w-full animate-wt-fade flex-col overflow-hidden rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg">
                 <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-6 py-4">
                     <div class="min-w-0 flex-1">
                         <div id="nota-judul" class="flex flex-wrap items-center gap-2 font-display text-[17px] font-extrabold tracking-[.02em]">
@@ -111,7 +111,7 @@
                             {{ $n->jenis() }} · {{ $n->institution?->name ? $n->institution->name.' · ' : '' }}{{ $n->customer?->full_name }}{{ $n->customer?->phone ? ' · '.$n->customer->phone : '' }}
                         </div>
                     </div>
-                    <button type="button" wire:click="close" class="flex h-8 w-8 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
+                    <button type="button" wire:click="close" class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 flex-none items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200" aria-label="Tutup">
                         <x-staf.ikon nama="tutup" ukuran="16" />
                     </button>
                 </div>

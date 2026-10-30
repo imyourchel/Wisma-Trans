@@ -18,7 +18,7 @@
     @foreach (array_filter(['Layanan F&B' => $fnb ?? null, 'Housekeeping' => $housekeeping ?? null, 'Tugas Housekeeping' => $tugasSaya ?? null]) as $judulHk => $kartuHk)
         <section aria-label="{{ $judulHk }}">
             <h2 class="mb-2.5 mt-0 font-display text-sm font-bold uppercase tracking-[.08em]">{{ $judulHk }}</h2>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 @foreach ($kartuHk as $k)
                     <a href="{{ $k['url'] }}" class="wt-card block p-5 text-ink-900 hover:border-cream-400 hover:bg-row-hover hover:text-ink-900 hover:no-underline">
                         <div class="text-xs font-semibold uppercase tracking-[.08em] text-ink-500">{{ $k['label'] }}</div>
@@ -32,7 +32,7 @@
     @if ($maintenance)
         <section aria-labelledby="judul-mnt">
             <h2 id="judul-mnt" class="mb-2.5 mt-0 font-display text-sm font-bold uppercase tracking-[.08em]">Maintenance</h2>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 @foreach ($maintenance as $k)
                     <a href="{{ $k['url'] }}" class="wt-card block p-5 text-ink-900 hover:border-cream-400 hover:bg-row-hover hover:text-ink-900 hover:no-underline">
                         <div class="text-xs font-semibold uppercase tracking-[.08em] text-ink-500">{{ $k['label'] }}</div>
@@ -44,7 +44,7 @@
     @endif
 
     @if ($admin)
-        <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             @foreach ($admin['kartu'] as $k)
                 <a href="{{ $k['url'] }}" class="wt-card block p-5 text-ink-900 hover:border-cream-400 hover:bg-row-hover hover:text-ink-900 hover:no-underline">
                     <div class="text-xs font-semibold uppercase tracking-[.08em] text-ink-500">{{ $k['label'] }}</div>
@@ -102,7 +102,7 @@
                             <span class="font-display text-[13px] font-bold uppercase tracking-[.08em] text-ink-900">{{ $g['label'] }}</span>
                         </div>
                         @foreach ($g['anak'] as $item)
-                            <a href="{{ $item['url'] }}" class="block py-1 text-sm text-olive-600 hover:text-brown-800">{{ $item['label'] }}</a>
+                            <a href="{{ $item['url'] }}" class="block py-1 text-sm text-olive-600 hover:text-brown-800 pointer-coarse:py-3">{{ $item['label'] }}</a>
                         @endforeach
                     </div>
                 @endforeach

@@ -10,6 +10,7 @@ use App\Rules\NomorHp;
 use App\Services\Kamar\KetersediaanKamar;
 use App\Services\Pelanggan\ProfilPelanggan;
 use App\Services\Reservasi\ReservasiService;
+use App\Services\Reservasi\TambahanKamar;
 use App\Support\Pelanggan;
 use App\Support\PersonName;
 use App\Support\Phone;
@@ -26,6 +27,7 @@ use Throwable;
 /**
  * Reservasi langsung (walk-in) oleh Front Office: cek ketersediaan, tamu memilih nomor kamar,
  * data tamu dicatat, lalu bisa langsung check-in. Pembayaran dicatat di menu Pembayaran.
+ * Per kamar bisa ditambah Extra bed dan Sarapan tambahan dengan aturan yang sama seperti pemesanan online (TambahanKamar).
  */
 class ReservasiLangsung extends Component
 {
@@ -35,6 +37,15 @@ class ReservasiLangsung extends Component
 
     /** @var list<string> id kamar terpilih */
     public array $kamar = [];
+
+    /** Saring pilihan kamar per jenis kasur (Room::BED_TYPES); kosong = semua. */
+    public string $saringKasur = '';
+
+    /** Extra bed dan Sarapan tambahan per kamar: id kamar => ['extra' => n, 'sarapan' => n]. */
+    public array $tambahan = [];
+
+    /** Dewasa dan anak per kamar terpilih: id kamar => ['dewasa' => n, 'anak' => n]. Hanya untuk peringatan kapasitas, tidak disimpan. */
+    public array $tamuKamar = [];
 
     public string $nama = '';
 
@@ -98,6 +109,17 @@ class ReservasiLangsung extends Component
         }
     }
 
+    /** Centang atau ubah jumlah tambahan satu kamar terpilih. Extra bed dilepas: Sarapan tambahan ikut dilepas. */
+    public function aturTambahan(int $kamarId, string $jenis, int $jumlah, TambahanKamar $tambahan): void
+    {
+        $room = in_array((string) $kamarId, $this->kamar, true) ? Room::with('roomType')->find($kamarId) : null;
+        if (! $room || ! in_array($jenis, ['extra', 'sarapan'], true)) {
+            return;
+        }
+        $this->tambahan[$kamarId] = $tambahan->rapikan([$jenis => $jumlah] + ($this->tambahan[$kamarId] ?? []), $room->roomType, $room->bed_type);
+        $this->resetErrorBag('tambahan');
+    }
+
     /** Kamar favorit dari kartu rekomendasi: hanya ditambahkan bila FO menekan tombolnya dan kamarnya bebas. */
     public function pilihKamar(int $id): void
     {
@@ -147,7 +169,9 @@ class ReservasiLangsung extends Component
 
         $tamu = Pelanggan::dariIsian(['name' => $this->nama, 'phone' => $this->hp, 'email' => $this->email ?: null], null, 'hp');
         $fo = Auth::user();
-        $r = $layanan->buatLangsung($tamu, CarbonImmutable::parse($this->masuk), CarbonImmutable::parse($this->keluar), array_map('intval', $this->kamar), $fo, trim($this->permintaan) ?: null);
+        $tambahan = collect($this->kamar)->mapWithKeys(fn ($id) => [(int) $id => $this->tambahan[$id] ?? []])->all();
+        $r = $layanan->buatLangsung($tamu, CarbonImmutable::parse($this->masuk), CarbonImmutable::parse($this->keluar), array_map('intval', $this->kamar), $fo,
+            trim($this->permintaan) ?: null, $tambahan);
 
         $pesan = "Reservasi {$r->reservation_code} dibuat.";
         if ($this->langsungCheckIn && $this->masuk === today()->toDateString()) {
@@ -174,14 +198,37 @@ class ReservasiLangsung extends Component
         $lama = $this->pelangganLama ? Customer::find($this->pelangganLama) : null;
         $profil = $lama ? app(ProfilPelanggan::class)->untuk($lama) : null;
         $favorit = $profil['kamar']['favorit'] ?? null;
+        $tambahan = app(TambahanKamar::class);
+        $pilihan = $dipilih->mapWithKeys(fn ($k) => [$k->id => $tambahan->rapikan($this->tambahan[$k->id] ?? [], $tipe[$k->room_type_id], $k->bed_type)]);
+        $rincianTambahan = $pilihan->map(fn ($p) => $tambahan->rincian($p, $malam));
+        // Peringatan bila dewasa/anak yang diisi FO melebihi kapasitas kasur kamar itu (extra bed yang dipilih ikut dihitung)
+        $peringatanKapasitas = $dipilih->mapWithKeys(function ($k) use ($tipe, $pilihan, $tambahan) {
+            $t = $tipe[$k->room_type_id];
+            $dewasa = max(0, (int) ($this->tamuKamar[$k->id]['dewasa'] ?? 0));
+            $anak = max(0, (int) ($this->tamuKamar[$k->id]['anak'] ?? 0));
+            if ($dewasa + $anak === 0 || $t->muatKasur($k->bed_type, $dewasa, $anak, $pilihan[$k->id]['extra'])) {
+                return [$k->id => null];
+            }
+            // Anak hanya dibatasi batas anak (extra bed tidak menambahnya); dewasa bisa ditutup extra bed
+            $perlu = $t->extraPerlu($k->bed_type, $dewasa, $anak);
+
+            return [$k->id => 'Melebihi kapasitas kamar ini (maks '.$t->teksKapasitas($k->bed_type).'). '
+                .($perlu !== null && $perlu <= $tambahan->extraTersedia() ? "Tambahkan {$perlu} extra bed atau pilih kamar lain." : 'Pilih kamar lain.')];
+        });
 
         return view('livewire.staf.reservasi.reservasi-langsung', [
             'tipe' => $tipe,
-            'perTipe' => $bebas->groupBy('room_type_id'),
+            // Saringan jenis kasur; kamar yang sudah dipilih tetap tampil
+            'perTipe' => $bebas->filter(fn ($k) => $this->saringKasur === '' || $k->bed_type === $this->saringKasur || in_array((string) $k->id, $this->kamar, true))->groupBy('room_type_id'),
+            'jenisKasur' => collect(array_keys(Room::BED_TYPES))->filter(fn ($b) => $bebas->contains('bed_type', $b))->values(),
             'sisa' => $sisa,
             'malam' => $malam,
             'dipilih' => $dipilih,
-            'total' => $dipilih->sum(fn ($k) => (float) $tipe[$k->room_type_id]->base_price * $malam),
+            'total' => $dipilih->sum(fn ($k) => (float) $tipe[$k->room_type_id]->base_price * $malam) + $rincianTambahan->flatten(1)->sum('subtotal'),
+            'layananTambahan' => $tambahan->layanan(),
+            'pilihan' => $pilihan,
+            'rincianTambahan' => $rincianTambahan,
+            'peringatanKapasitas' => $peringatanKapasitas,
             'hariIni' => $this->masuk === today()->toDateString(),
             'tanggalValid' => $tgl !== null,
             'pelanggan' => $lama,

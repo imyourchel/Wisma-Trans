@@ -42,13 +42,13 @@ class KetersediaanMenu extends Component
         Gate::authorize('manage-fnb');
         $menu = Service::findOrFail($id);
         $layanan->aturKetersediaan($menu, $habis);
-        $this->dispatch('toast', teks: $habis ? "{$menu->name} ditandai habis." : "{$menu->name} tersedia lagi.", peringatan: $habis);
+        $this->dispatch('toast', teks: $habis ? "{$menu->name} ditandai habis. Pesanan yang sudah masuk tetap diproses." : "{$menu->name} tersedia lagi.", peringatan: $habis);
     }
 
     public function render(): View
     {
         $kata = mb_strtolower(trim($this->cari));
-        $menu = Service::where('category', 'fnb')->where('is_active', true)->orderBy('id')->get();
+        $menu = Service::menuKafe()->orderBy('id')->get();
 
         return view('livewire.staf.layanan.ketersediaan-menu', [
             'grup' => $menu->filter(fn ($m) => ($this->saring !== 'habis' || $m->habis()) && ($kata === '' || str_contains(mb_strtolower($m->name), $kata)))

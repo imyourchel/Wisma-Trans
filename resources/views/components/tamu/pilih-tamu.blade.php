@@ -1,10 +1,11 @@
-{{-- Panel susunan tamu per kamar (dewasa dan anak), dipakai di dalam x-data cariKamar. $panel mengatur posisi panel. --}}
+{{-- Panel susunan tamu per kamar (dewasa dan anak) dengan tombol Tambah kamar, dipakai di dalam x-data cariKamar (halaman kamar)
+     dan pencarianKamar (beranda). $panel mengatur posisi panel. --}}
 @props(['panel' => 'inset-x-0 top-[92px] sm:left-3 sm:right-auto sm:w-[340px]'])
 
 <div x-cloak x-show="buka" x-transition.opacity.duration.150ms @keydown.escape.window="buka = false"
      {{ $attributes->class(['absolute z-[60] flex max-h-[min(560px,75vh)] max-w-[calc(100vw-32px)] flex-col rounded-md border border-cream-300 bg-cream-50 shadow-wt-lg', $panel]) }}>
     <div class="flex flex-col gap-3 overflow-y-auto p-5 pb-3">
-        <div class="text-[13px] text-ink-500" x-text="'Maksimal ' + maksTamu + ' orang per kamar, dewasa dan anak dihitung.'"></div>
+        <div class="text-[13px] text-ink-500" x-text="'Maksimal ' + batasTamu.dewasa + ' dewasa dan ' + batasTamu.anak + ' anak per kamar.'"></div>
         <template x-for="(k, i) in kamar" :key="i">
             <div class="flex flex-col gap-3 rounded border border-cream-300 p-4">
                 <div class="flex items-center justify-between gap-2">
@@ -17,10 +18,10 @@
                         <span class="text-sm">{{ $label }}@if ($ket)<span class="block text-xs text-ink-500">{{ $ket }}</span>@endif</span>
                         <div class="flex items-center gap-2">
                             <button type="button" @click="ubahTamu(i, '{{ $jenis }}', -1)" :disabled="{{ $jenis === 'dewasa' ? 'k.dewasa <= 1' : 'k.anak <= 0' }}" aria-label="Kurangi {{ Str::lower($label) }}"
-                                    class="h-9 w-9 rounded border border-cream-300 bg-cream-50 text-[17px] text-brown-800 hover:bg-cream-200 disabled:opacity-30">−</button>
+                                    class="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 rounded border border-cream-300 bg-cream-50 text-[17px] text-brown-800 hover:bg-cream-200 disabled:opacity-30">−</button>
                             <span class="min-w-6 text-center font-display font-bold tabular-nums" x-text="k.{{ $jenis }}" aria-live="polite"></span>
-                            <button type="button" @click="ubahTamu(i, '{{ $jenis }}', 1)" :disabled="k.dewasa + k.anak >= maksTamu" aria-label="Tambah {{ Str::lower($label) }}"
-                                    class="h-9 w-9 rounded border border-cream-300 bg-cream-50 text-[17px] text-brown-800 hover:bg-cream-200 disabled:opacity-30">+</button>
+                            <button type="button" @click="ubahTamu(i, '{{ $jenis }}', 1)" :disabled="k.{{ $jenis }} >= batasTamu.{{ $jenis }}" aria-label="Tambah {{ Str::lower($label) }}"
+                                    class="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 rounded border border-cream-300 bg-cream-50 text-[17px] text-brown-800 hover:bg-cream-200 disabled:opacity-30">+</button>
                         </div>
                     </div>
                 @endforeach

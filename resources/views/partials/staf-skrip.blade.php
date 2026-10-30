@@ -60,7 +60,7 @@
             tanggal: '',
             jam: '',
             init() {
-                const fTanggal = new Intl.DateTimeFormat('id-ID', { timeZone: cfg.zona, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                const fTanggal = new Intl.DateTimeFormat('id-ID', { timeZone: cfg.zona, day: 'numeric', month: 'short', year: 'numeric' });
                 const fJam = new Intl.DateTimeFormat('id-ID', { timeZone: cfg.zona, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
                 const tik = () => {
                     const d = new Date(Date.now() + this.selisih);

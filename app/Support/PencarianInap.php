@@ -18,6 +18,9 @@ final class PencarianInap
     /** Batas wajar tamu per kamar; kapasitas sebenarnya mengikuti tipe kamar. */
     public const MAKS_TAMU = 10;
 
+    /** Batas jumlah tamu satu pencarian di halaman kamar (dewasa dan anak dihitung); rombongan lebih besar lewat instansi. */
+    public const MAKS_TAMU_TOTAL = 40;
+
     /** Susunan bawaan bila tamu belum memilih: satu kamar dua dewasa, sama seperti beranda. */
     public const BAWAAN = [['dewasa' => 2, 'anak' => 0]];
 
@@ -72,6 +75,34 @@ final class PencarianInap
 
             return ['dewasa' => $d, 'anak' => max(0, min(self::MAKS_TAMU - $d, $a))];
         })->all();
+    }
+
+    /**
+     * Jumlah dewasa dan anak dari ?tamu= untuk halaman kamar, yang tidak lagi menanyakan jumlah kamar. Susunan per kamar
+     * lama ("2-0_4-0") dijumlahkan, jadi tautan lama tetap terbuka. Isian rusak kembali ke 2 dewasa.
+     *
+     * @return array{dewasa: int, anak: int}
+     */
+    public static function total(mixed $tamu): array
+    {
+        if (! is_string($tamu) || ! preg_match('/^\d{1,2}-\d{1,2}(_\d{1,2}-\d{1,2})*$/', $tamu)) {
+            return self::BAWAAN[0];
+        }
+        $d = $a = 0;
+        foreach (array_slice(explode('_', $tamu), 0, self::MAKS_KAMAR) as $k) {
+            [$kd, $ka] = array_map('intval', explode('-', $k));
+            $d += $kd;
+            $a += $ka;
+        }
+        $d = max(1, min(self::MAKS_TAMU_TOTAL, $d));
+
+        return ['dewasa' => $d, 'anak' => max(0, min(self::MAKS_TAMU_TOTAL - $d, $a))];
+    }
+
+    /** Kebalikan total(): "4-2"; 2 dewasa tanpa anak (bawaan) menjadi teks kosong. */
+    public static function teksTotal(array $total): string
+    {
+        return [$total['dewasa'], $total['anak']] === [2, 0] ? '' : $total['dewasa'].'-'.$total['anak'];
     }
 
     /** Kebalikan susunan(); susunan bawaan menjadi teks kosong agar tidak muncul di URL. */

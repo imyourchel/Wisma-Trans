@@ -88,4 +88,26 @@ class ProfilTest extends TestCase
 
         $this->assertTrue(Hash::check('sandibaru123', $akun->fresh()->password));
     }
+
+    public function test_PR05_menu_akun_staf_sesuai_peran(): void
+    {
+        // Admin dan Manager: Lihat situs dan Keluar; FO, F&B, HK: hanya Keluar. Profil tidak ada di menu staf.
+        foreach (['admin' => true, 'manager' => true, 'fo' => false, 'fnb' => false, 'hk' => false] as $peran => $situs) {
+            $r = $this->actingAs($this->akun($peran))->get(route('staf.dashboard'))->assertOk()
+                ->assertSee('Keluar')->assertDontSee('href="'.route('profil').'"', false);
+            $situs ? $r->assertSee('data-menu-situs', false) : $r->assertDontSee('data-menu-situs', false);
+        }
+    }
+
+    public function test_PR06_bawah_sidebar_staf_lihat_situs_dan_keluar(): void
+    {
+        // Ciut/lebar sidebar hanya lewat tombol menu di kepala; bawah sidebar: Lihat situs tamu (Admin, Manager) dan Keluar (dengan konfirmasi)
+        foreach (['admin' => true, 'manager' => true, 'fo' => false, 'fnb' => false, 'hk' => false] as $peran => $situs) {
+            $r = $this->actingAs($this->akun($peran))->get(route('staf.dashboard'))->assertOk()
+                ->assertDontSee('Ciutkan</span>', false)->assertSee('data-tombol-menu', false)
+                ->assertSee('data-sidebar-keluar', false)->assertSee('Keluar dari panel staf?');
+            $situs ? $r->assertSee('data-sidebar-situs', false)->assertSee('Lihat situs tamu')->assertSee('target="_blank" rel="noopener"', false)
+                : $r->assertDontSee('data-sidebar-situs', false)->assertDontSee('Lihat situs tamu');
+        }
+    }
 }

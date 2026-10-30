@@ -21,7 +21,7 @@
      @if ($model) x-modelable="nilai" x-model="{{ $model }}" @endif
      @if ($sumber) x-effect="pilihan = ({{ $sumber }})" @endif
      @click.outside="tutup()" @keydown.escape="buka && (tutup(), $event.stopPropagation())"
-     {{ $attributes->merge(['class' => 'relative']) }}>
+     {{ $attributes->merge(['class' => 'wt-isian-lebar relative']) }}>
     @if ($name)
         <input type="hidden" name="{{ $name }}" :value="nilai">
     @endif

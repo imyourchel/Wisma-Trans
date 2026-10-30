@@ -13,6 +13,8 @@
 /.zed
 /auth.json
 /node_modules
+/tools/responsive/node_modules
+/storage/app/responsive
 /public/build
 /public/hot
 /public/storage

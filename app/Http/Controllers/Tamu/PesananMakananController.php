@@ -11,9 +11,11 @@ use App\Rules\EmailWajar;
 use App\Rules\NomorHp;
 use App\Services\Keuangan\PembayaranMidtrans;
 use App\Services\Reservasi\KodeKamar;
+use App\Support\IzinCekPesanan;
 use App\Support\Nomor;
 use App\Support\Pelanggan;
 use App\Support\PersonName;
+use App\Support\PesananPerangkat;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -114,7 +116,7 @@ class PesananMakananController extends Controller
 
         // Harga selalu diambil dari basis data, bukan dari peramban
         $menu = Service::whereIn('id', collect($data['items'])->pluck('id'))
-            ->where('category', 'fnb')->where('is_active', true)->whereNotNull('price')->get()
+            ->menuKafe()->whereNotNull('price')->get()
             ->reject(fn (Service $s) => $s->habis())->keyBy('id');
         $hilang = collect($data['items'])->reject(fn ($i) => $menu->has($i['id']));
         if ($hilang->isNotEmpty()) {
@@ -213,12 +215,27 @@ class PesananMakananController extends Controller
         if ($order->jenisLayanan() === 'laundry') {
             return redirect($order->urlStatus());
         }
+
+        return $this->tampilkan($order, false);
+    }
+
+    /** Halaman hanya-lihat dari Cek Pesanan; pemanggil (CekPesananLihatController) sudah memeriksa izin session. */
+    public function lihat(ServiceOrder $order): View
+    {
+        return $this->tampilkan($order, true);
+    }
+
+    private function tampilkan(ServiceOrder $order, bool $hanyaLihat): View
+    {
         $this->midtrans->sinkronkan($order);
         $order = $order->fresh(['items.service', 'invoice.payments', 'customer', 'reservationRoom.room'])->batalkanBilaKedaluwarsa();
+        // Tamu tanpa akun: masuk ke tab "Pesanan terakhir" di Cek Pesanan (lihat saja tanpa token)
+        PesananPerangkat::layanan($order, $hanyaLihat);
 
         return view('tamu.pesanan-status', [
             'order' => $order,
             'title' => 'Pesanan '.$order->order_code,
+            'hanyaLihat' => $hanyaLihat,
             'tagihan' => $order->sudahDibayar() || $order->status === 'cancelled' ? null : $this->midtrans->tagihanAktif($order),
         ]);
     }
@@ -226,7 +243,7 @@ class PesananMakananController extends Controller
     /** Buat tagihan (nomor virtual account atau QRIS) untuk metode yang dipilih tamu. */
     public function bayar(Request $request, string $kode): JsonResponse
     {
-        $order = $this->pesananDariTautan($request, $kode);
+        $order = $this->pesananDariTautan($request, $kode, izinLihat: true);
         $metode = $request->validate(['metode' => ['required', Rule::in(array_keys(PembayaranMidtrans::METODE))]], [
             'metode.*' => 'Pilih metode pembayaran.',
         ])['metode'];
@@ -255,7 +272,7 @@ class PesananMakananController extends Controller
     /** Dipanggil berkala oleh halaman pesanan selama tamu menyelesaikan pembayaran. */
     public function cek(Request $request, string $kode): JsonResponse
     {
-        $order = $this->pesananDariTautan($request, $kode);
+        $order = $this->pesananDariTautan($request, $kode, izinLihat: true);
         $this->midtrans->sinkronkan($order);
         $order = $order->fresh('invoice')->batalkanBilaKedaluwarsa();
 
@@ -276,10 +293,12 @@ class PesananMakananController extends Controller
         return response()->json(['pesan' => 'ok']);
     }
 
-    private function pesananDariTautan(Request $request, string $kode): ServiceOrder
+    /** Token di tautan. $izinLihat: izin lihat saja dari Cek Pesanan juga diterima (hanya bayar dan cek status). */
+    private function pesananDariTautan(Request $request, string $kode, bool $izinLihat = false): ServiceOrder
     {
         $order = ServiceOrder::dariKodeUrl($kode);
-        abort_unless($order && $order->access_token && hash_equals($order->access_token, (string) $request->query('t')), 404);
+        $lihat = $izinLihat && $order && IzinCekPesanan::berlaku($order->jenisLayanan(), $order->order_code);
+        abort_unless($order && $order->access_token && ($lihat || hash_equals($order->access_token, (string) $request->query('t'))), 404);
 
         return $order;
     }

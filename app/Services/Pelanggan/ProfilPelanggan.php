@@ -322,7 +322,7 @@ class ProfilPelanggan
     {
         $barisKamar = DB::table('reservation_rooms')->whereIn('reservation_id', $reservasiIds->all() ?: [0])->select('id');
         $pesanan = fn () => DB::table('service_order_items as soi')->join('service_orders as so', 'so.id', '=', 'soi.service_order_id')
-            ->join('services as s', 's.id', '=', 'soi.service_id')->where('so.status', '!=', 'cancelled')
+            ->join('services as s', 's.id', '=', 'soi.service_id')->where('so.status', '!=', 'cancelled')->whereNull('so.service_start_date')
             ->where(fn ($q) => $q->whereIn('so.reservation_room_id', $barisKamar)
                 ->when($pelangganLuar, fn ($q) => $q->orWhere(fn ($q) => $q->where('so.order_type', 'outside_guest')->where('so.customer_id', $pelangganLuar))));
 

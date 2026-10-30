@@ -153,6 +153,25 @@
     .wt-btn-sm:hover { background: var(--color-cream-200); }
 
     .wt-lencana { display: inline-block; padding: 3px 8px; font-size: 11px; font-weight: 700; line-height: 1.2; white-space: nowrap; border-radius: 999px; }
+    /*
+     * Warna status kamar dari RoomStatus::gaya() (--st utama, --st-bg latar, --st-tx teks, --st-badge latar label).
+     * Ditulis di sini, bukan sebagai kelas arbitrer di Blade, supaya tidak ikut terbuang saat build.
+     */
+    .wt-st-kartu {
+        background-color: var(--st-bg); border: 1px solid color-mix(in srgb, var(--st) 30%, transparent); border-left: 5px solid var(--st);
+        transition: border-color .2s var(--ease-wt), box-shadow .2s var(--ease-wt), transform .2s var(--ease-wt);
+    }
+    .wt-st-kartu:hover { border-color: var(--st); }
+    .wt-st-arsir { background-image: repeating-linear-gradient(45deg, color-mix(in srgb, var(--st) 8%, transparent) 0 6px, transparent 6px 12px); }
+    .wt-st-ringkasan { background-color: var(--st-bg); border: 1px solid color-mix(in srgb, var(--st) 22%, transparent); border-left: 4px solid var(--st); }
+    .wt-st-ringkasan:hover, .wt-st-ringkasan.is-aktif { border-color: var(--st); }
+    .wt-st-ringkasan.is-aktif { box-shadow: 0 0 0 1px var(--st); }
+    .wt-st-badge { display: inline-flex; align-self: flex-start; border-radius: 6px; padding: 2px 8px; background-color: var(--st-badge); color: var(--st-tx); font-weight: 600; }
+    .wt-st-lencana { background-color: var(--st-bg); color: var(--st-tx); }
+    .wt-st-utama { color: var(--st); }
+    .wt-st-teks { color: var(--st-tx); }
+    .wt-st-titik { background-color: var(--st); }
+
     .wt-lencana-aktif { background: rgba(92, 158, 103, .18); color: var(--color-status-available); }
     .wt-lencana-nonaktif { background: rgba(155, 139, 120, .20); color: var(--color-status-occupied); }
     .wt-lencana-netral { background: var(--color-cream-200); color: var(--color-brown-800); }
@@ -174,7 +193,6 @@
     .wt-sidebar { width: 256px; }
     .wt-label { min-width: 0; overflow: hidden; white-space: nowrap; transition: opacity .2s var(--ease-wt) .12s; }
     .wt-logo-kecil { opacity: 0; transition: opacity .15s var(--ease-wt); }
-    .wt-ciut-ikon { transition: transform .3s var(--ease-wt); }
     .wt-anim .wt-sidebar { transition: width .3s var(--ease-wt), transform .3s var(--ease-wt); }
     .wt-anim .wt-konten { transition: padding-left .3s var(--ease-wt); }
     @media (min-width: 768px) {
@@ -182,7 +200,6 @@
         .wt-sidebar.is-ciut .wt-label { opacity: 0; pointer-events: none; transition-duration: .1s; transition-delay: 0s; }
         .wt-sidebar.is-ciut .wt-logo-kecil { opacity: 1; transition-delay: .15s; }
         .wt-sidebar.is-ciut .wt-grup-aktif { background: rgba(242, 235, 220, .16); }
-        .wt-sidebar.is-ciut .wt-ciut-ikon { transform: rotate(180deg); }
         .wt-konten { padding-left: 256px; }
         .wt-konten.is-ciut { padding-left: 72px; }
     }
@@ -236,8 +253,83 @@ button[aria-busy="true"]::before,
     border: 2px solid currentColor; border-right-color: transparent; border-radius: 9999px;
     animation: wt-putar .7s linear infinite;
 }
+/* Tombol berlabel panjang (wt-muat-tengah): saat memuat label disembunyikan dan ikon putar di tengah, supaya lebar tombol tetap dan label tidak terpotong */
+:is(button[aria-busy="true"], [data-loading]).wt-muat-tengah { position: relative; color: transparent !important; }
+:is(button[aria-busy="true"], [data-loading]).wt-muat-tengah::before {
+    position: absolute; left: 50%; top: 50%; margin: -.525em 0 0 -.525em;
+    border-color: var(--color-cream-50); border-right-color: transparent;
+}
 @media (prefers-reduced-motion: reduce) {
     html.wt-memuat body::after { animation: none; transform: scaleX(.6); }
     button[aria-busy="true"]::before,
     :is(.wt-btn-primary, .wt-btn-outline, .wt-btn-sm, button[type="submit"])[data-loading]::before { animation-duration: 1.6s; }
+}
+
+/*
+ * Aturan responsif bersama (HP 360px sampai desktop 1920px). Sengaja di luar @layer agar berlaku di atas
+ * utilitas per halaman; cakupannya dibatasi kelas atau media query supaya tampilan desktop tidak berubah.
+ */
+/* Gambar sudah max-width: 100% dan height: auto dari preflight Tailwind (lapisan base) */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* HP dan tablet: isian minimal 16px agar Safari iOS tidak memperbesar halaman saat isian disentuh */
+@media (max-width: 1023.98px), (pointer: coarse) {
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"]), select, textarea { font-size: 16px; }
+}
+
+/* Layar sentuh: target sentuh minimal 44px untuk tombol, isian, dan tautan berbentuk tombol bersama */
+@media (pointer: coarse) {
+    .wt-input:not(textarea), .wt-btn-primary, .wt-btn-outline, .wt-btn-sm { min-height: 44px; }
+    .wt-btn-sm { padding-inline: 14px; }
+    :is([role="tablist"], .wt-geser) > :is(button, a) { min-height: 44px; }
+}
+
+/*
+ * Modal tengah (.wt-modal pembungkus, .wt-dialog kotaknya): di HP tampil penuh layar. Kepala dan kaki dialog
+ * memakai flex-none dan isinya overflow-y-auto, jadi kepala tetap di atas dan tombol aksi menempel di bawah.
+ * Di tablet/desktop tetap di tengah dengan tinggi maksimum dan isi yang bisa digeser.
+ */
+@media (max-width: 639.98px) {
+    .wt-modal { padding: 0; align-items: stretch; }
+    .wt-dialog { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0;
+        padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/*
+ * Tabel yang menjadi daftar kartu di bawah 768px (.wt-tabel-kartu). Tiap baris menjadi kartu; tiap sel tampil
+ * "label  nilai" dengan label dari atribut data-label (kolom kiri) dan isinya bertumpuk di kolom kanan.
+ * Sel .wt-kartu-judul menjadi judul kartu (paling atas, tanpa label), sel .wt-kartu-aksi berisi tombol di bawah.
+ * Sel tanpa data-label tampil selebar kartu. Di 768px ke atas tetap tabel biasa.
+ */
+@media (max-width: 767.98px) {
+    .wt-tabel-kartu { display: block; width: 100%; min-width: 0; }
+    .wt-tabel-kartu thead { display: none; }
+    .wt-tabel-kartu tbody { display: block; }
+    .wt-tabel-kartu tr { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-top: 1px solid var(--color-cream-300); }
+    .wt-tabel-kartu tbody tr:first-child { border-top: 0; }
+    .wt-tabel-kartu td { display: block; max-width: none; padding: 0; border: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+    .wt-tabel-kartu td[data-label] { display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr); column-gap: 12px; align-items: baseline; }
+    .wt-tabel-kartu td[data-label]::before {
+        content: attr(data-label); grid-column: 1; grid-row: 1 / span 20;
+        font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--color-ink-500);
+    }
+    .wt-tabel-kartu td[data-label] > * { grid-column: 2; min-width: 0; }
+    .wt-tabel-kartu td.wt-kartu-judul { order: -1; font-size: 14px; }
+    .wt-tabel-kartu td.wt-kartu-aksi { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; padding-top: 6px; }
+    .wt-tabel-kartu td.wt-kartu-aksi > * { justify-content: flex-start; }
+    .wt-tabel-kartu td:empty { display: none; }
+    .wt-tabel-kartu td[colspan] { text-align: center; }
+}
+
+/* Isian tanggal, jam, dan pilihan panel staf (x-staf.tanggal/jam/pilih): selebar wadah di HP, lebar tetapnya mulai 640px */
+@media (max-width: 639.98px) {
+    .wt-isian-lebar { width: 100%; max-width: 100%; min-width: 0; flex: 1 1 100%; }
+}
+
+/* Tab, segmen, atau lajur yang tidak muat: geser horizontal di dalam wadahnya (di lapisan components agar
+   utilitas seperti lg:overflow-visible tetap bisa menimpanya) */
+@layer components {
+    .wt-geser { overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none; }
+    .wt-geser::-webkit-scrollbar { display: none; }
+    .wt-geser > * { scroll-snap-align: start; flex: none; }
 }

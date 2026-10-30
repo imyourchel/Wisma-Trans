@@ -314,8 +314,8 @@ class PerbaikanKamarMaintenanceTest extends TestCase
         $this->assertSame($this->tipe('DLX')->id, $kamar->fresh()->room_type_id);
 
         // Nomor, lantai, dan jenis kasur tetap boleh diubah
-        $this->actingAs($this->akun('admin'))->putJson(route('staf.kamar.update', $kamar), ['room_number' => '201A', 'bed_type' => 'twin'] + $isi)->assertOk();
-        $this->assertSame(['201A', 'twin'], [$kamar->fresh()->room_number, $kamar->fresh()->bed_type]);
+        $this->actingAs($this->akun('admin'))->putJson(route('staf.kamar.update', $kamar), ['room_number' => '201A', 'bed_type' => 'twin_single'] + $isi)->assertOk();
+        $this->assertSame(['201A', 'twin_single'], [$kamar->fresh()->room_number, $kamar->fresh()->bed_type]);
 
         // Tamu yang sedang menginap juga mengunci tipe; kamar tanpa pemesanan bebas diubah
         $this->pesan('RSV-0012', '204', '2026-10-05', '2026-10-07', 'checked_in');

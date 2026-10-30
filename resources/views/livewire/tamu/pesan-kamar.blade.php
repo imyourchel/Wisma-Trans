@@ -1,35 +1,21 @@
 @php
+    use App\Models\Room;
     use App\Services\Keuangan\PembayaranMidtrans;
     use App\Services\Reservasi\ReservasiService;
+    use App\Support\PilihanKamar;
 
     $rp = fn ($n) => 'Rp'.number_format((float) $n, 0, ',', '.');
     $kolomGalat = fn ($f) => $errors->has($f) ? 'is-invalid' : '';
+    $rentang = $cari->masuk ? $cari->masuk->translatedFormat('j M').' – '.$cari->keluar->translatedFormat('j M Y').' · '.$malam.' malam' : '';
 @endphp
 
-<div class="wt-container animate-wt-masuk max-w-[1120px] py-8 sm:py-12">
-    <a href="{{ $urlKembali }}" class="mb-5 inline-flex items-center gap-1.5 text-[13px] text-ink-500 hover:text-clay-600">
+<div class="wt-container animate-wt-masuk max-w-[1188px] py-8 sm:py-10">
+    <a href="{{ $urlKembali }}" class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-ink-500 hover:text-clay-600">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Ubah pilihan kamar
     </a>
 
-    {{-- Tahapan --}}
-    <ol class="m-0 mb-7 flex list-none flex-wrap items-center gap-x-3 gap-y-2 p-0 text-[13px]" aria-label="Tahapan pemesanan">
-        @foreach (['Pilih kamar', 'Data pemesan', 'Bayar uang muka'] as $i => $langkah)
-            <li class="flex items-center gap-2">
-                <span @class(['flex h-6 w-6 items-center justify-center rounded-full font-display text-[11px] font-bold',
-                    'bg-status-available text-cream-50' => $i === 0, 'bg-clay-500 text-cream-50' => $i === 1, 'bg-cream-300 text-ink-500' => $i === 2])>
-                    @if ($i === 0)
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                    @else
-                        {{ $i + 1 }}
-                    @endif
-                </span>
-                <span @class(['font-semibold text-ink-900' => $i === 1, 'text-ink-500' => $i !== 1]) @if ($i === 1) aria-current="step" @endif>{{ $langkah }}</span>
-                @unless ($loop->last)<span class="h-px w-6 bg-cream-400" aria-hidden="true"></span>@endunless
-            </li>
-        @endforeach
-    </ol>
-
-    <h1 class="m-0 font-display text-[26px] font-extrabold leading-tight tracking-[.02em] sm:text-[30px]">Data pemesan</h1>
+    <div class="font-display text-[11px] font-semibold uppercase tracking-[.22em] text-clay-600">Langkah 2 dari 3 · Data pemesan dan pembayaran</div>
+    <h1 class="mb-0 mt-2 font-display text-[26px] font-extrabold uppercase leading-tight tracking-[.03em] sm:text-[32px]">Selesaikan pemesanan</h1>
     <p class="mb-0 mt-1.5 text-sm text-ink-500">Konfirmasi dan tautan cek pesanan dikirim ke WhatsApp Anda. Tidak perlu membuat akun.</p>
 
     @if ($galat)
@@ -39,16 +25,18 @@
         </div>
     @endif
 
-    <form wire:submit="pesan" class="mt-7 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]" novalidate>
-        <div class="flex min-w-0 flex-col gap-6">
-            <section class="wt-card p-5 sm:p-6" aria-labelledby="judul-pemesan">
-                <h2 id="judul-pemesan" class="m-0 font-display text-[13px] font-bold uppercase tracking-[.08em]">Pemesan</h2>
+    {{-- Di bawah lg: tombol bayar menempel di bawah layar --}}
+    <form wire:submit="pesan" class="mt-7 grid items-start gap-6 max-lg:pb-24 lg:grid-cols-[minmax(0,1fr)_380px]" novalidate>
+        <div class="wt-card min-w-0 divide-y divide-cream-300 p-0">
+            {{-- Data pemesan --}}
+            <section class="p-5 sm:p-6" aria-labelledby="judul-pemesan">
+                <h2 id="judul-pemesan" class="m-0 font-display text-[13px] font-bold uppercase tracking-[.1em]">Data pemesan</h2>
                 {{-- Tanggal, tamu, dan kamar terpilih ada di alamat halaman, jadi tetap ada setelah masuk --}}
                 <x-tawaran-masuk class="mt-4" manfaat="data pemesan terisi otomatis dan reservasi tersimpan di Pesanan saya" />
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     @foreach ([
                         ['nama', 'Nama lengkap', 'text', 'name', 'Sesuai kartu identitas', 'sm:col-span-2'],
-                        ['hp', 'Nomor WhatsApp', 'tel', 'tel', 'Contoh: 081234567890', ''],
+                        ['hp', 'Nomor WhatsApp', 'tel', 'tel', '08xxxxxxxxxx', ''],
                         ['email', 'Email (opsional)', 'email', 'email', 'Untuk bukti pembayaran', ''],
                     ] as [$f, $label, $type, $auto, $ph, $kolom])
                         <label class="block {{ $kolom }}">
@@ -57,23 +45,44 @@
                             @error($f)<span class="mt-1.5 flex text-xs font-medium leading-snug text-status-dirty" role="alert">{{ $message }}</span>@enderror
                         </label>
                     @endforeach
-                    <label class="block sm:col-span-2">
-                        <span class="wt-field-label mb-1.5 block">Permintaan khusus (opsional)</span>
-                        <textarea wire:model="permintaan" rows="2" maxlength="500" placeholder="Contoh: kamar di lantai 2, tiba sekitar pukul 20.00" class="wt-input {{ $kolomGalat('permintaan') }}"></textarea>
-                        <span class="mt-1.5 block text-xs text-ink-500">Permintaan disesuaikan dengan ketersediaan saat check-in.</span>
-                        @error('permintaan')<span class="mt-1.5 flex text-xs font-medium leading-snug text-status-dirty" role="alert">{{ $message }}</span>@enderror
-                    </label>
                 </div>
             </section>
 
-            <section class="wt-card p-5 sm:p-6" aria-labelledby="judul-metode">
+            {{-- Tambahan per kamar (Extra bed, Sarapan tambahan); harga dan keterangan dari tabel services --}}
+            @if ($layananTambahan['extra'] && $kamar)
+                <section class="p-5 sm:p-6" aria-labelledby="judul-tambahan" data-bagian-tambahan>
+                    <div class="flex flex-wrap items-baseline justify-between gap-3">
+                        <h2 id="judul-tambahan" class="m-0 font-display text-[13px] font-bold uppercase tracking-[.1em]">Tambahan per kamar <span class="font-normal normal-case tracking-normal text-ink-500">(opsional)</span></h2>
+                        @error('tambahan')<span class="text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror
+                    </div>
+                    <p class="mb-0 mt-1.5 text-xs leading-relaxed text-ink-500">Biaya tambahan ikut dihitung dalam total dan uang muka.</p>
+                    <div class="mt-4 flex flex-col gap-3">
+                        @foreach ($kamar as $k)
+                            <x-tambahan-kamar :kunci="$k['no']" :judul="$k['tipe']->name.($k['kasur'] ? ' · '.Room::labelKasur($k['kasur']) : '')" :tipe="$k['tipe']" :pilih="$pilihanTambahan[$k['no']]"
+                                              :kasur="$k['kasur']" :wajib="$k['wajib']" :layanan="$layananTambahan" :subjudul="'Kamar '.$k['no'].' · '.PilihanKamar::teksTamu($k['dewasa'], $k['anak'])" wire:key="tambahan-{{ $k['no'] }}" />
+                        @endforeach
+                    </div>
+                </section>
+            @endif
+
+            <section class="p-5 sm:p-6">
+                <label class="block">
+                    <span class="font-display text-[13px] font-bold uppercase tracking-[.1em]">Permintaan khusus <span class="font-normal normal-case tracking-normal text-ink-500">(opsional)</span></span>
+                    <textarea wire:model="permintaan" rows="2" maxlength="500" placeholder="Contoh: kamar berdekatan, tiba sekitar pukul 20.00" class="wt-input mt-3 {{ $kolomGalat('permintaan') }}"></textarea>
+                    <span class="mt-1.5 block text-xs text-ink-500">Permintaan disesuaikan dengan ketersediaan saat check-in.</span>
+                    @error('permintaan')<span class="mt-1.5 flex text-xs font-medium leading-snug text-status-dirty" role="alert">{{ $message }}</span>@enderror
+                </label>
+            </section>
+
+            <section class="p-5 sm:p-6" aria-labelledby="judul-metode">
                 <div class="flex flex-wrap items-baseline justify-between gap-3">
-                    <h2 id="judul-metode" class="m-0 font-display text-[13px] font-bold uppercase tracking-[.08em]">Metode bayar uang muka</h2>
+                    <h2 id="judul-metode" class="m-0 font-display text-[13px] font-bold uppercase tracking-[.1em]">Metode pembayaran uang muka</h2>
                     @error('metode')<span class="text-xs font-medium text-status-dirty" role="alert">{{ $message }}</span>@enderror
                 </div>
-                <div @class(['mt-4 flex flex-col divide-y divide-cream-300 overflow-hidden rounded-lg border', 'border-status-dirty' => $errors->has('metode'), 'border-cream-300' => ! $errors->has('metode')])>
+                <div class="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2" role="radiogroup" aria-labelledby="judul-metode">
                     @foreach (PembayaranMidtrans::METODE as $kunci => [$namaMetode, $ket])
-                        <label class="relative flex cursor-pointer items-center gap-3 px-3.5 py-2.5 transition hover:bg-row-hover has-[:checked]:bg-[rgba(181,113,74,.07)]">
+                        <label @class(['relative flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border px-3.5 py-3 transition hover:bg-row-hover has-[:checked]:border-clay-500 has-[:checked]:bg-cream-100 has-[:checked]:ring-1 has-[:checked]:ring-clay-500',
+                            'border-status-dirty' => $errors->has('metode'), 'border-cream-300' => ! $errors->has('metode')])>
                             <input type="radio" wire:model="metode" value="{{ $kunci }}" class="peer sr-only">
                             <span class="flex h-9 w-16 flex-none items-center justify-center rounded border border-cream-300 bg-white px-1.5">
                                 <img src="{{ asset('ds/bank/'.$kunci.'.svg') }}" alt="" class="max-h-5 max-w-full object-contain">
@@ -91,71 +100,72 @@
         </div>
 
         {{-- Ringkasan --}}
-        <aside class="wt-card overflow-hidden lg:sticky lg:top-24" aria-labelledby="judul-ringkasan">
-            <div class="border-b border-cream-300 bg-cream-100 px-5 py-4">
-                <h2 id="judul-ringkasan" class="m-0 font-display text-[13px] font-bold uppercase tracking-[.08em]">Ringkasan reservasi</h2>
+        <aside class="wt-card overflow-hidden p-0 lg:sticky lg:top-24" aria-labelledby="judul-ringkasan" data-ringkasan-pesan>
+            <div class="px-5 pb-4 pt-5 sm:px-6">
+                <h2 id="judul-ringkasan" class="m-0 font-display text-[11px] font-semibold uppercase tracking-[.22em] text-clay-600">Ringkasan</h2>
+                @if ($cari->masuk)
+                    <div class="mt-2 font-display text-[17px] font-bold">{{ $rentang }}</div>
+                    <div class="mt-0.5 text-[13px] text-ink-500">{{ PilihanKamar::teksTamu($jumlahTamu['dewasa'], $jumlahTamu['anak']) }} · check-in {{ ReservasiService::jamCheckIn() }} WITA</div>
+                @endif
             </div>
-            @if ($cari->masuk)
-                <div class="grid grid-cols-2 divide-x divide-cream-300 border-b border-cream-300">
-                    <div class="px-5 py-3.5">
-                        <div class="text-xs text-ink-500">Check-in</div>
-                        <div class="font-display text-[15px] font-bold">{{ $cari->masuk->translatedFormat('D, j M Y') }}</div>
-                        <div class="text-xs text-ink-500">mulai {{ ReservasiService::jamCheckIn() }} WITA</div>
-                    </div>
-                    <div class="px-5 py-3.5">
-                        <div class="text-xs text-ink-500">Check-out</div>
-                        <div class="font-display text-[15px] font-bold">{{ $cari->keluar->translatedFormat('D, j M Y') }}</div>
-                        <div class="text-xs text-ink-500">{{ $malam }} malam</div>
-                    </div>
-                </div>
-            @endif
 
-            <ul class="m-0 flex list-none flex-col gap-2 border-b border-cream-300 px-5 py-4 text-sm">
-                @foreach ($kamar as $k)
-                    <li class="flex items-center justify-between gap-3">
-                        <span class="min-w-0">
-                            <span class="block font-semibold">{{ $k['tipe']->name }}</span>
-                            <span class="block text-xs text-ink-500">Kamar {{ $k['no'] }} · {{ $k['dewasa'] }} dewasa{{ $k['anak'] ? ', '.$k['anak'].' anak' : '' }}</span>
-                        </span>
-                        <span class="flex-none text-right text-xs tabular-nums text-ink-500">{{ $rp($k['tipe']->base_price) }}<span class="block">/malam</span></span>
-                    </li>
-                @endforeach
-            </ul>
-
-            <dl class="m-0 flex flex-col gap-2 px-5 py-4 text-sm">
+            <dl class="m-0 flex flex-col gap-2 border-t border-cream-300 px-5 py-4 text-sm sm:px-6">
                 @foreach ($kelompok as $g)
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-ink-500">{{ $g['tipe']->name }} × {{ $g['jumlah'] }} · {{ $malam }} malam</dt>
-                        <dd class="m-0 tabular-nums">{{ $rp((float) $g['tipe']->base_price * $g['jumlah'] * $malam) }}</dd>
+                    <div class="flex justify-between gap-3" data-kelompok-kamar>
+                        <dt class="text-ink-900">{{ $g['tipe']->name }}{{ $g['kasur'] ? ' · '.Room::labelKasur($g['kasur']) : '' }} × {{ $g['jumlah'] }}</dt>
+                        <dd class="m-0 flex-none tabular-nums">{{ $rp((float) $g['tipe']->base_price * $g['jumlah'] * $malam) }}</dd>
+                    </div>
+                @endforeach
+                @foreach ($rincianTambahan as $t)
+                    <div class="flex justify-between gap-3" data-ringkasan-tambahan>
+                        <dt class="text-ink-500">{{ $t['teks'] }}</dt>
+                        <dd class="m-0 flex-none tabular-nums">{{ $rp($t['subtotal']) }}</dd>
                     </div>
                 @endforeach
                 <div class="mt-1 flex items-baseline justify-between gap-3 border-t border-cream-300 pt-3">
-                    <dt class="font-semibold">Total kamar</dt>
-                    <dd class="m-0 font-display text-lg font-extrabold tabular-nums">{{ $rp($total) }}</dd>
+                    <dt class="font-semibold">Total menginap</dt>
+                    <dd class="m-0 font-semibold tabular-nums">{{ $rp($total) }}</dd>
                 </div>
-                <div class="flex items-baseline justify-between gap-3 rounded-md bg-[rgba(181,113,74,.08)] px-3 py-2.5">
-                    <dt class="font-semibold text-clay-600">Uang muka {{ $persen }}%</dt>
-                    <dd class="m-0 font-display text-xl font-extrabold tabular-nums text-clay-600">{{ $rp($uangMuka) }}</dd>
+                <div class="flex items-baseline justify-between gap-3">
+                    <dt class="font-semibold text-clay-600">Bayar sekarang <span class="font-normal">(uang muka {{ $persen }}%)</span></dt>
+                    <dd class="m-0 font-display text-[22px] font-extrabold tabular-nums text-clay-600">{{ $rp($uangMuka) }}</dd>
                 </div>
-                <div class="flex justify-between gap-3 text-xs">
-                    <dt class="text-ink-500">Sisa dilunasi di resepsionis</dt>
-                    <dd class="m-0 tabular-nums">{{ $rp($total - $uangMuka) }}</dd>
+                <div class="flex justify-between gap-3 text-[13px]">
+                    <dt class="text-ink-500">Sisa dibayar saat check-out</dt>
+                    <dd class="m-0 tabular-nums text-ink-500">{{ $rp($total - $uangMuka) }}</dd>
                 </div>
             </dl>
 
-            <div class="border-t border-cream-300 px-5 py-4">
+            <div class="border-t border-cream-300 px-5 pb-5 pt-4 sm:px-6">
                 @error('kamar')<p class="m-0 mb-3 text-xs font-medium text-status-dirty" role="alert">{{ $message }}</p>@enderror
                 @error('tanggal')<p class="m-0 mb-3 text-xs font-medium text-status-dirty" role="alert">{{ $message }}</p>@enderror
+                @error('tambahan')<p class="m-0 mb-3 text-xs font-medium text-status-dirty" role="alert">{{ $message }}</p>@enderror
                 <button type="submit" @disabled($galat) wire:loading.attr="disabled"
-                        class="h-12 w-full rounded border-0 bg-clay-500 font-display text-[13px] font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 disabled:cursor-not-allowed disabled:opacity-60">
-                    <span wire:loading.remove wire:target="pesan">Pesan dan bayar {{ $rp($uangMuka) }}</span>
+                        class="h-12 w-full rounded border-0 bg-clay-500 font-display text-[13px] font-bold uppercase tracking-[.1em] text-cream-50 hover:bg-clay-600 disabled:cursor-not-allowed disabled:opacity-60 max-lg:hidden">
+                    <span wire:loading.remove wire:target="pesan">Bayar {{ $rp($uangMuka) }}</span>
                     <span wire:loading wire:target="pesan">Membuat reservasi…</span>
                 </button>
                 <p class="mb-0 mt-3 text-xs leading-relaxed text-ink-500">
-                    Pembatalan lebih dari {{ ReservasiService::hariMinimalBatal() }} hari sebelum kedatangan: uang muka kembali {{ ReservasiService::persenPengembalian() }}%.
+                    Satu kode pesanan untuk semua kamar. Pembatalan lebih dari {{ ReservasiService::hariMinimalBatal() }} hari sebelum kedatangan: uang muka kembali {{ ReservasiService::persenPengembalian() }}%.
                     Setelah itu, atau bila tidak datang, uang muka hangus.
                 </p>
             </div>
         </aside>
+
+        {{-- Bar bawah (di bawah lg): uang muka dan tombol bayar selalu terlihat --}}
+        <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50 px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_28px_-14px_rgba(62,42,28,.35)] lg:hidden" data-bar-bayar>
+            <div class="mx-auto flex max-w-[720px] items-center gap-3">
+                <button type="button" @click="document.getElementById('judul-ringkasan').scrollIntoView({ behavior: 'smooth', block: 'start' })"
+                        class="min-w-0 flex-1 border-0 bg-transparent p-0 text-left">
+                    <span class="block text-[11px] text-ink-500">Uang muka {{ $persen }}% · <span class="underline underline-offset-2">rincian</span></span>
+                    <span class="block truncate font-display text-lg font-extrabold tabular-nums text-clay-600">{{ $rp($uangMuka) }}</span>
+                </button>
+                <button type="submit" @disabled($galat) wire:loading.attr="disabled"
+                        class="h-12 flex-none rounded border-0 bg-clay-500 px-5 font-display text-[13px] font-bold uppercase tracking-[.08em] text-cream-50 hover:bg-clay-600 disabled:cursor-not-allowed disabled:opacity-60">
+                    <span wire:loading.remove wire:target="pesan">Bayar {{ $rp($uangMuka) }}</span>
+                    <span wire:loading wire:target="pesan">Memproses…</span>
+                </button>
+            </div>
+        </div>
     </form>
 </div>

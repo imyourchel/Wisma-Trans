@@ -11,6 +11,9 @@
         'Paket' => 'Lengkap dengan nasi, sup, dan sambal.',
         'Tambahan' => 'Pelengkap untuk menu utama.',
     ];
+    // Isi penampil foto (ketuk foto menu): foto besar, nama, deskripsi, harga, dan tombol pesan bila bisa dipesan
+    $dataFoto = fn ($m) => ['id' => $m->id, 'url' => $m->fotoUrl(), 'nama' => $m->name, 'ket' => (string) $m->description,
+        'harga' => $harga($m) ?? 'Sesuai ukuran', 'pesan' => ! $m->habis() && $m->price !== null, 'habis' => $m->habis()];
     $tanyaWa = 'https://wa.me/'.$wisma['whatsapp'].'?text='.rawurlencode('Halo Wisma Trans, saya ingin bertanya tentang menu restoran.');
     // Teks yang dicocokkan pencarian: nama dan deskripsi menu (sama dengan x-show tiap menu)
     $daftarGrup = $grup->map(fn ($isi, $nama) => ['nama' => $nama, 'slug' => Str::slug($nama), 'menu' => $isi->map(fn ($m) => Str::lower($m->name.' '.$m->description))->values()])->values();
@@ -19,8 +22,9 @@
 <x-layouts.guest :title="$title">
 <div class="animate-wt-masuk" x-data="menuResto(@js($daftarGrup), @js($katalog), @js(['pemesan' => $pemesan, 'urlPesan' => route('resto.pesan'), 'bayarOnline' => $bayarOnline,
         'kamarTamu' => $kamarTamu, 'jenisAwal' => $jenisAwal, 'kodeGalat' => $kodeGalat,
-        'urlKodeKamar' => route('resto.kode-kamar'), 'urlLupakan' => route('resto.kode-kamar.lupakan')]))"
-     x-effect="document.body.style.overflow = panel ? 'hidden' : ''">
+        'urlKodeKamar' => route('resto.kode-kamar'), 'urlLupakan' => route('resto.kode-kamar.lupakan'), 'tamu' => auth()->guest()]))"
+     x-effect="document.body.style.overflow = (panel || foto) ? 'hidden' : ''"
+     @tawar-akun-buka.window="tawarAkun = true" @tawar-akun-tutup.window="tawarAkun = false" @tanpa-akun.window="lanjutTanpaAkun($event.detail.varian)">
 
     {{-- Datang lewat tautan kode kamar --}}
     @if ($kodeGalat)
@@ -33,7 +37,7 @@
 
     {{-- Kepala halaman --}}
     <section class="relative isolate overflow-hidden bg-brown-900">
-        <img src="{{ asset('ds/img/resto-kafe.jpg') }}" alt="" class="absolute inset-0 -z-10 h-full w-full object-cover opacity-45">
+        <img src="{{ asset('ds/img/resto-header.jpg') }}" alt="" class="absolute inset-0 -z-10 h-full w-full object-cover opacity-45">
         <div class="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(40,27,18,.55)_0%,rgba(40,27,18,.72)_55%,rgba(40,27,18,.94)_100%)]"></div>
         <div class="wt-container flex min-h-[300px] flex-col items-center justify-center py-10 text-center sm:min-h-[340px] sm:py-12">
             <div class="flex items-center gap-3 font-display text-[11px] font-semibold uppercase tracking-[.32em] text-sand-300">
@@ -92,7 +96,10 @@
                         <article @class(['group flex w-[210px] flex-none snap-start flex-col overflow-hidden rounded-xl border border-cream-300 bg-cream-50 transition duration-300 hover:-translate-y-1 hover:border-cream-400 hover:shadow-wt-md sm:w-auto', 'opacity-60' => $m->habis()])>
                             <div class="relative aspect-[4/3] overflow-hidden bg-[linear-gradient(150deg,#F4EADB,#E6D3B3)]">
                                 @if ($foto = $m->fotoUrl())
-                                    <img src="{{ $foto }}" alt="{{ $m->name }}" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105">
+                                    <button type="button" @click="lihatFoto(@js($dataFoto($m)))" aria-label="Lihat foto {{ $m->name }}" data-lihat-foto="{{ $m->id }}"
+                                            class="block h-full w-full cursor-zoom-in border-0 bg-transparent p-0">
+                                        <img src="{{ $foto }}" alt="{{ $m->name }}" loading="lazy" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105">
+                                    </button>
                                 @else
                                     <div class="flex h-full items-center justify-center text-clay-500/50">
                                         <x-resto.ikon :minum="in_array($m->menu_group, $minuman)" ukuran="36" />
@@ -167,7 +174,8 @@
                     $kanan = $loop->index % 2 === 1;
                     $minum = in_array($nama, $minuman);
                     // Gambar kelompok: foto menu pertama di kelompok ini yang sudah punya foto
-                    $fotoGrup = $isi->map(fn ($m) => $m->fotoUrl())->filter()->first();
+                    $menuFotoGrup = $isi->first(fn ($m) => $m->fotoUrl());
+                    $fotoGrup = $menuFotoGrup?->fotoUrl();
                 @endphp
                 <section id="grup-{{ $slug }}" data-grup="{{ $slug }}" x-show="jumlahCocok(grup[{{ $loop->index }}]) > 0" :class="kata && 'mb-12!'"
                          @class(['scroll-mt-[190px] lg:scroll-mt-[200px] xl:scroll-mt-[160px]', 'mb-20 lg:mb-28' => ! $loop->last])>
@@ -180,7 +188,10 @@
                         <div x-show="!kata" @class(['lg:self-stretch', 'lg:order-2' => $kanan])>
                             <div class="relative aspect-[16/10] overflow-hidden rounded-sm bg-brown-800 lg:sticky lg:top-[200px] xl:top-[160px] lg:aspect-auto lg:h-[clamp(320px,100%,560px)]">
                                 @if ($fotoGrup)
-                                    <img src="{{ $fotoGrup }}" alt="{{ $nama }}" class="h-full w-full object-cover" loading="lazy">
+                                    <button type="button" @click="lihatFoto(@js($dataFoto($menuFotoGrup)))" aria-label="Lihat foto {{ $menuFotoGrup->name }}" data-lihat-foto="{{ $menuFotoGrup->id }}"
+                                            class="block h-full w-full cursor-zoom-in border-0 bg-transparent p-0">
+                                        <img src="{{ $fotoGrup }}" alt="{{ $nama }}" class="h-full w-full object-cover" loading="lazy">
+                                    </button>
                                 @else
                                     <div class="flex h-full flex-col items-center justify-center gap-4 bg-[radial-gradient(circle_at_30%_20%,rgba(228,185,143,.22),transparent_55%),radial-gradient(circle_at_80%_90%,rgba(181,113,74,.30),transparent_50%)] text-sand-300">
                                         <span class="flex h-20 w-20 items-center justify-center rounded-full border border-[rgba(228,185,143,.4)]">
@@ -204,7 +215,10 @@
                                 @foreach ($isi as $m)
                                     <article x-show="cocok(@js(Str::lower($m->name.' '.$m->description)))" @class(['flex items-center gap-4 border-b border-cream-300/70 py-4 last:border-b-0', 'opacity-60' => $m->habis()])>
                                         @if ($foto = $m->fotoUrl())
-                                            <img src="{{ $foto }}" alt="{{ $m->name }}" class="h-14 w-14 flex-none rounded-full object-cover" loading="lazy">
+                                            <button type="button" @click="lihatFoto(@js($dataFoto($m)))" aria-label="Lihat foto {{ $m->name }}" data-lihat-foto="{{ $m->id }}"
+                                                    class="h-14 w-14 flex-none cursor-zoom-in overflow-hidden rounded-full border-0 bg-transparent p-0 transition hover:ring-2 hover:ring-clay-500/50">
+                                                <img src="{{ $foto }}" alt="{{ $m->name }}" class="h-full w-full object-cover" loading="lazy">
+                                            </button>
                                         @endif
                                         <div class="min-w-0 flex-1">
                                             <div class="flex items-center gap-3">
@@ -263,6 +277,58 @@
         </div>
     </section>
 
+    {{-- Penampil foto menu: ketuk foto untuk melihat lebih detail; ketuk foto besar untuk memperbesar di titik itu --}}
+    <template x-teleport="body">
+        <div x-show="foto" x-cloak x-transition.opacity role="dialog" aria-modal="true" :aria-label="foto ? 'Foto ' + foto.nama : ''"
+             @keydown.escape.window="foto && tutupFoto()" data-penampil-foto
+             class="fixed inset-0 z-[400] flex flex-col bg-[rgba(20,13,8,.96)]">
+            <div class="flex flex-none items-center justify-between gap-4 px-4 py-3 text-cream-50 sm:px-6">
+                <span class="min-w-0 truncate font-display text-xs font-semibold uppercase tracking-[.16em]" x-text="foto?.nama"></span>
+                <button type="button" @click="tutupFoto()" x-ref="tutupFoto" aria-label="Tutup foto"
+                        class="flex h-10 w-10 flex-none items-center justify-center rounded-full border-0 bg-[rgba(242,235,220,.12)] text-cream-50 hover:bg-[rgba(242,235,220,.2)]">
+                    <x-tamu.ikon nama="tutup" ukuran="18" />
+                </button>
+            </div>
+            {{-- Ketuk di luar foto untuk menutup --}}
+            <div class="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3 sm:p-8" @click.self="tutupFoto()">
+                <img :src="foto?.url" :alt="foto?.nama" @click="ketukFoto($event)" @mousemove="zoom && geserFoto($event)"
+                     :style="zoom ? `transform: scale(2.2); transform-origin: ${asalZoom}` : ''"
+                     :class="zoom ? 'cursor-zoom-out' : 'cursor-zoom-in'"
+                     class="max-h-full max-w-full select-none rounded-sm object-contain transition-transform duration-200">
+            </div>
+            <div class="flex flex-none flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-[rgba(242,235,220,.12)] px-4 py-4 text-cream-50 sm:px-6">
+                <div class="min-w-0 flex-1">
+                    <p class="m-0 text-[13px] leading-snug text-[rgba(242,235,220,.8)]" x-show="foto?.ket" x-text="foto?.ket"></p>
+                    <p class="m-0 mt-1 text-[11px] text-[rgba(242,235,220,.55)]" x-text="zoom ? 'Ketuk foto untuk kembali.' : 'Ketuk foto untuk memperbesar.'"></p>
+                </div>
+                <div class="flex flex-none items-center gap-4">
+                    <span class="font-display text-base font-bold tabular-nums text-sand-300" x-text="foto?.harga"></span>
+                    <span x-show="foto?.habis" class="rounded-full bg-[rgba(212,81,74,.2)] px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-[.12em] text-[#F2B8B4]">Sedang tidak tersedia</span>
+                    <template x-if="foto?.pesan">
+                        <div>
+                            <button type="button" x-show="!jumlah(foto.id)" @click="tambah(foto.id)"
+                                    class="flex h-10 items-center gap-1.5 rounded-full border-0 bg-clay-500 px-5 font-display text-xs font-semibold text-cream-50 hover:bg-clay-600">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                                Tambah ke pesanan
+                            </button>
+                            <div x-show="jumlah(foto.id)" class="flex items-center gap-0.5 rounded-full border border-[rgba(242,235,220,.3)] p-0.5">
+                                <button type="button" @click="kurang(foto.id)" :aria-label="'Kurangi ' + foto.nama"
+                                        class="flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-full border-0 bg-transparent text-cream-50 hover:bg-[rgba(242,235,220,.12)]">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+                                </button>
+                                <span class="min-w-7 text-center font-display text-sm font-bold tabular-nums" x-text="jumlah(foto.id)"></span>
+                                <button type="button" @click="tambah(foto.id)" :aria-label="'Tambah ' + foto.nama"
+                                        class="flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-full border-0 bg-clay-500 text-cream-50 hover:bg-clay-600">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </template>
+
     {{-- Kartu keranjang melayang di bawah layar; klik di mana saja membuka panel pesanan --}}
     <div x-show="totalItem > 0 && !panel" x-cloak
          x-transition:enter="transition duration-300 ease-wt" x-transition:enter-start="translate-y-6 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
@@ -292,16 +358,34 @@
         </div>
     </div>
 
+    {{-- Tawaran masuk saat tamu (belum masuk) menekan Lanjut: masuk/daftar, atau lanjut tanpa akun. Keranjang tetap tersimpan. --}}
+    <x-tawaran-akun kunci="wt.resto.tanpa-akun" :kembali="route('menu', ['lanjut' => 1])" :varian="[
+        'luar' => ['manfaat' => [
+                ['Data pemesan terisi otomatis', 'Nama dan nomor WhatsApp tidak perlu diketik ulang setiap kali memesan.'],
+                ['Riwayat pesanan tersimpan', 'Pantau status pesanan kapan saja melalui menu Pesanan saya.'],
+            ], 'lanjut' => 'Lanjutkan sebagai tamu', 'ingat' => true, 'catatan' => 'Isi keranjang Anda tetap tersimpan setelah masuk.'],
+        'menginap' => ['manfaat' => [
+                ['Kamar langsung dikenali', 'Pesanan berikutnya tidak lagi memerlukan kode kamar.'],
+                ['Riwayat pesanan tersimpan', 'Pantau status pesanan kapan saja melalui menu Pesanan saya.'],
+            ], 'lanjut' => 'Lanjutkan sebagai tamu', 'ingat' => true, 'catatan' => 'Isi keranjang Anda tetap tersimpan setelah masuk.'],
+        'kamar' => ['manfaat' => [
+                ['Kamar langsung dikenali', 'Masuk dengan akun yang dipakai saat memesan kamar, tanpa kode kamar.'],
+                ['Tagihkan ke kamar', 'Pesanan dapat dibayar sekaligus saat check-out.'],
+                ['Riwayat pesanan tersimpan', 'Pantau status pesanan kapan saja melalui menu Pesanan saya.'],
+            ], 'lanjut' => 'Gunakan kode kamar', 'ingat' => false, 'catatan' => 'Isi keranjang Anda tetap tersimpan setelah masuk.'],
+    ]" />
+
+
     {{-- Panel pesanan: 1) keranjang dan cara penyajian, 2) data pemesan dan metode bayar --}}
     <div x-show="panel" x-cloak @click="tutupPanel()" x-transition.opacity class="fixed inset-0 z-[340] bg-[rgba(62,42,28,.40)]"></div>
-    <aside x-show="panel" x-cloak x-ref="panel" @keydown.escape.window="panel && tutupPanel()"
+    <aside x-show="panel" x-cloak x-ref="panel" @keydown.escape.window="panel && !tawarAkun && tutupPanel()"
            x-transition:enter="transition duration-250 ease-wt" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
            x-transition:leave="transition duration-200 ease-wt" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full"
            role="dialog" aria-modal="true" aria-labelledby="judul-pesanan"
            class="fixed inset-y-0 right-0 z-[345] flex w-[460px] max-w-full flex-col bg-cream-50 shadow-wt-lg">
         <div class="flex flex-none items-center gap-3 border-b border-cream-300 px-5 py-4 sm:px-6">
             <button type="button" x-show="langkah === 2" @click="langkah = 1" aria-label="Kembali ke keranjang"
-                    class="flex h-8 w-8 items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200">
+                    class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
             <div class="min-w-0 flex-1">
@@ -309,7 +393,7 @@
                 <div class="text-xs text-ink-500" x-text="'Langkah ' + langkah + ' dari 2'"></div>
             </div>
             <button type="button" @click="tutupPanel()" aria-label="Tutup"
-                    class="flex h-8 w-8 items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200">
+                    class="flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded border border-cream-300 bg-transparent text-brown-800 hover:bg-cream-200">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
         </div>
@@ -317,44 +401,47 @@
         <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
             {{-- Langkah 1 --}}
             <div x-show="langkah === 1" class="flex flex-col gap-6">
-                {{-- Saran masuk paling atas: tamu luar (data pemesan) dan tamu menginap yang belum punya kamar (tanpa kode kamar) --}}
-                <div x-show="jenis === 'luar'">
-                    <x-tawaran-masuk :kembali="route('menu', ['lanjut' => 1])" manfaat="data pemesan terisi otomatis dan pesanan tersimpan di Pesanan saya" />
-                </div>
-                <div x-show="jenis === 'menginap' && !kamarList.length" x-cloak>
-                    <x-tawaran-masuk :kembali="route('menu', ['lanjut' => 1])" manfaat="kamar Anda langsung tampil tanpa kode kamar dan pesanan tersimpan di Pesanan saya" />
-                </div>
-
                 {{-- Tamu menginap memesan ke kamarnya dengan kode kamar; tamu luar membayar di muka --}}
                 <div data-isian="kamar">
                     <div class="grid grid-cols-2 gap-1 rounded-lg border border-cream-300 bg-cream-100 p-1" role="radiogroup" aria-label="Jenis tamu">
-                        @foreach (['luar' => 'Saya tamu luar', 'menginap' => 'Saya tamu yang sedang menginap'] as $nilai => $label)
+                        @foreach (['luar' => 'Tidak menginap', 'menginap' => 'Sedang menginap'] as $nilai => $label)
                             <button type="button" role="radio" :aria-checked="jenis === '{{ $nilai }}'" @click="pilihJenis('{{ $nilai }}')"
                                     class="min-h-10 rounded-md border-0 px-2.5 py-1.5 text-[13px] font-semibold leading-tight transition"
                                     :class="jenis === '{{ $nilai }}' ? 'bg-brown-800 text-cream-50 shadow-wt-xs' : 'bg-transparent text-ink-500 hover:text-ink-900'">{{ $label }}</button>
                         @endforeach
                     </div>
+                    <p class="mb-0 mt-2 text-xs leading-relaxed text-ink-500" data-keterangan-jenis
+                       x-text="jenis === 'menginap' ? 'Masukkan kode kamar, tagihan masuk ke nota kamar Anda.' : 'Bayar langsung saat memesan.'">{{ $jenisAwal === 'menginap' ? 'Masukkan kode kamar, tagihan masuk ke nota kamar Anda.' : 'Bayar langsung saat memesan.' }}</p>
 
                     <div x-show="jenis === 'menginap'" x-cloak class="mt-3">
                         {{-- Kamar terpilih --}}
                         <template x-if="kamarDipilih">
                             <div class="flex items-center gap-3 rounded-lg border border-[rgba(92,158,103,.4)] bg-[rgba(92,158,103,.08)] px-3.5 py-3">
                                 <svg class="flex-none text-status-available" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                                <span class="min-w-0 flex-1 text-sm font-semibold" x-text="'Kamar ' + kamarDipilih.nomor + ' · menginap sampai ' + kamarDipilih.keluar"></span>
+                                <span class="min-w-0 flex-1 text-sm font-semibold" x-text="'Kamar ' + kamarDipilih.nomor"></span>
                                 <button type="button" @click="gantiKamar()" class="border-0 bg-transparent p-0 text-[13px] font-semibold text-clay-600 hover:underline">Ganti</button>
                             </div>
                         </template>
                         {{-- Beberapa kamar: pilih salah satu --}}
                         <template x-if="!kamarDipilih && kamarList.length">
-                            <div>
-                                <div class="wt-field-label mb-2">Pilih kamar Anda</div>
-                                <div class="flex flex-wrap gap-2">
+                            <div data-pilih-kamar>
+                                <div class="mb-2 flex items-baseline justify-between gap-3">
+                                    <span class="wt-field-label">Pilih kamar Anda</span>
+                                    <span class="text-[11px] tabular-nums text-ink-500" x-text="kamarList.length + ' kamar'"></span>
+                                </div>
+                                <div class="grid grid-cols-3 gap-2">
                                     <template x-for="k in kamarList" :key="k.id">
-                                        <button type="button" @click="kamarId = k.id; delete galat.kamar"
-                                                class="h-10 rounded-full border border-cream-300 bg-cream-50 px-4 text-sm font-semibold hover:border-clay-500" x-text="'Kamar ' + k.nomor"></button>
+                                        <button type="button" @click="kamarId = k.id; delete galat.kamar" :aria-label="'Kamar ' + k.nomor"
+                                                class="group flex flex-col items-start rounded-lg border bg-cream-50 px-3 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-clay-500 hover:shadow-wt-xs"
+                                                :class="galat.kamar ? 'border-status-dirty' : 'border-cream-300'">
+                                            <span class="text-[10px] font-semibold uppercase tracking-[.14em] text-ink-500 group-hover:text-clay-600">Kamar</span>
+                                            <span class="font-display text-xl font-extrabold leading-tight tabular-nums text-ink-900" x-text="k.nomor"></span>                                        </button>
                                     </template>
                                 </div>
-                                <button type="button" @click="lupakanKode()" class="mt-2 border-0 bg-transparent p-0 text-xs text-ink-500 hover:underline">Pakai kode kamar lain</button>
+                                <button type="button" @click="lupakanKode()" class="mt-2.5 inline-flex items-center gap-1.5 border-0 bg-transparent p-0 text-xs font-semibold text-clay-600 hover:underline">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.3-9.3M17 6l3 3M15 8l2 2"/></svg>
+                                    Pakai kode kamar lain
+                                </button>
                             </div>
                         </template>
                         {{-- Belum ada kamar: ketik kode kamar --}}
@@ -385,11 +472,11 @@
                                 <div class="text-xs tabular-nums text-ink-500" x-text="rupiah(b.harga) + ' × ' + b.qty"></div>
                             </div>
                             <div class="flex items-center gap-0.5 rounded-full border border-cream-300 p-0.5">
-                                <button type="button" @click="kurang(b.id)" :aria-label="'Kurangi ' + b.nama" class="flex h-7 w-7 items-center justify-center rounded-full border-0 bg-transparent text-brown-800 hover:bg-cream-200">
+                                <button type="button" @click="kurang(b.id)" :aria-label="'Kurangi ' + b.nama" class="flex h-7 w-7 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-full border-0 bg-transparent text-brown-800 hover:bg-cream-200">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
                                 </button>
                                 <span class="min-w-5 text-center text-sm font-bold tabular-nums" x-text="b.qty"></span>
-                                <button type="button" @click="tambah(b.id)" :aria-label="'Tambah ' + b.nama" class="flex h-7 w-7 items-center justify-center rounded-full border-0 bg-transparent text-brown-800 hover:bg-cream-200">
+                                <button type="button" @click="tambah(b.id)" :aria-label="'Tambah ' + b.nama" class="flex h-7 w-7 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-full border-0 bg-transparent text-brown-800 hover:bg-cream-200">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                                 </button>
                             </div>
@@ -427,17 +514,30 @@
 
                 <div>
                     <div class="mb-2 flex items-baseline justify-between gap-3">
-                        <span class="wt-field-label">Cara menikmati</span>
+                        <span class="wt-field-label">Penyajian</span>
                         <span x-show="galat.serving_type" x-text="galat.serving_type" x-cloak class="text-[11px] font-medium text-status-dirty"></span>
                     </div>
-                    <div class="grid grid-cols-2 gap-2.5">
-                        @foreach ([['room_service', 'Antar ke kamar', 'Diantar staf ke kamar Anda'], ['take_away', 'Ambil di tempat', 'Dibungkus, diambil di restoran'], ['dine_in', 'Makan di tempat', 'Disajikan di restoran']] as [$nilai, $label, $ket])
-                            <label @if ($nilai === 'room_service') x-show="jenis === 'menginap'" x-cloak @endif class="relative cursor-pointer rounded-lg border border-cream-300 p-3.5 transition hover:bg-row-hover has-[:checked]:border-clay-500 has-[:checked]:bg-[rgba(181,113,74,.07)]"
-                                   :class="galat.serving_type && 'border-status-dirty'">
+                    {{-- Daftar pilihan berikon; Antar ke kamar hanya untuk tamu menginap --}}
+                    <div class="flex flex-col divide-y divide-cream-300 overflow-hidden rounded-lg border" data-cara-menikmati
+                         :class="galat.serving_type ? 'border-status-dirty' : 'border-cream-300'">
+                        @foreach ([
+                            ['room_service', 'Antar ke kamar', 'Diantar staf ke kamar Anda', '<path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M2 21h20"/><path d="M15 12h.01"/>'],
+                            ['take_away', 'Ambil di tempat', 'Dibungkus, diambil di restoran', '<path d="M6 8h12l1 13H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>'],
+                            ['dine_in', 'Makan di tempat', 'Disajikan di restoran', '<path d="M7 3v8a2 2 0 0 0 2 2v8"/><path d="M11 3v8a2 2 0 0 1-2 2"/><path d="M17 21V3c-1.7 1-3 3.2-3 6v4h3"/>'],
+                        ] as [$nilai, $label, $ket, $ikon])
+                            <label @if ($nilai === 'room_service') x-show="jenis === 'menginap'" x-cloak @endif
+                                   class="group flex cursor-pointer items-center gap-3.5 px-3.5 py-3 transition hover:bg-row-hover has-[:checked]:bg-[rgba(181,113,74,.07)]">
                                 <input type="radio" name="serving_type" value="{{ $nilai }}" x-model="isi.serving_type" @change="delete galat.serving_type" class="peer sr-only">
-                                <span class="absolute right-3 top-3 h-4 w-4 rounded-full border border-cream-400 peer-checked:border-[5px] peer-checked:border-clay-500"></span>
-                                <span class="block pr-5 text-sm font-semibold">{{ $label }}</span>
-                                <span class="mt-0.5 block text-xs leading-snug text-ink-500">{{ $ket }}</span>
+                                <span class="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-cream-200 text-clay-600 transition group-has-[:checked]:bg-clay-500 group-has-[:checked]:text-cream-50" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">{!! $ikon !!}</svg>
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-sm font-semibold text-ink-900">{{ $label }}</span>
+                                    <span class="mt-0.5 block text-xs leading-snug text-ink-500">{{ $ket }}</span>
+                                </span>
+                                <span class="flex h-5 w-5 flex-none items-center justify-center rounded-full border border-cream-400 text-transparent transition peer-checked:border-clay-500 peer-checked:bg-clay-500 peer-checked:text-cream-50" aria-hidden="true">
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                                </span>
                             </label>
                         @endforeach
                     </div>
@@ -471,7 +571,7 @@
 
                 @foreach ([
                     ['name', 'Nama pemesan', 'text', 'name', 'Nama Anda'],
-                    ['phone', 'Nomor WhatsApp', 'tel', 'tel', 'Contoh: 081234567890'],
+                    ['phone', 'Nomor WhatsApp', 'tel', 'tel', '08xxxxxxxxxx'],
                     ['email', 'Email (opsional)', 'email', 'email', 'Untuk bukti pembayaran'],
                 ] as [$f, $label, $type, $auto, $ph])
                     <label class="block" x-show="jenis === 'luar'">
@@ -485,7 +585,7 @@
 
                 <div class="rounded-lg bg-cream-200 p-4 text-sm">
                     <div class="flex justify-between gap-3"><span class="text-ink-500">Pesanan</span><span class="font-semibold" x-text="totalItem + ' item'"></span></div>
-                    <div class="mt-1 flex justify-between gap-3"><span class="text-ink-500">Cara menikmati</span><span class="font-semibold" x-text="{ dine_in: 'Makan di tempat', take_away: 'Ambil di tempat', room_service: 'Antar ke kamar' }[isi.serving_type]"></span></div>
+                    <div class="mt-1 flex justify-between gap-3"><span class="text-ink-500">Penyajian</span><span class="font-semibold" x-text="{ dine_in: 'Makan di tempat', take_away: 'Ambil di tempat', room_service: 'Antar ke kamar' }[isi.serving_type]"></span></div>
                     <div x-show="kamarDipilih && jenis === 'menginap'" class="mt-1 flex justify-between gap-3"><span class="text-ink-500">Kamar</span><span class="font-semibold" x-text="kamarDipilih?.nomor"></span></div>
                 </div>
                 {{-- Metode bayar: nomor VA atau QRIS langsung dibuat bersama pesanan --}}
@@ -514,7 +614,7 @@
             </div>
         </div>
 
-        <div class="flex-none border-t border-cream-300 px-5 py-4 sm:px-6">
+        <div class="flex-none border-t border-cream-300 px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-4 sm:px-6">
             <div class="mb-3 flex items-baseline justify-between">
                 <span class="text-sm text-ink-500">Total</span>
                 <span class="font-display text-xl font-extrabold tabular-nums" x-text="rupiah(total)"></span>
@@ -552,6 +652,12 @@
             catatan: {},
             ubahCatatan: null,
             panel: false,
+            // Pop-up x-tawaran-akun sedang terbuka (Esc menutup pop-up dulu, bukan panel)
+            tawarAkun: false,
+            // Penampil foto menu: { id, url, nama, ket, harga, pesan, habis } atau null
+            foto: null,
+            zoom: false,
+            asalZoom: '50% 50%',
             langkah: 1,
             isi: { ...cfg.pemesan, serving_type: cfg.jenisAwal === 'menginap' ? 'room_service' : '', note: '', metode: metodeTerakhir() },
             galat: {},
@@ -661,11 +767,31 @@
             get total() { return this.daftar.reduce((a, b) => a + b.subtotal, 0); },
             rupiah(n) { return 'Rp' + n.toLocaleString('id-ID'); },
 
+            lihatFoto(data) {
+                this.zoom = false;
+                this.foto = data;
+                this.$nextTick(() => this.$refs.tutupFoto?.focus());
+            },
+            tutupFoto() { this.foto = null; this.zoom = false; },
+            // Titik yang diketuk menjadi pusat pembesaran; saat diperbesar, gerakan tetikus menggeser foto
+            geserFoto(e) {
+                // offsetX/Y memakai ukuran asli foto (sebelum diperbesar), jadi titiknya tetap tepat saat foto sudah membesar
+                const el = e.currentTarget;
+                const x = Math.min(100, Math.max(0, (e.offsetX / el.offsetWidth) * 100));
+                const y = Math.min(100, Math.max(0, (e.offsetY / el.offsetHeight) * 100));
+                this.asalZoom = `${x}% ${y}%`;
+            },
+            ketukFoto(e) {
+                if (!this.zoom) this.geserFoto(e);
+                this.zoom = !this.zoom;
+            },
             bukaPanel() { this.langkah = 1; this.panel = true; },
             tutupPanel() { if (!this.proses) { this.simpanCatatan(); this.panel = false; } },
             lanjut() {
                 this.simpanCatatan();
                 if (this.jenis === 'menginap' && !this.kamarDipilih) {
+                    // Tamu menginap tanpa kode kamar: tawarkan masuk supaya kamarnya tampil sendiri
+                    if (cfg.tamu && !this.kamarList.length) return this.$dispatch('tawar-akun', { varian: 'kamar' });
                     this.galat = { ...this.galat, kamar: this.kamarList.length ? 'Pilih kamar Anda.' : 'Cocokkan kode kamar dulu.' };
                     return;
                 }
@@ -673,6 +799,20 @@
                     this.galat = { ...this.galat, serving_type: 'Pilih salah satu.' };
                     return;
                 }
+                // Tamu belum masuk: tawarkan masuk/daftar; pilihan tanpa akun diingat x-tawaran-akun selama sesi peramban
+                if (cfg.tamu) return this.$dispatch('tawar-akun', { varian: this.jenis === 'luar' ? 'luar' : 'menginap' });
+                this.keLangkah2();
+            },
+            lanjutTanpaAkun(varian) {
+                if (varian === 'kamar') {
+                    // Tetap tanpa akun: arahkan ke isian kode kamar
+                    this.galat = { ...this.galat, kamar: 'Cocokkan kode kamar dulu.' };
+                    this.$nextTick(() => this.$refs.panel.querySelector('[data-isian="kamar"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+                    return;
+                }
+                this.keLangkah2();
+            },
+            keLangkah2() {
                 this.langkah = 2;
                 this.$nextTick(() => this.$refs.panel.querySelector(`[data-isian="${this.isi.name ? 'phone' : 'name'}"]`)?.focus());
             },
